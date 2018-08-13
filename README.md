@@ -10,3 +10,5 @@ This will use C++17 and C++20 (as they become available) features.
 More explanations/documentations/examples/libraries will be added as the series progresses.
 
 g/cpp-from-the-sky-down 
+
+This is not an officially supported Google product.
