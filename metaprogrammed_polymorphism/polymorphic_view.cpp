@@ -87,7 +87,7 @@ class polymorphic_view
   template <typename... OtherSignatures>
   static auto get_vtable(const polymorphic_view<OtherSignatures...>& other) {
     static const std::array<detail::ptr<void()>, sizeof...(Signatures)> vtable{
-        other.get_entry<Signatures>()...};
+        other.template get_entry<Signatures>()...};
     return &vtable;
   }
   template <typename Signature>
