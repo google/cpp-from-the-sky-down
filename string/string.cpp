@@ -101,14 +101,9 @@ inline std::ostream& operator<<(std::ostream& os, const string& s) {
   return os;
 }
 
-template <typename... Sizes>
-size_t add(Sizes... sizes) {
-  return (0 + ... + sizes);
-}
-
 template <typename... String>
 string concat(string first, String&&... strings) {
-  first.reserve(add(1, strings.size()...));
+  first.reserve(1 + (strings.size() + ...));
   return (first += ... += strings);
 }
 
