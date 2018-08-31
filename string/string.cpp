@@ -19,6 +19,24 @@
 #include <memory>
 #include <string>
 
+template <typename T>
+struct move_zero {
+  T t{};
+  move_zero() = default;
+  move_zero(T t) : t(t){};
+  move_zero(const move_zero&) = default;
+  move_zero(move_zero&& other) {
+    t = other.t;
+    other.t = {};
+  }
+  move_zero& operator=(const move_zero&) = default;
+  move_zero& operator=(move_zero&& other) {
+    auto temp = move_zero(std::move(other));
+    return *this = temp;
+  }
+  operator T() const { return t; }
+};
+
 class string_rep {
  public:
   template <typename Iter1, typename Iter2>
@@ -51,8 +69,8 @@ class string_rep {
 
  private:
   std::unique_ptr<char[]> ptr_;
-  std::size_t size_ = 0;
-  std::size_t capacity_ = 0;
+  move_zero<std::size_t> size_ = 0;
+  move_zero<std::size_t> capacity_ = 0;
 };
 
 class string {
