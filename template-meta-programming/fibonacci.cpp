@@ -15,6 +15,7 @@
 
 #include <iostream>
 #include <type_traits>	
+#include <array>
 
 
 namespace specialization {
@@ -85,6 +86,37 @@ namespace function {
 	}
 }
 
+namespace variadic {
+	template<bool Done, int... I>
+	struct fib;
+
+
+	template<class Array>
+	constexpr auto reverse_array(Array ar) {
+		Array ret{};
+		auto begin = ar.rbegin();
+		for (auto& a : ret) {
+			a = *begin++;
+		}
+		return ret;
+	}
+
+
+
+	template<int... I>
+	struct fib<true, I...> {
+		static constexpr std::array<int, sizeof...(I)> sequence = reverse_array(std::array{ I... });
+	};
+
+	template<int fcur, int fprev, int... I>
+	struct fib<false, fcur, fprev, I...> 
+		:fib < std::numeric_limits<int>::max() - fcur - fprev < (fcur - fprev ), fcur + fprev, fcur, fprev, I...>{};
+
+	constexpr auto fibonacci = fib<false, 1, 1>::sequence;
+
+
+}
+
 
 
 
@@ -95,10 +127,16 @@ int main() {
 	static_assert(specialization::fib<4>::value == 5);
 	static_assert(constexpr_function::fibonacci(4) == 5);
 	static_assert(constexpr_function_iterative::fibonacci(4) == 5);
+	static_assert(variadic::fibonacci[4] == 5);
+	auto f = variadic::fibonacci;
 	static_assert(std::is_same_v<templated::make_ptr<int>::type, int*>);
 	static_assert(std::is_same_v<templated::make_ptr<int*>::type, int*>);
 	static_assert(std::is_same_v < decltype(function::make_ptr(t2t<int>{}))::type, int* > );
 	static_assert(std::is_same_v < decltype(function::make_ptr(t2t<int*>{}))::type, int* > );
+
+	constexpr std::array carray{ 1,2,3,4 };
+
+	static_assert(carray[1] == 2);
 
 
 
