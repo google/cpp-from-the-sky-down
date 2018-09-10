@@ -31,6 +31,15 @@ struct function_entry<T, Return(Method, Parameters...)> {
   }
 };
 
+template <typename T, typename Return, typename Method, typename... Parameters>
+struct function_entry<T, Return(Method, Parameters...)const> {
+  static Return poly_call(Method method, const void* t, Parameters... parameters) {
+    return poly_extend(method, *static_cast<const T*>(t), parameters...);
+  }
+};
+
+
+
 template <typename T, typename... Signatures>
 inline const auto vtable = std::array{
     reinterpret_cast<ptr<void()>>(function_entry<T, Signatures>::poly_call)...};
@@ -48,12 +57,37 @@ struct vtable_caller<Index, Return(Method, Parameters...)> {
   constexpr static std::size_t get_index(ptr<Return(Method, Parameters...)>) {
     return Index;
   }
+
+
+  using  is_const = std::false_type;
 };
+
+template <size_t Index, typename Signature>
+struct vtable_caller;
+template <size_t Index, typename Return, typename Method,
+          typename... Parameters>
+struct vtable_caller<Index, Return(Method, Parameters...)const> {
+  static Return call_vtable(Method method, ptr<const ptr<void()>> table,
+                            const void* t, Parameters... parameters) {
+    return reinterpret_cast<ptr<Return(Method, const void*, Parameters...)>>(
+        table[Index])(method, t, parameters...);
+  }
+  constexpr static std::size_t get_index(ptr<Return(Method, Parameters...)>) {
+    return Index;
+  }
+
+  using  is_const = std::true_type;
+};
+
+
+template<typename T>
+using is_const_t = typename T::is_const;
 
 template <typename... implementations>
 struct overload_call_vtable : implementations... {
   using implementations::call_vtable...;
   using implementations::get_index...;
+  static constexpr bool all_const = std::conjunction_v<is_const_t<implementations>...>;
 };
 
 template <typename IntPack, typename... Signatures>
@@ -82,7 +116,7 @@ class polymorphic_view
     : private detail::polymorphic_caller_implementation<
           std::make_index_sequence<sizeof...(Signatures)>, Signatures...> {
   const std::array<detail::ptr<void()>, sizeof...(Signatures)>* vptr_ = nullptr;
-  void* t_ = nullptr;
+  std::conditional_t<polymorphic_view::all_const,const void*, void*> t_ = nullptr;
 
   template <typename... OtherSignatures>
   static auto get_vtable(const polymorphic_view<OtherSignatures...>& other) {
@@ -126,7 +160,7 @@ struct draw {};
 struct another {};
 
 template <typename T>
-void poly_extend(draw, T& t) {
+void poly_extend(draw, const T& t) {
   std::cout << t << "\n";
 }
 template <typename T>
@@ -137,6 +171,10 @@ void poly_extend(another, T& t) {
 int main() {
   int i = 5;
   using poly = polymorphic::polymorphic_view<void(draw), void(another)>;
+  using poly_const = polymorphic::polymorphic_view<void(draw) const>;
+  const int ic = 7;
+  poly_const pc1{ ic };
+  pc1.call<draw>();
   poly p1{i};
   p1.call<draw>();
   auto p2 = p1;
