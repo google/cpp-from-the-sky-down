@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <array>
 #include <memory>
 #include <utility>
 
@@ -25,147 +24,111 @@ using ptr = T*;
 template <typename T>
 struct type {};
 
-template <typename... T>
-struct overload : T... {
-  using T::operator()...;
-};
-template <typename... F>
-overload(F... f)->overload<F...>;
+template <typename Signature>
+struct vtable_entry;
 
-template <typename T, typename Return, typename Method, typename... Parameters>
-constexpr auto get_vtable_function(type<Return(Method, Parameters...)>) {
-  return +[](Method method, void* t, Parameters... parameters) -> Return {
-    return poly_extend(method, *static_cast<T*>(t), parameters...);
-  };
-}
+template <typename Method, typename Return, typename... Parameters>
+struct vtable_entry<Return(Method, Parameters...)> {
+  template <typename T>
+  vtable_entry(type<T>)
+      : fun_ptr_(+[](void* t, Parameters... parameters) -> Return {
+          return poly_extend(Method{}, *static_cast<T*>(t), parameters...);
+        }) {}
 
-template <typename T, typename Return, typename Method, typename... Parameters>
-constexpr auto get_vtable_function(type<Return(Method, Parameters...) const>) {
-  return +[](Method method, const void* t, Parameters... parameters) -> Return {
-    return poly_extend(method, *static_cast<const T*>(t), parameters...);
-  };
-}
-
-using vtable_entry = ptr<void()>;
-
-template <typename T, typename... Signatures>
-inline const vtable_entry vtable[] = {reinterpret_cast<ptr<void()>>(
-    get_vtable_function<T>(type<Signatures>{}))...};
-
-template <size_t Index, typename Return, typename Method,
-          typename... Parameters>
-constexpr auto get_vtable_caller(type<Return(Method, Parameters...)>) {
-  return [](Method method, const vtable_entry* table, void* t,
-            Parameters... parameters) -> Return {
-    return reinterpret_cast<ptr<Return(Method, void*, Parameters...)>>(
-        table[Index])(method, t, parameters...);
-  };
-}
-
-template <size_t Index, typename Return, typename Method,
-          typename... Parameters>
-constexpr auto get_vtable_caller(type<Return(Method, Parameters...) const>) {
-  return [](Method method, const vtable_entry* table, const void* t,
-            Parameters... parameters) -> Return {
-    return reinterpret_cast<ptr<Return(Method, const void*, Parameters...)>>(
-        table[Index])(method, t, parameters...);
-  };
-}
-template <size_t... I, typename... TypedSignatures>
-constexpr auto make_vtable_callers(std::index_sequence<I...>,
-                                   TypedSignatures...) {
-  return overload{get_vtable_caller<I>(TypedSignatures{})...};
-}
-template <size_t Index, typename TypedSignature>
-constexpr auto get_vtable_entry(TypedSignature) {
-  return [](TypedSignature, const vtable_entry* table) { return table[Index]; };
-}
-
-template <size_t... I, typename... TypedSignatures>
-constexpr auto make_vtable_getters(std::index_sequence<I...>,
-                                   TypedSignatures...) {
-  return overload{get_vtable_entry<I>(TypedSignatures{})...};
-}
-
-template <typename... Signatures>
-constexpr auto vtable_callers = make_vtable_callers(
-    std::make_index_sequence<sizeof...(Signatures)>{}, type<Signatures>{}...);
-
-template <typename... Signatures>
-constexpr auto vtable_getters = make_vtable_getters(
-    std::make_index_sequence<sizeof...(Signatures)>{}, type<Signatures>{}...);
-
-template <typename... Signatures>
-struct polymorphic_caller_implementation {
-  const vtable_entry* vptr_ = nullptr;
-  polymorphic_caller_implementation(const vtable_entry* vptr) : vptr_{vptr} {}
-
-  template <typename Method, typename Ptr, typename... Parameters>
-  decltype(auto) call_vtable(Method method, Ptr p,
-                             Parameters&&... parameters) const {
-    return vtable_callers<Signatures...>(
-        method, vptr_, p, std::forward<Parameters>(parameters)...);
+  auto call(Method, void* t, Parameters... parameters) const {
+    return fun_ptr_(t, parameters...);
   }
 
-  template <typename... OtherSignatures>
-  static const vtable_entry* get_vtable(
-      const polymorphic_caller_implementation<OtherSignatures...>& other) {
-    static const vtable_entry vtable[] = {
-        vtable_getters<OtherSignatures...>(type<Signatures>(), other.vptr_)...};
-    return vtable;
+  static constexpr bool is_const = false;
+  ptr<Return(void*, Parameters...)> fun_ptr_;
+};
+
+template <typename Method, typename Return, typename... Parameters>
+struct vtable_entry<Return(Method, Parameters...) const> {
+  template <typename T>
+  vtable_entry(type<T>)
+      : fun_ptr_(+[](const void* t, Parameters... parameters) -> Return {
+          return poly_extend(Method{}, *static_cast<const T*>(t),
+                             parameters...);
+        }) {}
+
+  auto call(Method, const void* t, Parameters... parameters) const {
+    return fun_ptr_(t, parameters...);
   }
 
-  template <typename... OtherSignatures>
-  polymorphic_caller_implementation(
-      const polymorphic_caller_implementation<OtherSignatures...>& other)
-      : vptr_(get_vtable(other)) {}
+  static constexpr bool is_const = true;
+  ptr<Return(const void*, Parameters...)> fun_ptr_;
 };
+
+template <typename... Signatures>
+struct vtable : vtable_entry<Signatures>... {
+  using vtable_entry<Signatures>::call...;
+
+  static constexpr bool all_const = (vtable_entry<Signatures>::is_const && ...);
+
+  template <typename Other>
+  vtable(Other& other) : vtable_entry<Signatures>(other)... {}
+
+  template <typename T>
+  vtable(type<T> t) : vtable_entry<Signatures>(t)... {}
+
+  template <typename Other>
+  static auto subset_vtable(const Other& other) {
+    static const vtable vt(other);
+    return &vt;
+  }
+};
+
+template <typename T, typename VTable>
+inline const auto type_specific_vtable = VTable{type<std::decay_t<T>>{}};
 
 template <typename T>
-struct is_polymorphic {
-  static constexpr bool value = false;
-};
+std::false_type is_vtable(const T*);
 
-template <typename VoidType, typename... Signatures>
-class general_polymorphic_view {
-  detail::polymorphic_caller_implementation<Signatures...> pci_;
+template <typename... Signatures>
+std::true_type is_vtable(const vtable<Signatures...>*);
 
-  VoidType t_ = nullptr;
+template <typename T, typename = std::void_t<>>
+struct is_polymorphic : std::false_type {};
 
-  using pci = detail::polymorphic_caller_implementation<
-      std::make_index_sequence<sizeof...(Signatures)>, Signatures...>;
+template <typename T>
+struct is_polymorphic<
+    T, std::void_t<decltype(std::declval<const T&>().get_vptr())>>
+    : decltype(is_vtable(std::declval<const T&>().get_vptr())) {};
 
-  template <typename VT, typename... OtherSignatures>
-  friend class general_polymorphic_view;
+}  // namespace detail
+
+template <typename... Signatures>
+class view {
+  using vtable_t = detail::vtable<Signatures...>;
+  const vtable_t* vptr_ = nullptr;
+
+  std::conditional_t<vtable_t::all_const, const void*, void*> t_;
 
  public:
   template <typename T, typename = std::enable_if_t<
-                            !is_polymorphic<std::decay_t<T>>::value>>
-  explicit general_polymorphic_view(T& t)
-      : pci_(detail::vtable<std::decay_t<T>, Signatures...>), t_(&t) {}
+                            !detail::is_polymorphic<std::decay_t<T>>::value>>
+  view(T& t) : vptr_(&detail::type_specific_vtable<T, vtable_t>), t_(&t) {}
 
-  template <typename Poly, typename = std::enable_if_t<
-                               is_polymorphic<std::decay_t<Poly>>::value>>
-  explicit general_polymorphic_view(const Poly& other)
-      : pci_(other.get_pci()), t_(other.get_ptr()){};
+  template <typename Poly, typename = std::enable_if_t<detail::is_polymorphic<
+                               std::decay_t<Poly>>::value>>
+  view(const Poly& other)
+      : vptr_(vtable_t::subset_vtable(*other.get_vptr())),
+        t_(other.get_ptr()){};
 
   explicit operator bool() const { return t_ != nullptr; }
 
   auto get_ptr() const { return t_; }
 
-  const auto& get_pci() const { return pci_; }
+  auto get_vptr() const { return vptr_; }
+
   template <typename Method, typename... Parameters>
   decltype(auto) call(Parameters&&... parameters) const {
-    return pci_.call_vtable(Method{}, t_,
-                            std::forward<Parameters>(parameters)...);
+    return vptr_->call(Method{}, t_, std::forward<Parameters>(parameters)...);
   }
 };
 
-template <typename VoidType, typename... Signatures>
-struct is_polymorphic<general_polymorphic_view<VoidType, Signatures...>> {
-  static constexpr bool value = true;
-};
-
+namespace detail {
 using object_ptr = std::unique_ptr<void, detail::ptr<void(void*)>>;
 
 template <typename T>
@@ -182,31 +145,35 @@ object_ptr poly_extend(clone, const T& t) {
 }  // namespace detail
 
 template <typename... Signatures>
-class polymorphic_object {
-  detail::polymorphic_caller_implementation<
-      Signatures..., detail::object_ptr(detail::clone) const>
-      pci_;
+class object {
+  using vtable_t =
+      const detail::vtable<Signatures...,
+                           detail::object_ptr(detail::clone) const>;
+  vtable_t* vptr_ = nullptr;
   detail::object_ptr t_;
 
  public:
-  auto& get_pci() const { return pci_; }
+  auto get_vptr() const { return vptr_; }
   template <typename T, typename = std::enable_if_t<
                             !detail::is_polymorphic<std::decay_t<T>>::value>>
-  explicit polymorphic_object(T t)
-      : pci_{detail::vtable<std::decay_t<T>, Signatures...,
-                            detail::object_ptr(detail::clone)>},
+  object(T t)
+      : vptr_(&detail::type_specific_vtable<T, vtable_t>),
         t_(detail::make_object_ptr(std::move(t))) {}
 
-  polymorphic_object(const polymorphic_object& other)
-      : pci_{other.pci_.vptr_}, t_(other.call<detail::clone>()) {}
+  template <typename Poly, typename = std::enable_if_t<detail::is_polymorphic<
+                               std::decay_t<Poly>>::value>>
+  object(const Poly& other)
+      : vptr_(vtable_t::subset_vtable(*other.get_vptr())),
+        t_(other.template call<detail::clone>()) {}
 
-  polymorphic_object(polymorphic_object&&) = default;
+  object(const object& other)
+      : vptr_{other.get_vptr()}, t_(other.call<detail::clone>()) {}
 
-  polymorphic_object& operator=(polymorphic_object&&) = default;
+  object(object&&) = default;
 
-  polymorphic_object& operator=(const polymorphic_object& other) {
-    (*this) = polymorphic_view(other);
-  }
+  object& operator=(object&&) = default;
+
+  object& operator=(const object& other) { (*this) = view(other); }
 
   explicit operator bool() const { return t_ != nullptr; }
 
@@ -214,30 +181,16 @@ class polymorphic_object {
 
   template <typename Method, typename... Parameters>
   decltype(auto) call(Parameters&&... parameters) {
-    return pci_.call_vtable(Method{}, t_.get(),
-                            std::forward<Parameters>(parameters)...);
+    return vptr_->call(Method{}, t_.get(),
+                       std::forward<Parameters>(parameters)...);
   }
 
   template <typename Method, typename... Parameters>
   decltype(auto) call(Parameters&&... parameters) const {
-    return pci_.call_vtable(Method{}, t_.get(),
-                            std::forward<Parameters>(parameters)...);
+    return vptr_->call(Method{}, t_.get(),
+                       std::forward<Parameters>(parameters)...);
   }
 };
-
-namespace detail {
-template <typename... Signatures>
-struct is_polymorphic<polymorphic_object<Signatures...>> {
-  static constexpr bool value = true;
-};
-}  // namespace detail
-
-template <typename... Signatures>
-using polymorphic_view = detail::general_polymorphic_view<void*, Signatures...>;
-
-template <typename... Signatures>
-using const_polymorphic_view =
-    detail::general_polymorphic_view<const void*, Signatures...>;
 
 }  // namespace polymorphic
 
@@ -256,22 +209,32 @@ void poly_extend(another, T& t) {
   t = t + t;
 }
 
+void call_draw(polymorphic::view<void(draw) const> drawable) {
+  std::cout << "Calling draw: ";
+  drawable.call<draw>();
+}
+
 int main() {
   int i = 5;
 
-  using poly = polymorphic::polymorphic_view<void(draw) const, void(another)>;
-  using poly_object =
-      polymorphic::polymorphic_object<void(draw) const, void(another)>;
+  using poly = polymorphic::view<void(draw) const, void(another)>;
+  using poly_object = polymorphic::object<void(draw) const, void(another)>;
   poly_object po{i};
   auto po1 = po;
+  polymorphic::object<void(draw) const> po2 = po;
+  call_draw(i);
+  call_draw(po);
+  call_draw(po2);
   po.call<another>();
   po1.call<draw>();
   po.call<draw>();
 
   poly a{po};
+
+  call_draw(a);
   a.call<draw>();
 
-  using poly_const = polymorphic::const_polymorphic_view<void(draw) const>;
+  using poly_const = polymorphic::view<void(draw) const>;
   const int ic = 7;
   poly_const pc1{ic};
   pc1.call<draw>();
@@ -284,7 +247,7 @@ int main() {
   p2.call<another>();
   p2.call<draw>();
 
-  polymorphic::polymorphic_view<void(draw) const> p3{p2};
+  polymorphic::view<void(draw) const> p3{p2};
 
   p3.call<draw>();
 }
