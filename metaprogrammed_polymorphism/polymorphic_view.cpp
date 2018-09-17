@@ -11,11 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // limitations under the License.
 
+#include <array>
+#include <cstdint>
+#include <limits>
 #include <memory>
 #include <utility>
-#include <cstdint>
-#include <array>
-#include <limits>
 
 namespace polymorphic {
 namespace detail {
@@ -43,8 +43,9 @@ struct vtable_entry<I, Return(Method, Parameters...)> {
         });
   }
 
-  static decltype(auto) call_imp(const vtable_fun* vt, const index_type* permutation, Method,
-                             void* t, Parameters... parameters) {
+  static decltype(auto) call_imp(const vtable_fun* vt,
+                                 const index_type* permutation, Method, void* t,
+                                 Parameters... parameters) {
     return reinterpret_cast<fun_ptr>(vt[permutation[I]])(t, parameters...);
   }
 
@@ -65,11 +66,12 @@ struct vtable_entry<I, Return(Method, Parameters...) const> {
         });
   }
 
-  static decltype(auto) call_imp(const vtable_fun* vt, const index_type* permutation, Method,
-                             const void* t, Parameters... parameters) {
+  static decltype(auto) call_imp(const vtable_fun* vt,
+                                 const index_type* permutation, Method,
+                                 const void* t, Parameters... parameters) {
     return reinterpret_cast<fun_ptr>(vt[permutation[I]])(t, parameters...);
   }
-  static auto get_index(type<Return(Method, Parameters...)const>) { return I; }
+  static auto get_index(type<Return(Method, Parameters...) const>) { return I; }
 
   static constexpr bool is_const = true;
   using fun_ptr = ptr<Return(const void*, Parameters...)>;
@@ -81,7 +83,8 @@ struct vtable;
 template <size_t... I, typename... Signatures>
 struct vtable<std::index_sequence<I...>, Signatures...>
     : vtable_entry<I, Signatures>... {
-      static_assert(sizeof...(Signatures) <= std::numeric_limits<index_type>::max());
+  static_assert(sizeof...(Signatures) <=
+                std::numeric_limits<index_type>::max());
   using vtable_entry<I, Signatures>::call_imp...;
   using vtable_entry<I, Signatures>::get_entry...;
   using vtable_entry<I, Signatures>::get_index...;
@@ -96,33 +99,34 @@ struct vtable<std::index_sequence<I...>, Signatures...>
     return &vt[0];
   }
 
-  template<typename T>
-  vtable(type<T> t):vptr_(get_vtable(t)),permutation_{I...}{}
+  template <typename T>
+  vtable(type<T> t) : vptr_(get_vtable(t)), permutation_{I...} {}
 
   const vtable_fun* vptr_;
   std::array<detail::index_type, sizeof...(Signatures)> permutation_;
 
   template <typename OtherSequence, typename... OtherSignatures>
-  vtable(const vtable<OtherSequence, OtherSignatures...>& other):vptr_(other.vptr_),permutation_(subset(other)){}
-  
+  vtable(const vtable<OtherSequence, OtherSignatures...>& other)
+      : vptr_(other.vptr_), permutation_(subset(other)) {}
+
   template <typename Other>
   static auto subset(const Other& other) {
-    return std::array<detail::index_type, sizeof...(Signatures)>{other.permutation_[other.get_index(type<Signatures>{})]...};
+    return std::array<detail::index_type, sizeof...(Signatures)>{
+        other.permutation_[other.get_index(type<Signatures>{})]...};
   }
 
   template <typename VoidType, typename Method, typename... Parameters>
-  decltype(auto) call(Method method,VoidType t, Parameters&&... parameters) const {
+  decltype(auto) call(Method method, VoidType t,
+                      Parameters&&... parameters) const {
     return call_imp(vptr_, permutation_.data(), method, t,
-                          std::forward<Parameters>(parameters)...);
+                    std::forward<Parameters>(parameters)...);
   }
-
-
 };
 
 template <typename T>
 std::false_type is_vtable(const T*);
 
-template<typename Sequence, typename... Signatures>
+template <typename Sequence, typename... Signatures>
 std::true_type is_vtable(const vtable<Sequence, Signatures...>&);
 
 template <typename T, typename = std::void_t<>>
@@ -141,32 +145,27 @@ class view {
       detail::vtable<std::make_index_sequence<sizeof...(Signatures)>,
                      Signatures...>;
 
-vtable_t vt_;
+  vtable_t vt_;
   std::conditional_t<vtable_t::all_const, const void*, void*> t_;
 
  public:
   template <typename T, typename = std::enable_if_t<
                             !detail::is_polymorphic<std::decay_t<T>>::value>>
-  view(T& t)
-      : vt_(detail::type<std::decay_t<T>>{}),
-        t_(&t) {}
+  view(T& t) : vt_(detail::type<std::decay_t<T>>{}), t_(&t) {}
 
   template <typename Poly, typename = std::enable_if_t<detail::is_polymorphic<
                                std::decay_t<Poly>>::value>>
-  view(const Poly& other)
-      : vt_(other.get_vtable()),
-        t_(other.get_ptr()){};
+  view(const Poly& other) : vt_(other.get_vtable()), t_(other.get_ptr()){};
 
   explicit operator bool() const { return t_ != nullptr; }
 
-  const auto& get_vtable() const{ return vt_; }
+  const auto& get_vtable() const { return vt_; }
 
-  auto get_ptr()const{return t_;}
+  auto get_ptr() const { return t_; }
 
   template <typename Method, typename... Parameters>
   decltype(auto) call(Parameters&&... parameters) const {
-    return vt_.call(Method{}, t_,
-                          std::forward<Parameters>(parameters)...);
+    return vt_.call(Method{}, t_, std::forward<Parameters>(parameters)...);
   }
 };
 
@@ -189,7 +188,7 @@ object_ptr poly_extend(clone, const T& t) {
 template <typename... Signatures>
 class object {
   using vtable_t =
-      const detail::vtable<std::make_index_sequence<sizeof...(Signatures)+1>,
+      const detail::vtable<std::make_index_sequence<sizeof...(Signatures) + 1>,
                            Signatures...,
                            detail::object_ptr(detail::clone) const>;
 
@@ -201,41 +200,36 @@ class object {
   template <typename T, typename = std::enable_if_t<
                             !detail::is_polymorphic<std::decay_t<T>>::value>>
   object(T t)
-      : vt_(detail::type<T>{}),
-        t_(detail::make_object_ptr(std::move(t))) {}
+      : vt_(detail::type<T>{}), t_(detail::make_object_ptr(std::move(t))) {}
 
   template <typename Poly, typename = std::enable_if_t<detail::is_polymorphic<
                                std::decay_t<Poly>>::value>>
   object(const Poly& other)
-      : vt_(other.get_vtable()),
-        t_(other.template call<detail::clone>()) {}
+      : vt_(other.get_vtable()), t_(other.template call<detail::clone>()) {}
 
   object(const object& other)
-      : vt_{other.get_vtable()},t_(other.call<detail::clone>()) {}
+      : vt_{other.get_vtable()}, t_(other.call<detail::clone>()) {}
 
   object(object&&) = default;
 
   object& operator=(object&&) = default;
 
-  object& operator=(const object& other) {
-    (*this) = view(other); }
+  object& operator=(const object& other) { (*this) = view(other); }
 
-  explicit operator bool() const {
-    return t_ != nullptr; }
+  explicit operator bool() const { return t_ != nullptr; }
 
-  auto get_ptr() const {
-    return t_.get(); }
+  auto get_ptr() const { return t_.get(); }
 
   template <typename Method, typename... Parameters>
   decltype(auto) call(Parameters&&... parameters) {
     return vt_.call(Method{}, t_.get(),
-                          std::forward<Parameters>(parameters)...);
+                    std::forward<Parameters>(parameters)...);
   }
 
   template <typename Method, typename... Parameters>
   decltype(auto) call(Parameters&&... parameters) const {
     return vt_.call(Method{}, t_.get(),
-                          std::forward<Parameters>(parameters)...);
+                    std::forward<Parameters>(parameters)...);
   }
 };
 
@@ -243,59 +237,43 @@ class object {
 
 #include <iostream>
 #include <string>
+#include <vector>
 
+// Use types instead of names
+// void draw(std::ostream&) -> void(draw, std::ostream&)
 struct draw {};
-struct another {};
+void call_draw(polymorphic::view<void(draw,std::ostream&) const> d) {
+  std::cout << "in call_draw\n";
+  d.call<draw>(std::cout);
+}
+
+struct x2 {};
 
 template <typename T>
-void poly_extend(draw, const T& t) {
-  std::cout << t << "\n";
+void poly_extend(draw, const T& t, std::ostream& os) {
+  os << t << "\n";
 }
 template <typename T>
-void poly_extend(another, T& t) {
+void poly_extend(x2, T& t) {
   t = t + t;
 }
 
-void call_draw(polymorphic::view<void(draw) const> drawable) {
-  std::cout << "Calling draw: ";
-  drawable.call<draw>();
-}
-
 int main() {
-  int i = 5;
-
-  using poly = polymorphic::view<void(another),void(draw) const >;
-  using poly_object = polymorphic::object<void(draw) const, void(another)>;
-  poly_object po{i};
-  auto po1 = po;
-  polymorphic::object<void(draw) const> po2 = po;
-  call_draw(i);
-  call_draw(po);
-  call_draw(po2);
-  po.call<another>();
-  po1.call<draw>();
-  po.call<draw>();
-
-  poly a{po};
-
-  call_draw(a);
-  a.call<draw>();
-
-  using poly_const = polymorphic::view<void(draw) const>;
-  const int ic = 7;
-  poly_const pc1{ic};
-  pc1.call<draw>();
-  poly p1{i};
-  p1.call<draw>();
-  auto p2 = p1;
-  p2.call<draw>();
-  std::string s("hello world");
-  p2 = poly{s};
-  p2.call<another>();
-  p2.call<draw>();
-
-  polymorphic::view<void(draw) const> p3{a};
-
-  p3.call<draw>();
-  p2.call<draw>();
+  std::vector<polymorphic::object<void(x2), void(draw, std::ostream&) const>> objects;
+  for (int i = 0; i < 30; ++i) {
+    switch (i % 3) {
+      case 0:
+        objects.emplace_back(i);
+        break;
+      case 1:
+        objects.emplace_back(double(i) + double(i) / 10.0);
+        break;
+      case 2:
+        objects.emplace_back(std::to_string(i) + " string");
+        break;
+    }
+  }
+  for (const auto& o : objects) call_draw(o);
+  for (auto& o : objects) o.call<x2>();
+  for (auto& o : objects) call_draw(o);
 }
