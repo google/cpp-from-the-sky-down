@@ -11,6 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // limitations under the License.
 
+#pragma once
+
 #include <array>
 #include <cstdint>
 #include <limits>
@@ -77,20 +79,26 @@ struct vtable_entry<I, Return(Method, Parameters...) const> {
   using fun_ptr = ptr<Return(const void*, Parameters...)>;
 };
 
+template <typename... entry>
+struct entries : entry... {
+  template <typename... T>
+  entries(T&&... t) : entry(t...)... {}
+
+  using entry::call_imp...;
+  using entry::get_entry...;
+  using entry::get_index...;
+
+  static constexpr bool all_const() { return (entry::is_const && ...); }
+};
+
 template <typename Sequence, typename... Signatures>
 struct vtable;
 
 template <size_t... I, typename... Signatures>
 struct vtable<std::index_sequence<I...>, Signatures...>
-    : vtable_entry<I, Signatures>... {
+    : entries<vtable_entry<I, Signatures>...> {
   static_assert(sizeof...(Signatures) <=
                 std::numeric_limits<index_type>::max());
-  using vtable_entry<I, Signatures>::call_imp...;
-  using vtable_entry<I, Signatures>::get_entry...;
-  using vtable_entry<I, Signatures>::get_index...;
-
-  static constexpr bool all_const =
-      (vtable_entry<I, Signatures>::is_const && ...);
 
   template <typename T>
   static auto get_vtable(type<T> t) {
@@ -118,8 +126,8 @@ struct vtable<std::index_sequence<I...>, Signatures...>
   template <typename VoidType, typename Method, typename... Parameters>
   decltype(auto) call(Method method, VoidType t,
                       Parameters&&... parameters) const {
-    return call_imp(vptr_, permutation_.data(), method, t,
-                    std::forward<Parameters>(parameters)...);
+    return vtable::call_imp(vptr_, permutation_.data(), method, t,
+                            std::forward<Parameters>(parameters)...);
   }
 };
 
@@ -146,7 +154,7 @@ class view {
                      Signatures...>;
 
   vtable_t vt_;
-  std::conditional_t<vtable_t::all_const, const void*, void*> t_;
+  std::conditional_t<vtable_t::all_const(), const void*, void*> t_;
 
  public:
   template <typename T, typename = std::enable_if_t<
@@ -234,46 +242,3 @@ class object {
 };
 
 }  // namespace polymorphic
-
-#include <iostream>
-#include <string>
-#include <vector>
-
-// Use types instead of names
-// void draw(std::ostream&) -> void(draw, std::ostream&)
-struct draw {};
-void call_draw(polymorphic::view<void(draw,std::ostream&) const> d) {
-  std::cout << "in call_draw\n";
-  d.call<draw>(std::cout);
-}
-
-struct x2 {};
-
-template <typename T>
-void poly_extend(draw, const T& t, std::ostream& os) {
-  os << t << "\n";
-}
-template <typename T>
-void poly_extend(x2, T& t) {
-  t = t + t;
-}
-
-int main() {
-  std::vector<polymorphic::object<void(x2), void(draw, std::ostream&) const>> objects;
-  for (int i = 0; i < 30; ++i) {
-    switch (i % 3) {
-      case 0:
-        objects.emplace_back(i);
-        break;
-      case 1:
-        objects.emplace_back(double(i) + double(i) / 10.0);
-        break;
-      case 2:
-        objects.emplace_back(std::to_string(i) + " string");
-        break;
-    }
-  }
-  for (const auto& o : objects) call_draw(o);
-  for (auto& o : objects) o.call<x2>();
-  for (auto& o : objects) call_draw(o);
-}
