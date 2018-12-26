@@ -53,7 +53,7 @@ struct vtable_entry<I, Return(Method, Parameters...)> {
 
   static auto get_index(type<Return(Method, Parameters...)>) { return I; }
 
-  static constexpr bool is_const = false;
+  using is_const =  std::false_type ;
   using fun_ptr = ptr<Return(void*, Parameters...)>;
 };
 
@@ -75,9 +75,12 @@ struct vtable_entry<I, Return(Method, Parameters...) const> {
   }
   static auto get_index(type<Return(Method, Parameters...) const>) { return I; }
 
-  static constexpr bool is_const = true;
+  using is_const = std::true_type ;
   using fun_ptr = ptr<Return(const void*, Parameters...)>;
 };
+
+template<typename T>
+using is_const_t = typename T::is_const;
 
 template <typename... entry>
 struct entries : entry... {
@@ -88,7 +91,7 @@ struct entries : entry... {
   using entry::get_entry...;
   using entry::get_index...;
 
-  static constexpr bool all_const() { return (entry::is_const && ...); }
+  static constexpr bool all_const() { return std::conjunction_v<is_const_t<entry>...>; }
 };
 
 template <typename Sequence, typename... Signatures>
@@ -115,13 +118,8 @@ struct vtable<std::index_sequence<I...>, Signatures...>
 
   template <typename OtherSequence, typename... OtherSignatures>
   vtable(const vtable<OtherSequence, OtherSignatures...>& other)
-      : vptr_(other.vptr_), permutation_(subset(other)) {}
+      : vptr_(other.vptr_), permutation_{other.permutation_[other.get_index(type<Signatures>{})]...} {}
 
-  template <typename Other>
-  static auto subset(const Other& other) {
-    return std::array<detail::index_type, sizeof...(Signatures)>{
-        other.permutation_[other.get_index(type<Signatures>{})]...};
-  }
 
   template <typename VoidType, typename Method, typename... Parameters>
   decltype(auto) call(Method method, VoidType t,
