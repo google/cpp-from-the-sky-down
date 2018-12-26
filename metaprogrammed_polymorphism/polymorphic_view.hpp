@@ -53,7 +53,7 @@ struct vtable_entry<I, Return(Method, Parameters...)> {
 
   static auto get_index(type<Return(Method, Parameters...)>) { return I; }
 
-  using is_const =  std::false_type ;
+  using is_const = std::false_type;
   using fun_ptr = ptr<Return(void*, Parameters...)>;
 };
 
@@ -75,7 +75,7 @@ struct vtable_entry<I, Return(Method, Parameters...) const> {
   }
   static auto get_index(type<Return(Method, Parameters...) const>) { return I; }
 
-  using is_const = std::true_type ;
+  using is_const  = std::true_type;
   using fun_ptr = ptr<Return(const void*, Parameters...)>;
 };
 
