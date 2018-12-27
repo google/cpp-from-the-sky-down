@@ -14,139 +14,214 @@
 #pragma once
 #include <type_traits>
 namespace tafn {
-	template<typename T>
+	template <typename T>
 	struct type {};
 
 	struct all_types {};
 
+	template <typename F>
+	struct all_functions {};
+
 	namespace detail {
 
 		struct call_customization_point_imp_t {
-			template<typename... Args>
-			auto operator()(Args&&... args) const -> decltype(customization_point(std::forward<Args>(args)...)) {
-				return customization_point(std::forward<Args>(args)...);
+			template <typename... Args>
+			auto operator()(Args&&... args) const
+				-> decltype(tafn_customization_point(std::forward<Args>(args)...)) {
+				return tafn_customization_point(std::forward<Args>(args)...);
 			}
 		};
 
 		inline constexpr call_customization_point_imp_t call_customization_point_imp;
 
-	}
+	}  // namespace detail
 
-	template<typename F, typename T, typename... Args>
-	inline constexpr bool has_implementation = std::is_invocable_v<detail::call_customization_point_imp_t, F, type<T>, Args...> || std::is_invocable_v<detail::call_customization_point_imp_t, F, all_types, Args...>;
+	template <bool b, typename F, typename T, typename... Args>
+	struct has_customization_point {
+		static constexpr bool value = false;
+	};
 
-	template<typename F, typename T, typename... Args>
-	inline constexpr bool has_type_specific_implementation = std::is_invocable_v<detail::call_customization_point_imp_t, F, type<T>, Args...>;
+	template <typename F, typename T, typename... Args>
+	struct has_customization_point<true, F, T, Args...> {
+		static constexpr bool value =
+			std::is_invocable_v<detail::call_customization_point_imp_t, F, T,
+			Args...>;
+	};
 
+	template <bool b, typename F, typename T, typename... Args>
+	inline constexpr bool has_customization_point_v =
+		has_customization_point<b, F, T, Args...>::value;
 
+	enum class customization_point_type {
+		type_function,
+		all_function,
+		type_all,
+		all_all,
+		none
+	};
+
+	// Calculate which customization point to use. Prefer type and function specific, though if have to choose, prefer function specific over type specific.
+	template <typename F, typename T, typename... Args>
+	struct get_customization_type {
+		using D = std::decay_t<T>;
+		static constexpr bool type_function =
+			has_customization_point_v<true, F, type<D>, T, Args...>;
+		static constexpr bool all_function =
+			has_customization_point_v<!type_function, F, all_types, T, Args...>;
+		static constexpr bool type_all = has_customization_point < !type_function &&
+			!all_function,
+			all_functions<F>, type<D>, T, Args... > ::value;
+		static constexpr bool all_all = has_customization_point_v < !type_function &&
+			!all_function && !type_all,
+			all_functions<F>, all_types, T, Args... >;
+
+		static constexpr customization_point_type value =
+			type_function
+			? customization_point_type::type_function
+			: all_function
+			? customization_point_type::all_function
+			: type_all ? customization_point_type::type_all
+			: all_all ? customization_point_type::all_all
+			: customization_point_type::none;
+	};
 
 	namespace detail {
-		template<typename F, typename T>
-		struct call_customization_point_t {
-			template<typename... Args>
-			decltype(auto) operator()(Args&&... args) const {
 
-				static_assert(has_implementation<F, T, Args...>, "no implementation for F for T");
-				if constexpr (has_type_specific_implementation<F, T, Args...>) {
-					return call_customization_point_imp(F{}, type<T>{}, std::forward<Args>(args)...);
+		template <typename F>
+		struct call_customization_point_t {
+			template <typename T, typename... Args>
+			decltype(auto) operator()(T&& t, Args&&... args) const {
+				using D = std::decay_t<T>;
+
+				constexpr auto customization_type =
+					get_customization_type<F, T, Args...>::value;
+				static_assert(customization_type != customization_point_type::none,
+					"No implementation of F for T");
+				if constexpr (customization_type ==
+					customization_point_type::type_function) {
+					return call_customization_point_imp(F{}, type<D>{}, std::forward<T>(t),
+						std::forward<Args>(args)...);
 				}
-				else {
-					return call_customization_point_imp(F{}, all_types{}, std::forward<Args>(args)...);
+				if constexpr (customization_type ==
+					customization_point_type::all_function) {
+					return call_customization_point_imp(F{}, all_types{}, std::forward<T>(t),
+						std::forward<Args>(args)...);
+				}
+				if constexpr (customization_type == customization_point_type::type_all) {
+					return call_customization_point_imp(all_functions<F>{}, type<D>{},
+						std::forward<T>(t),
+						std::forward<Args>(args)...);
+				}
+				if constexpr (customization_type == customization_point_type::all_all) {
+					return call_customization_point_imp(all_functions<F>{}, all_types{},
+						std::forward<T>(t),
+						std::forward<Args>(args)...);
+				}
+			}
+		};
+		template <typename F>
+		struct call_customization_point_t<all_functions<F>> {
+			template <typename T, typename... Args>
+			decltype(auto) operator()(T&& t, Args&&... args) const {
+				using D = std::decay_t<T>;
+
+				constexpr auto customization_type =
+					get_customization_type<F, T, Args...>::value;
+
+				static_assert(
+					customization_type == customization_point_type::type_function ||
+					customization_type == customization_point_type::type_all,
+					"No Implementation of F for T");
+				if constexpr (customization_type ==
+					customization_point_type::type_function) {
+					return call_customization_point_imp(F{}, type<D>{}, std::forward<T>(t),
+						std::forward<Args>(args)...);
+				}
+				if constexpr (customization_type == customization_point_type::type_all) {
+					return call_customization_point_imp(F{}, all_types{}, std::forward<T>(t),
+						std::forward<Args>(args)...);
 				}
 			}
 		};
 
-	}
+	}  // namespace detail
 
-	template<typename F, typename T>
-	inline constexpr detail::call_customization_point_t<F, T> call_customization_point{};
-
-
+	template <typename F>
+	inline constexpr detail::call_customization_point_t<F>
+		call_customization_point{};
 
 	namespace detail {
 
-		template<typename T>
+		template <typename T>
 		struct lvalue_wrapper;
 
-		template<typename T>
+		template <typename T>
 		struct rvalue_wrapper;
 
-
-
-		template<typename F, typename T>
+		template <typename F>
 		struct call_and_wrap_customization_point_t {
-
-			template<typename... Args>
+			template <typename... Args>
 			static auto helper(type<void>, Args&&... args) {
-				return call_customization_point<F, T>(std::forward<Args>(args)...);
+				return call_customization_point<F>(std::forward<Args>(args)...);
 			}
-			template<typename V, typename... Args>
+			template <typename V, typename... Args>
 			static auto helper(type<V>, Args&&... args) {
 				if constexpr (std::is_rvalue_reference_v<V>) {
-					return rvalue_wrapper<V>{call_customization_point<F, T>(std::forward<Args>(args)...)};
+					return rvalue_wrapper<V>{
+						call_customization_point<F>(std::forward<Args>(args)...)};
 				}
 				else {
-					return lvalue_wrapper<V>{call_customization_point<F, T>(std::forward<Args>(args)...)};
+					return lvalue_wrapper<V>{
+						call_customization_point<F>(std::forward<Args>(args)...)};
 				}
 			}
 
-			template<typename... Args>
+			template <typename... Args>
 			auto operator()(Args&&... args) const {
-				using e_type = decltype(call_customization_point<F, T>(std::forward<Args>(args)...));
+				using e_type =
+					decltype(call_customization_point<F>(std::forward<Args>(args)...));
 				return helper(type<e_type>{}, std::forward<Args>(args)...);
 			}
 		};
 
+	}  // namespace detail
 
-
-	}
-
-
-
-	template<typename F, typename T>
-	inline constexpr detail::call_and_wrap_customization_point_t<F, T> call_and_wrap_customization_point{};
-
-
-
-
-
+	template <typename F>
+	inline constexpr detail::call_and_wrap_customization_point_t<F>
+		call_and_wrap_customization_point{};
 
 	namespace detail {
 
-		template<typename T>
+		template <typename T>
 		struct lvalue_wrapper {
-
 			T unwrapped;
-			using D = std::decay_t<T>;
-			template<typename F, typename... Args>
-			auto _(Args&&... args)  {
-				return call_and_wrap_customization_point<F, D>(unwrapped, std::forward<Args>(args)...);
+			template <typename F, typename... Args>
+			auto _(Args&&... args) {
+				return call_and_wrap_customization_point<F>(unwrapped,
+					std::forward<Args>(args)...);
 			}
 
 			lvalue_wrapper(const lvalue_wrapper&) = delete;
 			lvalue_wrapper& operator=(const lvalue_wrapper&) = delete;
 		};
 
-		template<typename T>
+		template <typename T>
 		struct rvalue_wrapper {
-
 			T unwrapped;
 			using D = std::decay_t<T>;
-			template<typename F, typename... Args>
+			template <typename F, typename... Args>
 			auto _(Args&&... args) {
-				return call_and_wrap_customization_point<F, D>(std::forward<T>(unwrapped), std::forward<Args>(args)...);
+				return call_and_wrap_customization_point<F>(std::forward<T>(unwrapped),
+					std::forward<Args>(args)...);
 			}
 
 			rvalue_wrapper(const rvalue_wrapper&) = delete;
 			rvalue_wrapper& operator=(const rvalue_wrapper&) = delete;
-
 		};
 
-	}
+	}  // namespace detail
 
-
-
-	template<typename T>
+	template <typename T>
 	auto wrap(T&& t) {
 		if constexpr (std::is_rvalue_reference_v<T>) {
 			return detail::rvalue_wrapper<T&>{t};
@@ -155,14 +230,4 @@ namespace tafn {
 			return detail::lvalue_wrapper<T>{t};
 		}
 	}
-
-
-
-	struct value {};
-
-	template<typename T>
-	decltype(auto) customization_point(value, all_types, T&& t) {
-		return std::forward<T>(t);
-	}
-
-}
+}  // namespace tafn
