@@ -15,6 +15,8 @@
 #include <iostream>
 #include <vector>
 #include "tafn.hpp"
+#include <optional>
+
 
 struct multiply {};
 struct add {};
@@ -84,7 +86,9 @@ void tafn_customization_point(operation2, tafn::type<dummy>, dummy& d, int i,
 	}
 }
 
-template <typename F, typename... Args>
+template <typename F, typename... Args, typename =
+std::enable_if_t<tafn::is_valid<tafn::all_functions<F>,Args...,std::error_code&>>
+>
 decltype(auto) tafn_customization_point(tafn::all_functions<F>,
 	tafn::type<dummy>, Args&&... args) {
 	std::error_code ec;
@@ -132,14 +136,28 @@ std::vector<std::string> tafn_customization_point(get_all_lines, tafn::all_types
 }
 
 struct output {};
-template<typename T>
+template<typename T,
+typename = 
+	std::void_t<decltype(std::declval<std::ostream&>() << std::forward<T>(std::declval<T>()))
+	>>
 void tafn_customization_point(output, tafn::all_types, T&& t, std::ostream& os, std::string_view delimit = "") {
 	os << t << delimit;
 }
 
+template<typename T>
+struct c_value_type {
+	using D = std::decay_t<T>;
+	using type = typename D::value_type;
+};
+
+template<typename T>
+using c_value_type_t = typename c_value_type<T>::type;
+
 template<typename F>
 struct call_for_each {};
-template<typename F, typename C, typename... Args>
+template<typename F, typename C, typename... Args, typename =
+std::enable_if_t<
+	tafn::is_valid<F, decltype(*std::forward<C>(std::declval<C>()).begin()), Args...>>>
 void tafn_customization_point(call_for_each<F>, tafn::all_types, C&& c, Args&&... args) {
 	for (auto&& v : std::forward<C>(c)) {
 		tafn::call_customization_point<F>(std::forward<decltype(v)>(v), std::forward<Args>(args)...);
@@ -153,6 +171,7 @@ int main() {
 	int i{ 5 };
 
 	tafn::wrap(i)._<multiply>(10);
+	tafn::_<multiply>(i, 10);
 
 	std::cout << i;
 
@@ -170,6 +189,7 @@ int main() {
 	std::cout << tafn::wrap(t)._<algs::get<2>>().unwrapped;
 
 	test_exception();
+
 
 
 	tafn::wrap(std::cin)._<get_all_lines>()._<algs::sort>()._<algs::unique>()._<call_for_each<output>>(std::cout, "\n");

@@ -85,6 +85,29 @@ namespace tafn {
 			: customization_point_type::none;
 	};
 
+	// For all_functions, make sure we do  not all_functions again as that will create infinite recursion.
+	template <typename F, typename T, typename... Args>
+	struct get_customization_type<all_functions<F>, T, Args...>{
+		using D = std::decay_t<T>;
+		static constexpr bool type_function =
+			has_customization_point_v<true, F, type<D>, T, Args...>;
+		static constexpr bool all_function =
+			has_customization_point_v<!type_function, F, all_types, T, Args...>;
+	static constexpr customization_point_type value =
+			type_function
+			? customization_point_type::type_function
+			: all_function
+			? customization_point_type::all_function
+			: customization_point_type::none;
+	};
+
+
+
+
+	template <typename F, typename... Args>
+	inline constexpr bool is_valid = get_customization_type<F, Args...>::value != customization_point_type::none;
+
+
 	namespace detail {
 
 		template <typename F>
@@ -126,7 +149,7 @@ namespace tafn {
 				using D = std::decay_t<T>;
 
 				constexpr auto customization_type =
-					get_customization_type<F, T, Args...>::value;
+					get_customization_type<all_functions<F>, T, Args...>::value;
 
 				static_assert(
 					customization_type == customization_point_type::type_function ||
@@ -149,6 +172,12 @@ namespace tafn {
 	template <typename F>
 	inline constexpr detail::call_customization_point_t<F>
 		call_customization_point{};
+
+	template <typename F>
+	inline constexpr detail::call_customization_point_t<F>
+		_{};
+
+
 
 	namespace detail {
 
