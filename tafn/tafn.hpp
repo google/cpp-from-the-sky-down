@@ -158,6 +158,9 @@ namespace tafn {
 		template <typename T>
 		struct rvalue_wrapper;
 
+		template< typename T>
+		struct value_wrapper;
+
 		template <typename F>
 		struct call_and_wrap_customization_point_t {
 			template <typename... Args>
@@ -166,7 +169,11 @@ namespace tafn {
 			}
 			template <typename V, typename... Args>
 			static auto helper(type<V>, Args&&... args) {
-				if constexpr (std::is_rvalue_reference_v<V>) {
+				if constexpr (!std::is_reference_v<V>) {
+					return value_wrapper<V>{call_customization_point<F>(std::forward<Args>(args)...)};
+				}
+
+				else if	constexpr (std::is_rvalue_reference_v<V>) {
 					return rvalue_wrapper<V>{
 						call_customization_point<F>(std::forward<Args>(args)...)};
 				}
@@ -217,6 +224,28 @@ namespace tafn {
 
 			rvalue_wrapper(const rvalue_wrapper&) = delete;
 			rvalue_wrapper& operator=(const rvalue_wrapper&) = delete;
+		};
+
+		template<typename T>
+		struct value_wrapper {
+
+			T unwrapped;
+			using D = std::decay_t<T>;
+			template<typename F, typename... Args>
+			auto _(Args&&... args) & {
+				return call_and_wrap_customization_point<F>(unwrapped, std::forward<Args>(args)...);
+			}
+
+			template<typename F, typename... Args>
+			auto _(Args&&... args)  const& {
+				return call_and_wrap_customization_point<F>(unwrapped, std::forward<Args>(args)...);
+			}
+			template<typename F, typename... Args>
+			auto _(Args&&... args) && {
+				return call_and_wrap_customization_point<F>(std::move(unwrapped), std::forward<Args>(args)...);
+			}
+
+
 		};
 
 	}  // namespace detail

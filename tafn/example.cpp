@@ -36,23 +36,23 @@ namespace algs {
 	template <typename T>
 	decltype(auto) tafn_customization_point(sort, tafn::all_types, T&& t) {
 		std::sort(t.begin(), t.end());
-		return t;
+		return std::forward<T>(t);
 	}
 	template <typename T>
 	decltype(auto) tafn_customization_point(unique, tafn::all_types, T&& t) {
 		auto iter = std::unique(t.begin(), t.end());
 		t.erase(iter, t.end());
-		return t;
+		return std::forward<T>(t);
 	}
 	template <typename T, typename I>
 	decltype(auto) tafn_customization_point(copy, tafn::all_types, T&& t, I iter) {
 		std::copy(t.begin(), t.end(), iter);
-		return t;
+		return std::forward<T>(t);
 	}
 	template <typename T, size_t I>
 	decltype(auto) tafn_customization_point(get<I>, tafn::all_types, T&& t) {
 		using std::get;
-		return get<I>(t);
+		return get<I>(std::forward<T>(t));
 	}
 
 }  // namespace algs
@@ -118,10 +118,11 @@ void test_exception() {
 }
 
 #include <string>
+#include <string_view>
 
-struct all_lines {};
+struct get_all_lines {};
 
-std::vector<std::string> tafn_customization_point(all_lines, tafn::all_types, std::istream& is) {
+std::vector<std::string> tafn_customization_point(get_all_lines, tafn::all_types, std::istream& is) {
 	std::vector<std::string> result;
 	std::string line;
 	while (std::getline(is, line)) {
@@ -129,6 +130,22 @@ std::vector<std::string> tafn_customization_point(all_lines, tafn::all_types, st
 	}
 	return result;
 }
+
+struct output {};
+template<typename T>
+void tafn_customization_point(output, tafn::all_types, T&& t, std::ostream& os, std::string_view delimit = "") {
+	os << t << delimit;
+}
+
+template<typename F>
+struct call_for_each {};
+template<typename F, typename C, typename... Args>
+void tafn_customization_point(call_for_each<F>, tafn::all_types, C&& c, Args&&... args) {
+	for (auto&& v : std::forward<C>(c)) {
+		tafn::call_customization_point<F>(std::forward<decltype(v)>(v), std::forward<Args>(args)...);
+	}
+}
+
 
 #include <iterator>
 #include <tuple>
@@ -146,10 +163,7 @@ int main() {
 	std::vector<int> v{
 		4, 4, 1, 2, 2, 9, 9, 9, 7, 6, 6,
 	};
-	for (auto& i : tafn::wrap(v)._<algs::sort>()._<algs::unique>().unwrapped) {
-		std::cout << i << " ";
-	}
-
+	tafn::wrap(v)._<algs::sort>()._<algs::unique>()._<call_for_each<output>>(std::cout, "\n");
 	sort_unique(v);
 
 	std::tuple<int, char, int> t{ 1, 2, 3 };
@@ -157,10 +171,8 @@ int main() {
 
 	test_exception();
 
-	for (auto& i : tafn::wrap(std::cin)._<all_lines>()._<algs::sort>()._<algs::unique>().unwrapped) {
-		std::cout << i << "\n";
-	}
 
+	tafn::wrap(std::cin)._<get_all_lines>()._<algs::sort>()._<algs::unique>()._<call_for_each<output>>(std::cout, "\n");
 
 
 }
