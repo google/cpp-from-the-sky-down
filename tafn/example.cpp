@@ -35,18 +35,18 @@ namespace algs {
 	template <size_t I>
 	struct get {};
 
-	template <typename T>
+	template <typename T>//,typename = std::void_t<decltype(std::begin(std::declval<T>()))>>
 	decltype(auto) tafn_customization_point(sort, tafn::all_types, T&& t) {
 		std::sort(t.begin(), t.end());
 		return std::forward<T>(t);
 	}
-	template <typename T>
+	template <typename T,typename = std::void_t<decltype(std::begin(std::declval<T>()))>>
 	decltype(auto) tafn_customization_point(unique, tafn::all_types, T&& t) {
 		auto iter = std::unique(t.begin(), t.end());
 		t.erase(iter, t.end());
 		return std::forward<T>(t);
 	}
-	template <typename T, typename I>
+	template <typename T, typename I,typename = std::void_t<decltype(std::begin(std::declval<T>()))>>
 	decltype(auto) tafn_customization_point(copy, tafn::all_types, T&& t, I iter) {
 		std::copy(t.begin(), t.end(), iter);
 		return std::forward<T>(t);
@@ -166,6 +166,29 @@ void tafn_customization_point(call_for_each<F>, tafn::all_types, C&& c, Args&&..
 		tafn::call_customization_point<F>(std::forward<decltype(v)>(v), std::forward<Args>(args)...);
 	}
 }
+
+namespace smart_reference {
+	template<typename T>
+	struct reference {
+		T* t;
+	};
+
+	template<typename F, typename R, typename T, typename... Args, typename = std::enable_if_t<tafn::is_valid<F,R&,Args...>>>
+	decltype(auto) tafn_customization_point(tafn::all_functions<F>, tafn::type<reference<R>>, T&& t, Args&&... args) {
+		return tafn::call_customization_point<F>(*t.t, std::forward<Args>(args)...);
+	}
+
+	void test() {
+		using tafn::_;
+		std::vector<int> v{ 4,3,2,1,2,3 };
+		reference<std::vector<int>> a{&v};
+		a | _<algs::sort>() | _<algs::unique>() | _<call_for_each<output>>(std::cout, "\n");
+
+
+	}
+}
+
+
 
 
 #include <iterator>

@@ -66,11 +66,10 @@ namespace tafn {
 		using D = std::decay_t<T>;
 		static constexpr bool type_function =
 			has_customization_point_v<true, F, type<D>, T, Args...>;
-		static constexpr bool all_function =
-			has_customization_point_v<!type_function, F, all_types, T, Args...>;
-		static constexpr bool type_all = has_customization_point < !type_function &&
-			!all_function,
+		static constexpr bool type_all = has_customization_point < !type_function,
 			all_functions<F>, type<D>, T, Args... > ::value;
+		static constexpr bool all_function =
+			has_customization_point_v<!type_function && !type_all, F, all_types, T, Args...>;
 		static constexpr bool all_all = has_customization_point_v < !type_function &&
 			!all_function && !type_all,
 			all_functions<F>, all_types, T, Args... >;
@@ -125,14 +124,15 @@ namespace tafn {
 					return call_customization_point_imp(F{}, type<D>{}, std::forward<T>(t),
 						std::forward<Args>(args)...);
 				}
-				if constexpr (customization_type ==
-					customization_point_type::all_function) {
-					return call_customization_point_imp(F{}, all_types{}, std::forward<T>(t),
-						std::forward<Args>(args)...);
-				}
 				if constexpr (customization_type == customization_point_type::type_all) {
 					return call_customization_point_imp(all_functions<F>{}, type<D>{},
 						std::forward<T>(t),
+						std::forward<Args>(args)...);
+				}
+
+				if constexpr (customization_type ==
+					customization_point_type::all_function) {
+					return call_customization_point_imp(F{}, all_types{}, std::forward<T>(t),
 						std::forward<Args>(args)...);
 				}
 				if constexpr (customization_type == customization_point_type::all_all) {
