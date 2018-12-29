@@ -87,13 +87,13 @@ namespace tafn {
 
 	// For all_functions, make sure we do  not all_functions again as that will create infinite recursion.
 	template <typename F, typename T, typename... Args>
-	struct get_customization_type<all_functions<F>, T, Args...>{
+	struct get_customization_type<all_functions<F>, T, Args...> {
 		using D = std::decay_t<T>;
 		static constexpr bool type_function =
 			has_customization_point_v<true, F, type<D>, T, Args...>;
 		static constexpr bool all_function =
 			has_customization_point_v<!type_function, F, all_types, T, Args...>;
-	static constexpr customization_point_type value =
+		static constexpr customization_point_type value =
 			type_function
 			? customization_point_type::type_function
 			: all_function
@@ -173,119 +173,45 @@ namespace tafn {
 	inline constexpr detail::call_customization_point_t<F>
 		call_customization_point{};
 
-	template <typename F>
-	inline constexpr detail::call_customization_point_t<F>
-		_{};
-
-
-
 	namespace detail {
+		template<class F, class Tuple>
+		struct f_args_holder {
+			Tuple  t;
+		};
 
-		template <typename T>
-		struct lvalue_wrapper;
+		template<typename F, typename... Args>
+		auto make_f_args_holder(Args&&... args) {
+			return f_args_holder < F,
+				decltype(std::forward_as_tuple(std::forward<Args>(args)...)) > {std::forward_as_tuple(std::forward<Args>(args)...)};
+		}
 
-		template <typename T>
-		struct rvalue_wrapper;
+		template<typename T, typename F, typename Tuple>
+		decltype(auto) operator|(T&& t, f_args_holder<F, Tuple>&& h) {
+			return std::apply(call_customization_point<F>,
+				std::tuple_cat(std::forward_as_tuple(std::forward<T>(t)), std::move(h.t)));
+		}
 
-		template< typename T>
-		struct value_wrapper;
-
-		template <typename F>
-		struct call_and_wrap_customization_point_t {
-			template <typename... Args>
-			static auto helper(type<void>, Args&&... args) {
-				return call_customization_point<F>(std::forward<Args>(args)...);
-			}
-			template <typename V, typename... Args>
-			static auto helper(type<V>, Args&&... args) {
-				if constexpr (!std::is_reference_v<V>) {
-					return value_wrapper<V>{call_customization_point<F>(std::forward<Args>(args)...)};
-				}
-
-				else if	constexpr (std::is_rvalue_reference_v<V>) {
-					return rvalue_wrapper<V>{
-						call_customization_point<F>(std::forward<Args>(args)...)};
-				}
-				else {
-					return lvalue_wrapper<V>{
-						call_customization_point<F>(std::forward<Args>(args)...)};
-				}
-			}
-
-			template <typename... Args>
+		template<typename F>
+		struct f_args_maker {
+			template<typename... Args>
 			auto operator()(Args&&... args) const {
-				using e_type =
-					decltype(call_customization_point<F>(std::forward<Args>(args)...));
-				return helper(type<e_type>{}, std::forward<Args>(args)...);
+				return make_f_args_holder<F>(std::forward<Args>(args)...);
 			}
 		};
 
-	}  // namespace detail
 
-	template <typename F>
-	inline constexpr detail::call_and_wrap_customization_point_t<F>
-		call_and_wrap_customization_point{};
-
-	namespace detail {
-
-		template <typename T>
-		struct lvalue_wrapper {
-			T unwrapped;
-			template <typename F, typename... Args>
-			auto _(Args&&... args) {
-				return call_and_wrap_customization_point<F>(unwrapped,
-					std::forward<Args>(args)...);
-			}
-
-			lvalue_wrapper(const lvalue_wrapper&) = delete;
-			lvalue_wrapper& operator=(const lvalue_wrapper&) = delete;
-		};
-
-		template <typename T>
-		struct rvalue_wrapper {
-			T unwrapped;
-			using D = std::decay_t<T>;
-			template <typename F, typename... Args>
-			auto _(Args&&... args) {
-				return call_and_wrap_customization_point<F>(std::forward<T>(unwrapped),
-					std::forward<Args>(args)...);
-			}
-
-			rvalue_wrapper(const rvalue_wrapper&) = delete;
-			rvalue_wrapper& operator=(const rvalue_wrapper&) = delete;
-		};
-
-		template<typename T>
-		struct value_wrapper {
-
-			T unwrapped;
-			using D = std::decay_t<T>;
-			template<typename F, typename... Args>
-			auto _(Args&&... args) & {
-				return call_and_wrap_customization_point<F>(unwrapped, std::forward<Args>(args)...);
-			}
-
-			template<typename F, typename... Args>
-			auto _(Args&&... args)  const& {
-				return call_and_wrap_customization_point<F>(unwrapped, std::forward<Args>(args)...);
-			}
-			template<typename F, typename... Args>
-			auto _(Args&&... args) && {
-				return call_and_wrap_customization_point<F>(std::move(unwrapped), std::forward<Args>(args)...);
-			}
-
-
-		};
-
-	}  // namespace detail
-
-	template <typename T>
-	auto wrap(T&& t) {
-		if constexpr (std::is_rvalue_reference_v<T>) {
-			return detail::rvalue_wrapper<T&>{t};
-		}
-		else {
-			return detail::lvalue_wrapper<T>{t};
-		}
 	}
+	template<typename F>
+	inline constexpr detail::f_args_maker<F> _{};
+
+
+
+
+
+
+
+
+
+
+
 }  // namespace tafn

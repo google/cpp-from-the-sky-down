@@ -61,7 +61,8 @@ namespace algs {
 
 template <typename T>
 void sort_unique(T&& t) {
-	tafn::wrap(t)._<algs::sort>()._<algs::unique>();
+	using tafn::_;
+	t| _<algs::sort>()|_<algs::unique>();
 }
 
 #include <system_error>
@@ -78,6 +79,7 @@ dummy& tafn_customization_point(operation1, tafn::type<dummy>, dummy& d, int i,
 	}
 	return d;
 }
+
 
 void tafn_customization_point(operation2, tafn::type<dummy>, dummy& d, int i,
 	int j, std::error_code& ec) {
@@ -111,10 +113,11 @@ decltype(auto) tafn_customization_point(tafn::all_functions<F>,
 }
 
 void test_exception() {
+	using tafn::_;
 	try {
 		dummy d;
 		std::error_code ec;
-		tafn::wrap(d)._<operation1>(1, ec)._<operation2>(2, 2);
+		d|_<operation1>(1, ec)|_<operation2>(2, 2, ec);
 	}
 	catch (const std::exception& e) {
 		std::cerr << e.what() << "\n";
@@ -168,31 +171,33 @@ void tafn_customization_point(call_for_each<F>, tafn::all_types, C&& c, Args&&..
 #include <iterator>
 #include <tuple>
 int main() {
+
+	using tafn::_;
+
 	int i{ 5 };
 
-	tafn::wrap(i)._<multiply>(10);
-	tafn::_<multiply>(i, 10);
+	i | _<multiply>(10);
+	tafn::call_customization_point<multiply>(i, 10);
 
 	std::cout << i;
 
 	int j = 9;
-	auto k = tafn::wrap(i)._<add>(2)._<add>(3).unwrapped;
-	std::cout << k << " " << tafn::wrap(j)._<add>(4)._<add>(5).unwrapped << " ";
+	auto k = i | _<add>(2)|_<add>(3);
+	std::cout << k << " " << (j | _<add>(4) | _<add>(5)) << " ";
 
 	std::vector<int> v{
 		4, 4, 1, 2, 2, 9, 9, 9, 7, 6, 6,
 	};
-	tafn::wrap(v)._<algs::sort>()._<algs::unique>()._<call_for_each<output>>(std::cout, "\n");
+	v | _<algs::sort>()|_<algs::unique>()|_<call_for_each<output>>(std::cout, "\n");
 	sort_unique(v);
 
-	std::tuple<int, char, int> t{ 1, 2, 3 };
-	std::cout << tafn::wrap(t)._<algs::get<2>>().unwrapped;
+	auto t = std::tuple<int, char, int>{ 1, 2, 3 } ;
+	std::cout << (t|_<algs::get<2>>());
 
 	test_exception();
 
 
+	std::cin | _<get_all_lines>() | _<algs::sort>() | _<algs::unique>() | _<call_for_each<output>>(std::cout, "\n");
 
-	tafn::wrap(std::cin)._<get_all_lines>()._<algs::sort>()._<algs::unique>()._<call_for_each<output>>(std::cout, "\n");
-
-
+	// std::cin.<get_all_lines>().<algs::sort>().<algs::unique>().<call_for_each<output>>(std::cout, "\n");
 }
