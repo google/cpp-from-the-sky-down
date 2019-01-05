@@ -25,9 +25,8 @@ namespace tafn {
 	namespace detail {
 
 		struct call_customization_point_imp_t {
-			template <typename... Args>
-			auto operator()(Args&&... args) const
-				-> decltype(tafn_customization_point(std::forward<Args>(args)...)) {
+			template <typename... Args, typename = std::void_t<decltype(tafn_customization_point(std::declval<Args>()...))>>
+			decltype(auto) operator()(Args&&... args) const{
 				return tafn_customization_point(std::forward<Args>(args)...);
 			}
 		};
@@ -179,6 +178,18 @@ namespace tafn {
 			Tuple  t;
 		};
 
+		template<typename F,size_t... I, typename T, typename Tuple>
+		decltype(auto) call_with_tuple_imp(std::index_sequence<I...>, T&& t, Tuple&& tuple) {
+			return call_customization_point<F>(std::forward<T>(t), std::get<I>(std::forward<Tuple>(tuple))...);
+		}
+
+		template<typename F,typename T, typename Tuple>
+		decltype(auto) call_with_tuple(T&& t, Tuple&& tuple) {
+			return call_with_tuple_imp<F>(std::make_index_sequence<std::tuple_size_v<std::decay_t<Tuple>>>(),std::forward<T>(t),std::forward<Tuple>(tuple));
+		}
+
+
+
 		template<typename F, typename... Args>
 		auto make_f_args_holder(Args&&... args) {
 			return f_args_holder < F,
@@ -187,9 +198,22 @@ namespace tafn {
 
 		template<typename T, typename F, typename Tuple>
 		decltype(auto) operator|(T&& t, f_args_holder<F, Tuple>&& h) {
-			return std::apply(call_customization_point<F>,
-				std::tuple_cat(std::forward_as_tuple(std::forward<T>(t)), std::move(h.t)));
+			return call_with_tuple<F>(std::forward<T>(t), std::move(h.t));
 		}
+
+		template<typename T, typename F, typename Tuple>
+		decltype(auto) operator*(T&& t, f_args_holder<F, Tuple>&& h) {
+			return call_with_tuple<F>(std::forward<T>(t), std::move(h.t));
+		}
+
+		template<typename F, typename Tuple>
+		decltype(auto) operator*(f_args_holder<F, Tuple>&& h) {
+			return std::apply(call_customization_point<F>,
+				std::move(h.t));
+		}
+
+
+
 
 		template<typename F>
 		struct f_args_maker {
