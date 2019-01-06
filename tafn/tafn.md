@@ -116,7 +116,7 @@ std::string& str = ref.<get_data>();
 
 ```
 
-We have implemented a smart reference in literally 3 lines of code.
+We have implemented a smart reference forwarding in literally 3 lines of code.
 
 We can even do it for  `std::shared_ptr`
 
@@ -168,3 +168,80 @@ std::string std_customization_point(to_string, type<int>,int i){
 
 
 ```
+
+Let's add an output method that takes an ostream.
+
+```
+struct output {};
+template<typename T,
+	typename =
+	std::void_t<decltype(std::declval<std::ostream&>() << std::forward<T>(std::declval<T>()))
+	>>
+	void std_customization_point(output, all_types, const T& t, std::ostream& os, std::string_view delimit = "") {
+	os << t << delimit;
+}
+
+```
+
+Then, if we have a variable `x`, instead of doing `std::cout << x << "\n"; ` we can write `x.<output>(std::cout,"\n");`
+
+### Extensions Methods for Collections
+
+With extension methods, we can do the following to read lines from stdin, sort, unique, and output.
+
+```
+std::cin.<get_all_lines>().<sort>().<unique>().<call_for_each<output>>(std::cout, "\n");
+```
+
+We previously defined output, here are the others.
+
+```
+
+struct get_all_lines {};
+
+std::vector<std::string> std_customization_point(get_all_lines, all_types, std::istream& is) {
+	std::vector<std::string> result;
+	std::string line;
+	while (std::getline(is, line)) {
+		result.push_back(line);
+	}
+	return result;
+}
+
+struct sort {};
+
+template <typename T,typename = std::void_t<decltype(std::begin(std::declval<T>()))>>
+decltype(auto) std_customization_point(sort, all_types, T&& t) {
+    std::sort(t.begin(), t.end());
+    return std::forward<T>(t);
+}
+
+
+struct unique {};
+
+template <typename T, typename = std::void_t<decltype(std::begin(std::declval<T>()))>>
+decltype(auto) std_customization_point(unique, all_types, T&& t) {
+    auto iter = std::unique(t.begin(), t.end());
+    t.erase(iter, t.end());
+    return std::forward<T>(t);
+}
+
+template<typename F>
+
+struct call_for_each {};
+template<typename F, typename C, typename... Args, typename =
+	std::enable_if_t<
+	is_valid<F, decltype(*std::forward<C>(std::declval<C>()).begin()), Args...>>>
+	void std_customization_point(call_for_each<F>, all_types, C&& c, Args&&... args) {
+	for (auto&& v : std::forward<C>(c)) {
+		call_customization_point<F>(std::forward<decltype(v)>(v), std::forward<Args>(args)...);
+	}
+}
+
+
+```
+
+### Decorators
+
+TBD
+

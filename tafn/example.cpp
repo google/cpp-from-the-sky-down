@@ -143,7 +143,7 @@ template<typename T,
 	typename =
 	std::void_t<decltype(std::declval<std::ostream&>() << std::forward<T>(std::declval<T>()))
 	>>
-	void tafn_customization_point(output, tafn::all_types, T&& t, std::ostream& os, std::string_view delimit = "") {
+	void tafn_customization_point(output, tafn::all_types, const T& t, std::ostream& os, std::string_view delimit = "") {
 	os << t << delimit;
 }
 
