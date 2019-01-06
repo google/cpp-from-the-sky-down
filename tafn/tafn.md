@@ -241,7 +241,21 @@ template<typename F, typename C, typename... Args, typename =
 
 ```
 
+
+### Customization points
+
+One of the issues with C++ is picking customization points. For example, the addition of `size` as a customization point in `C++17`, resulted in compilation errors in code that worked with `C++14`.
+[https://quuxplusone.github.io/blog/2018/11/04/std-hash-value/]
+
+Using type names as functions, would make this problem go away.  Since, these would by defined unambiguously by types.
+
+For example, if we had to add a new customization point `baz` it could be called `std::customization_point::baz` and be called:
+
+`foo.<std::customization_point::baz>();`
+
+Customization points could be added to the standard without any fear that they would conflict with existing code.
+
 ### Decorators
 
-TBD
+TODO
 
