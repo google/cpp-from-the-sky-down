@@ -13,6 +13,7 @@
 
 #pragma once
 #include <type_traits>
+#include <tuple>
 namespace tafn {
 	template <typename T>
 	struct type {};
@@ -25,8 +26,8 @@ namespace tafn {
 	namespace detail {
 
 		struct call_customization_point_imp_t {
-			template <typename... Args, typename = std::void_t<decltype(tafn_customization_point(std::declval<Args>()...))>>
-			decltype(auto) operator()(Args&&... args) const{
+			template <typename... Args>
+			auto operator()(Args&&... args) const -> decltype(tafn_customization_point(std::declval<Args>()...)){
 				return tafn_customization_point(std::forward<Args>(args)...);
 			}
 		};
