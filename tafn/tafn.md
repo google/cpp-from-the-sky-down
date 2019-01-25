@@ -15,30 +15,77 @@ The feature is to allow types to be called as functions.
 
 ## Proposed Syntax
 
-Assume you have the following template structs;
+The goal is to use function type tags instead of functions.
 
-* `template<typename T> struct type{};`
-* `template<typename F> struct all_functions{};`
-* `struct all_types{};`
+### Calling a function type tag.
 
-Assume you have the following forms of overloads for `std_customization_point`
+```
+struct foo{};
 
-1. `template<typename F, typename T, typename... Args> decltype(auto) std_customization_point(F, type<T>, T&& t, Args&&... args);` - implements a specific function F for a single type T.
-2. `template<typename F, typename T, typename... Args> decltype(auto) std_customization_point(all_functions<F>, type<T>, T&& t, Args&&... args);` - implements all functions for a single type T.
-3. `template<typename F, typename T, typename... Args> decltype(auto) std_customization_point(F, all_types, T&& t, Args&&... args);` - implements a specific function F for all types. 
-4. `template<typename F, typename T, typename... Args> decltype(auto) std_customization_point(all_functions<F>, all_types, T&& t, Args&&... args);` - implements all functions for all types.
+object o;
 
-Assume you have the following callable:
+o.<foo>();
 
-`template<typename F, typename T, typename... Args> decltype(auto) call_customization_point(T&& t, Args&&... args);` which checks if the overload form of `std_customization_point` exists and if it exists calls it. The overload form 1 is higher priority than 2 which is higher than 3 which is higher than 4.
+// same as above
+<foo>(o);
 
-Then if you have Type `F` and Object `o` of Type `T` then `o.<F>(args);` is the same as `call_customization_point<F>(o,args);`
+```
 
-Finally, let us add a template variable which will let us know if we can call `call_customization_point`.
+### Implementing function tag types
+
+This can be done in 4 ways.
+
+1. Implementing a function type tag for a single function tag and type
+
+```
+
+auto <foo,object>(object& o){
+	return 43;
+}
+
+```
+
+2. Implementing a function tag type for a all functions tags for a give type.
+
+```
+template<typename F>
+auto <F, object>(object& o){
+	return 42;
+}
+
+```
+
+3. Implementing a function tag type for all types.
+
+
+```
+template<typename T>
+auto <foo>(T& t){
+	return 42;
+}
+
+```
+
+4. Implementing a function tag type for all types and all functions
+
+```
+template<typename F, typename T>
+auto <F>(T& t){
+	return 42;
+}
+
+```
+
+Implementation 1 takes precedence over 2, and so on.
+
+## is_action_invocable
+
 ```
 template<typename F, typename... Args>
-inline constexpr bool is_valid = // True iff there is an std_customization_point_overload such that call_customization_point<F>(declval<Args>()...) is well-formed
+inline constexpr bool is_action_invocable = // true if <F>(decltype<Args>()...) is well-formed.
 ```
+
+
 
 
 ## Simple Example
@@ -55,7 +102,7 @@ c.<say_hello>("john");
 To implement, we just provide the following overload in the namespace of either `my_class` for `say_hello`;
 
 ```
-void std_customization_point(say_hello, type<my_class>, const my_class& c, std::string_view name){
+void <say_hello, my_class>(const my_class& c, std::string_view name){
   std::cout << "hello " << name << "\n";
 ```
 
@@ -81,9 +128,9 @@ struct get_data{};
 class my_class{
 string data_;
 
-template<typename T>
-friend decltype(auto) std_customization_point(get_data, type<my_class>, T&& t){
-  return (std::forward<T>(t).data_);
+template<typename Self>
+friend decltype(auto) <get_data, my_class>(Self&& self){
+  return (std::forward<Self>(self).data_);
 }
 };
 ```
@@ -100,9 +147,9 @@ Let's make a dumb smart reference.
 		T& r_;
 	};
 
-	template<typename F, typename T,typename Self, typename... Args, typename = std::enable_if_t<is_valid<F,,Args...>>>
-	decltype(auto) std_customization_point(all_functions<F>, type<smart_reference<T>>, Self&& self, Args&&... args) {
-		return call_customization_point<F>(std::forward<Self>(self).r_, std::forward<Args>(args)...);
+	template<typename F, typename T,typename Self, typename... Args, typename = std::enable_if_t<is_action_invocable<F,Args...>>>
+	decltype(auto) <F,smart_reference<T>>(Self&& self, Args&&... args) {
+		return std::forward<Self>(self).r_.<F>(std::forward<Args>(args)...);
 	}
 
 
@@ -118,32 +165,6 @@ std::string& str = ref.<get_data>();
 
 We have implemented a smart reference forwarding in literally 3 lines of code.
 
-We can even do it for  `std::shared_ptr`
-
-```
-
-
-	template<typename F, typename T,typename Self, typename... Args, typename = std::enable_if_t<is_valid<F,T&,Args...>>>
-	decltype(auto) std_customization_point(all_functions<F>, type<shared_ptr<T>>, Self&& self, Args&&... args) {
-		return call_customization_point<F>(*std::forward<Self>(self), std::forward<Args>(args)...);
-	}
-
-
-```
-
-For this, we would have to be in namespace std (so this overload would have be be provided by the standard library).
-
-Once we have this we could do:
-
-```
-
-auto ptr = std::make_shared<my_class>();
-
-ptr.<get_data>();
-
-
-``` 
-
 
 ### Extension methods
 
@@ -157,7 +178,7 @@ namespace my_methods{
 
 struct to_string{};
 
-std::string std_customization_point(to_string, type<int>,int i){
+std::string <to_string,int>(int i){
   return std::to_string(i);
 }
 
@@ -177,7 +198,7 @@ template<typename T,
 	typename =
 	std::void_t<decltype(std::declval<std::ostream&>() << std::forward<T>(std::declval<T>()))
 	>>
-	void std_customization_point(output, all_types, const T& t, std::ostream& os, std::string_view delimit = "") {
+	void <output>(const T& t, std::ostream& os, std::string_view delimit = "") {
 	os << t << delimit;
 }
 
@@ -199,7 +220,7 @@ We previously defined output, here are the others.
 
 struct get_all_lines {};
 
-std::vector<std::string> std_customization_point(get_all_lines, all_types, std::istream& is) {
+std::vector<std::string> <get_all_lines>(std::istream& is) {
 	std::vector<std::string> result;
 	std::string line;
 	while (std::getline(is, line)) {
