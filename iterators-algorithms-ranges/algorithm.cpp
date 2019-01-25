@@ -41,6 +41,22 @@ void nearest_k(V& v, const T& t, int k) {
 }
 
 
+template<typename I1, typename I2>
+std::size_t distance(I1 begin, I2 end) {
+	if constexpr (std::is_same_v<typename std::iterator_traits<I1>::iterator_category, std::random_access_iterator_tag>) {
+		return end - begin;
+	}
+	else {
+		std::size_t d = 0;
+		for (; begin != end; ++begin) {
+			++d;
+		}
+		return d;
+	}
+}
+
+#include <list>
+
 int main() {
 	std::vector<int> v;
 
@@ -56,6 +72,10 @@ int main() {
 
 	nearest_k(v, 5, 2);
 	std::copy(v.begin(), v.end(), std::ostream_iterator<int>(std::cout, "\n"));
+
+
+	std::list<int> l(v.begin(), v.end());
+	std::cout << "vector size:" << distance(v.begin(), v.end()) << " list size:" << distance(l.begin(), l.end()) << "\n";
 
 
 
