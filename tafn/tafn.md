@@ -64,7 +64,7 @@ struct object{
 };
 
 object o;
-o.member_function;
+o.member_function();
 
 
 // Definition of action type tag.
@@ -79,7 +79,7 @@ o.<bar>();
 
 ## Proposed defintion syntax
 
-Let `object` be an object type, and `foo` be an n `action tag` and `ActionTag` be generic `action tag`:
+Let `object` be an object type, and `foo` be an `action tag` and `ActionTag` be a generic `action tag`:
 
 Then an implementation of an `action tag` can be accomplished in 4 ways:
 
@@ -157,7 +157,7 @@ int main(){
 
 ```
 
-Without that extra object type, users would not be able to confidently convert member functions to the `acton tag` format.
+Without that extra object type, users would not be able to confidently convert member functions to the `action tag` format.
 ## Supporting types
 
 ### is_action_tag_invocable
@@ -358,7 +358,7 @@ ref.<to_string>(); // "2"
 
 In addition to forwarding easily, `action tags` also solve the issue of how to differentiate the member functions of the smart reference itself. Because `action tags` are namespaced, it is obvious that the `action tag` `reset` applies to the reference itself and not to what is being stored.
 
-In addition, if we could extend this tecnhique to making for example debugging proxies doing such things as logging all `action tags` and parameters if we so desired.
+In addition, if we could extend this tecnhique to making for example debugging proxies doing such things as logging all `action tags` and parameters if we so desired. In fact, we could even use this to create a transparent remoting proxy which will convert member function invocations into a remote procedure call.
 
 ### Containment
 
