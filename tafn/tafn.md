@@ -1,41 +1,89 @@
 # Types as Function Names
 
-## Introduction
+## TLDR:
 
-We propose a feature that makes C++ more general and extensible and can help with the following features:
+A single general addition to the C++ core language will be able to solve what are currently viewed as multiple independent problems:
+
+* Universal Function Call Syntax
 * Extension Methods
-* Customization Points
-* Smart References
-* Forwarding member function calls to another class in lieu of inheritance
-* Type Erasure
-* Function Decorator
-* Deducing this to reduce const / reference overloading boilerplate
+* Deducing This
+* Extension points
+* Smart references/ proxies
+* Forwarding member functions calls to contained objects
+* Runtime polymorphism without inheritance
 
-The feature is to allow types to be called as functions.
 
-## Proposed Syntax
+## Motivation
 
-The goal is to use function type tags instead of functions.
+Using names to designate functions is a source of limitations for C++. The limitations fall into three main categories:
 
-### Calling a function type tag.
+1. Backwards compatibility limitations
+	* Universal Function Call Syntax
+	* Extension Methods
+	* Deducing This
+
+
+2. Incomplement namespacing
+	* Extension points
+
+3. Lack of meta-programmability
+    * Overload sets
+	* Smart references/proxies
+	* Making containment easier to use vs. inheritance
+	* Runtime polymorphism without inheritance
+
+
+## Definitions
+
+Let `action tag` be defined as an empty struct:
 
 ```
-struct foo{};
+struct foo{}; // foo is an action tag.
+struct bar{}; // bar is another action tag.
+
+```
+
+## Proposed calling syntax
+
+Anywhere where a `function name` is used to call a function or member function, `<action tag>` may be used instead. In addition, if `o` is a object, then `o.<action tag>` is equivalent of `<action tag>(o)`
+
+```
+// Declaration
+void free_function();
+
+free_function();
+
+// Definition of action tag type
+struct foo{}; 
+
+<foo>(); // calling an action tag
+
+// Declaration
+struct object{
+	void member_function();
+};
 
 object o;
+o.member_function;
 
-o.<foo>();
 
-// same as above
-<foo>(o);
+// Definition of action type tag.
+struct bar{};
+
+// The following 2 calls are equivalent.
+o.<bar>();
+<bar>(o);
+
 
 ```
 
-### Implementing function tag types
+## Proposed defintion syntax
 
-This can be done in 4 ways.
+Let `object` be an object type, and `foo` be an n `action tag` and `ActionTag` be generic `action tag`:
 
-1. Implementing a function type tag for a single function tag and type
+Then an implementation of an `action tag` can be accomplished in 4 ways:
+
+1. Implementing a specific `action tag` for a specific type.
 
 ```
 
@@ -45,17 +93,17 @@ auto <foo,object>(object& o){
 
 ```
 
-2. Implementing a function tag type for a all functions tags for a give type.
+2. Implementing all `action tags` for a single type.
 
 ```
-template<typename F>
-auto <F, object>(object& o){
+template<typename ActionTag>
+auto <ActionTag, object>(object& o){
 	return 42;
 }
 
 ```
 
-3. Implementing a function tag type for all types.
+3. Implementing an `action tag` for all types.
 
 
 ```
@@ -66,104 +114,93 @@ auto <foo>(T& t){
 
 ```
 
-4. Implementing a function tag type for all types and all functions
+4. Implementing all `action tags` for all types.
 
 ```
-template<typename F, typename T>
-auto <F>(T& t){
+template<typename ActionTag, typename T>
+auto <ActionTag>(T& t){
 	return 42;
 }
 
 ```
 
-Implementation 1 takes precedence over 2, and so on.
+Implementation 1 takes precedence over 2, 2 takes precedence over 3, 3 takes precedence over 4. SFINAE and concepts may be used to constrain the implementation. An implementation may be a friend of a class. Within predence levels 1-4, lookup proceeds in a manner consistent with ADL, with the addition of the namespace of the `action tag` to the list of namespaces searched.
 
-## is_action_invocable
+## Rationale for taking optional object type.
 
-```
-template<typename F, typename... Args>
-inline constexpr bool is_action_invocable = // true if <F>(decltype<Args>()...) is well-formed.
-```
-
-
-
-
-## Simple Example
-
-You have `struct say_hello{};` and `class my_class{string data_;};` 
-
-Let's call `say_hello` on a object of `my_class`.
+This allows us to convert member functions to use `action tags` without having to worry about having a better overload hiding our function. This is illustrated below:
 
 ```
-my_class c;
-c.<say_hello>("john");
-```
-
-To implement, we just provide the following overload in the namespace of either `my_class` for `say_hello`;
-
-```
-void <say_hello, my_class>(const my_class& c, std::string_view name){
-  std::cout << "hello " << name << "\n";
-```
-
-## Deducing this
-
-Going back to `my_class` let's add an access  member function for `data_`. This how we would currently do it.
-
-```
-class my_class{
-string data_;
-
-public:
-const string& data() const &{return data_;}
-string& data() &{return data_;}
-string&& data()&& {return data_;}
-
-```
-
-We have the same function body, but have to have different qualifiers. Here is how to do it with this proposal.
-
-```
-struct get_data{};
-class my_class{
-string data_;
-
-template<typename Self>
-friend decltype(auto) <get_data, my_class>(Self&& self){
-  return (std::forward<Self>(self).data_);
-}
+struct object{
+    int foo(double){
+        return 42;
+    }
 };
+
+int foo(object&, double){
+    return 42;
+}
+
+template<typename T>
+int foo(T&, int){
+    return 1;
+}
+
+
+
+int main(){
+    object o;
+    o.foo(1); // returns 42
+    foo(o,1); // return 1
+}
+
+
 ```
 
-You write the overload once, and it just works.
+Without that extra object type, users would not be able to confidently convert member functions to the `acton tag` format.
+## Supporting types
 
-## Smart references
-
-Let's make a dumb smart reference.
+### is_action_tag_invocable
 
 ```
- template<typename T>
-	struct smart_reference {
-		T& r_;
-	};
 
-	template<typename F, typename T,typename Self, typename... Args, typename = std::enable_if_t<is_action_invocable<F,Args...>>>
-	decltype(auto) <F,smart_reference<T>>(Self&& self, Args&&... args) {
-		return std::forward<Self>(self).r_.<F>(std::forward<Args>(args)...);
+// iff <ActionTag>(decltype<Args>()...) is well-formed.
+template<typename ActionTag, typename... Args>
+struct is_action_tag_invocable :std::true_type{}
+
+// otherwise
+template<typename ActionTag, typename... Args>
+struct is_action_tag_invocable :std::false_type{}
+
+
+template<typename ActionTag, typename... Args>
+inline constexpr bool is_action_tag_invocable_v = is_action_type_invocable<ActionTag,Args...>::value;
+
+
+```
+
+### action_tag_overload_set
+
+A functor that forwards all arguments to an 	`action tag`
+
+```
+template<typename ActionTag>
+struct action_tag_overload_set{
+	template<typename... T, typename = std::enable_if_t<is_action_tag_invocable_v<ActionTag,T...>>
+	decltype(auto) operator()(T&&... t) const{
+		return <ActionTag>(std::forward<T>(t)...);
 	}
-
-
-```
-
-
-Now we can do the following :
-```
-smart_reference<my_class> ref{ c };
-std::string& str = ref.<get_data>();
+};
 
 ```
 
-We have implemented a smart reference forwarding in literally 3 lines of code.
+# Applications
+
+## Overcoming Backword Compatibility Limitations
+
+### Universal Function Call Syntax
+
+While universal function call syntax would be very useful, there are backward compatiblity issues. Using `action tags` because we do not have to worry about backward compatiblity we can define that `o.<foo>()` and `<foo>(o)` are equivalent. In addition, the extra object type in the definition of the implementation of the `action tag` allows confident conversion of member functions to `action tags`.
 
 
 ### Extension methods
@@ -178,7 +215,7 @@ namespace my_methods{
 
 struct to_string{};
 
-std::string <to_string,int>(int i){
+auto <to_string,int>(int i) -> std::string{
   return std::to_string(i);
 }
 
@@ -190,93 +227,233 @@ std::string <to_string,int>(int i){
 
 ```
 
-Let's add an output method that takes an ostream.
+We could even extend this and provide a default to_string implementation.
 
 ```
-struct output {};
-template<typename T,
-	typename =
-	std::void_t<decltype(std::declval<std::ostream&>() << std::forward<T>(std::declval<T>()))
-	>>
-	void <output>(const T& t, std::ostream& os, std::string_view delimit = "") {
-	os << t << delimit;
+
+template<typename T>
+auto <to_string>(T& t) -> std::string{
+	std::stringstream s;
+	s << t;
+	return s.str();
 }
 
 ```
 
-Then, if we have a variable `x`, instead of doing `std::cout << x << "\n"; ` we can write `x.<output>(std::cout,"\n");`
+### Deducing this
 
-### Extensions Methods for Collections
-
-With extension methods, we can do the following to read lines from stdin, sort, unique, and output.
-
+Let's say there object has a data_ member that we would like to expose via a member function.
 ```
-std::cin.<get_all_lines>().<sort>().<unique>().<call_for_each<output>>(std::cout, "\n");
-```
+class object{
+string data_;
 
-We previously defined output, here are the others.
-
-```
-
-struct get_all_lines {};
-
-std::vector<std::string> <get_all_lines>(std::istream& is) {
-	std::vector<std::string> result;
-	std::string line;
-	while (std::getline(is, line)) {
-		result.push_back(line);
-	}
-	return result;
-}
-
-struct sort {};
-
-template <typename T,typename = std::void_t<decltype(std::begin(std::declval<T>()))>>
-decltype(auto) std_customization_point(sort, all_types, T&& t) {
-    std::sort(t.begin(), t.end());
-    return std::forward<T>(t);
-}
-
-
-struct unique {};
-
-template <typename T, typename = std::void_t<decltype(std::begin(std::declval<T>()))>>
-decltype(auto) std_customization_point(unique, all_types, T&& t) {
-    auto iter = std::unique(t.begin(), t.end());
-    t.erase(iter, t.end());
-    return std::forward<T>(t);
-}
-
-template<typename F>
-
-struct call_for_each {};
-template<typename F, typename C, typename... Args, typename =
-	std::enable_if_t<
-	is_valid<F, decltype(*std::forward<C>(std::declval<C>()).begin()), Args...>>>
-	void std_customization_point(call_for_each<F>, all_types, C&& c, Args&&... args) {
-	for (auto&& v : std::forward<C>(c)) {
-		call_customization_point<F>(std::forward<decltype(v)>(v), std::forward<Args>(args)...);
-	}
-}
-
+public:
+const string& data() const &{return data_;}
+string& data() &{return data_;}
+string&& data()&& {return data_;}
 
 ```
 
+We have the same function body, but have to have different qualifiers. Here is how to do it with this proposal.
+
+```
+struct get_data{};
+class object{
+string data_;
+
+template<typename Self>
+friend decltype(auto) <get_data, object>(Self&& self){
+  return (std::forward<Self>(self).data_);
+}
+};
+```
+
+## Overcoming incomplete namespacing
 
 ### Customization points
+Whenever we define a free function that is called through ADL, we are essentially reserving that name across namespaces. An illustration is from https://quuxplusone.github.io/blog/2018/06/17/std-size/ . There was a library that defined `size` in it's own namespace, which compiled fine with C++11. However, C++17 introduced `std::size` which then caused a conflict. With action tags, this would not be an issue. For example, we could put extension points in a hypothetical namespace.
 
-One of the issues with C++ is picking customization points. For example, the addition of `size` as a customization point in `C++17`, resulted in compilation errors in code that worked with `C++14`.
-[https://quuxplusone.github.io/blog/2018/11/04/std-hash-value/]
+```
+namespace std::extension_points{
+	struct size{};
 
-Using type names as functions, would make this problem go away.  Since, these would by defined unambiguously by types.
+    template<typename T>
+	auto <size>(T& t){
+		return t.size();
+	}
+}
 
-For example, if we had to add a new customization point `baz` it could be called `std::customization_point::baz` and be called:
+```
 
-`foo.<std::customization_point::baz>();`
+Which could then be called 
 
-Customization points could be added to the standard without any fear that they would conflict with existing code.
+```
 
-### Decorators
+std::vector v{1,2,3,...};
 
-TODO
+<std::extension_points::size>(v);
+
+```
+
+in addition, because with `action tags` the namespace of the tag is taken into account for ADL lookup, we do not have to do the `using std::extension_point` dance.
+
+```
+// Not needed any more with actino tags
+using std::size;
+size(v);
+
+
+
+
+```
+
+## Overcoming lack of meta-programmability
+
+### Overload sets
+
+When calling a generic function such as `transform` it is not convenient to pass in an overloaded function. We either have to specify the exact parameters, or wrap in a lambda. With this proposal, any `action tag` overload set can easily be passed to a generic overload using `action_tag_overload_set`. So if you have `action tag` `foo`, you can call 
+
+```
+transform(v.begin(),b.end(), action_tag_overload_set<foo>{});
+```
+
+
+### Smart references and proxies
+
+While you can easily define a smart pointer in C++ by overloading `operator->()`, there is no easy way to define a smart reference that will forward the member function calls. With this proposal, you can write smart reference that forwards `action tags`.
+
+```
+
+nameespace dumb_reference { 
+
+struct reset{};
+
+template<typenaem T>
+class basic_dumb_reference{
+	T* t_;
+
+public:
+	template<typename ActionTag, typename Self, typename... T, typename = std::enable_if_t<is_action_tag_invocable_v<ActionTag,Self,T...>>>
+	friend decltype(auto)  <ActionTag,basic_dumb_reference<T>>(Self&& self, T&&... t){
+		return <ActionTag>(self.t_,std::forward<T>(t)...);
+	}
+
+	auto <reset, basic_dumb_reference<T>>(T& t) -> void{
+		t_ = &t;
+	}
+};
+
+int i = 0;
+int j = 2;
+
+dumb_reference::basic_dumb_reference<int> ref;
+ref.<dumb_reference::reset>(i);
+ref.<to_string>(); // "0"
+ref.<dumb_reference::reset>(j);
+ref.<to_string>(); // "2"
+
+}
+
+```
+
+In addition to forwarding easily, `action tags` also solve the issue of how to differentiate the member functions of the smart reference itself. Because `action tags` are namespaced, it is obvious that the `action tag` `reset` applies to the reference itself and not to what is being stored.
+
+In addition, if we could extend this tecnhique to making for example debugging proxies doing such things as logging all `action tags` and parameters if we so desired.
+
+### Containment
+
+One of the reasons inheritance is used over containment is the convenience of not having to manually forward member function calls. With `action tags` you can automatically forward all non-implemented `action tags` to the contained object.
+
+```
+
+struct object{
+	contained_object contained_;
+
+   template<typename ActionTag, typename Self, typename... T, typename = std::enable_if_t<is_action_tag_invocable_v<ActionTag,decltype(declval<Self>().contained_),T...>>>
+	friend decltype(auto) <ActionTag,object>(Self&& self, T&&... t){
+		return <ActionTag>(self.contained_,std::forward<T>(t)...);
+	}
+}
+
+
+```
+
+### Polymorphism without inheritance
+
+You can use template metaprogramming to define a `polymorphic_object` that takes `action tags` signatures.
+
+```
+
+template<typename ReturnType, typename ActionTag, typename... Parameters>
+struct signature{};
+
+template<typename... Signatures>
+struct polymorphic_object{
+
+};
+
+
+// Action tags
+struct foo{};
+struct bar{};
+
+
+using foo_and_barable = polymorphic_object<signature<void,foo>,signature<void,bar,int>>;
+
+std::vector<foo_and_barable> stuff;
+
+for(auto& v: stuff){
+	v.<foo>();
+	v.<bar>(1);
+}
+
+
+
+```
+
+This instead of basing polymporphism on inheritance patterns, it can be based on support for invoking an `action tag` with a set of parameters.
+
+
+# Implementability, proof of concept
+
+I am not a compiler engineer and have not been able to implement this in a compiler. However, as a proof of concept I simulated this using a library https://github.com/google/cpp-from-the-sky-down/tree/master/tafn.
+
+On the calling side, instead of 
+
+```
+o.<foo>();
+<foo>(o);
+
+```
+
+It uses:
+
+```
+using tafn::_;
+
+o *_<foo>();
+*_<foo>(o);
+
+```
+
+On the defintion side:
+
+Instead of 
+
+```
+auto <foo, object>(object& o){return 42;}
+
+```
+
+It has:
+
+```
+auto  tafn_customization_point(foo, tafn::type<object>,object &) {
+			return 42;
+}
+
+```
+
+Using that library, I have been able to implement many of the applications of this technique mentioned in this proposal. For the ones I have not yet implemented (mainly polymorphic object), I can see a clear path towards how it could be done.
+
 
