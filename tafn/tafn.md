@@ -457,3 +457,40 @@ auto  tafn_customization_point(foo, tafn::type<object>,object &) {
 Using that library, I have been able to implement many of the applications of this technique mentioned in this proposal. For the ones I have not yet implemented (mainly polymorphic object), I can see a clear path towards how it could be done.
 
 
+# Possible exentions: Calling existing functions
+
+NB: The above proposal would be useful in and of itself. However, how do we use these mechanisms to optin to calling existing code. Below is a proposal for doing this.
+
+C++20 will allow for user defined template parameters. One example from http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2018/p0732r2.pdf is `std::fixed_string`. Based on that we could define the following.
+
+```
+template<std::fixed_string function_name>
+struct function_literal_name{};
+
+```
+
+The calling syntax would be:
+
+```
+std::vector<int> v;
+
+v.<function_literal_name<"clear">>();
+
+<function_literal_name<"clear">>(v);
+
+
+```
+
+The implementation would be compiler defined and have the following semantics.
+
+Let `function_name` be the value of `std::fixed_string`, and `o` be the first parameter.
+
+If `o.function_name(parameters...)` is well formed, then this is called. Else if `function_name(o, parameters...)` is well-formed then it is called, otherwise ill-formed.
+
+In the above example `vector::clear` is called.
+
+This would allow such advantages as allowing UFCS, and forwarding for existing code that uses function names for new code that opts in using the `action tag` syntax via `function_literal_name`.
+
+
+
+
