@@ -89,7 +89,7 @@ void tafn_customization_point(operation2, tafn::type<dummy>, dummy& d, int i,
 }
 
 template <typename F, typename... Args, typename = std::enable_if_t<!std::disjunction_v<std::is_same<std::error_code,std::decay_t<Args>>...>>, typename =
-	std::enable_if_t<tafn::is_valid<F, dummy&, Args..., std::error_code&>>
+	std::enable_if_t<tafn::is_action_tag_invocable_v<F, dummy&, Args..., std::error_code&>>
 >
 decltype(auto) tafn_customization_point(tafn::all_functions<F>,
 	tafn::type<dummy>, dummy& d, Args&&... args) {
@@ -160,7 +160,7 @@ template<typename F>
 struct call_for_each {};
 template<typename F, typename C, typename... Args, typename =
 	std::enable_if_t<
-	tafn::is_valid<F, decltype(*std::forward<C>(std::declval<C>()).begin()), Args...>>>
+	tafn::is_action_tag_invocable_v<F, decltype(*std::forward<C>(std::declval<C>()).begin()), Args...>>>
 	void tafn_customization_point(call_for_each<F>, tafn::all_types, C&& c, Args&&... args) {
 	using tafn::_;
 	for (auto&& v : std::forward<C>(c)) {
@@ -174,7 +174,7 @@ namespace smart_reference {
 		T* t;
 	};
 
-	template<typename F, typename R, typename T, typename... Args, typename = std::enable_if_t<tafn::is_valid<F, R&, Args...>>>
+	template<typename F, typename R, typename T, typename... Args, typename = std::enable_if_t<tafn::is_action_tag_invocable_v<F, R&, Args...>>>
 	decltype(auto) tafn_customization_point(tafn::all_functions<F>, tafn::type<reference<R>>, T&& t, Args&&... args) {
 		using tafn::_;
 		return *t.t * _<F>(std::forward<Args>(args)...);
@@ -211,7 +211,7 @@ namespace simple {
 		T& r_;
 	};
 
-	template<typename F, typename T, typename Self, typename... Args, typename = std::enable_if_t<tafn::is_valid<F, T&, Args...>>>
+	template<typename F, typename T, typename Self, typename... Args, typename = std::enable_if_t<tafn::is_action_tag_invocable_v<F, T&, Args...>>>
 	decltype(auto) tafn_customization_point(tafn::all_functions<F>, tafn::type<smart_reference<T>>, Self&& self, Args&&... args) {
 		using tafn::_;
 		return  std::forward<Self>(self).r_ * _<F>(std::forward<Args>(args)...);

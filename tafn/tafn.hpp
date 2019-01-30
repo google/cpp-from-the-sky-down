@@ -104,7 +104,9 @@ namespace tafn {
 
 
 	template <typename F, typename... Args>
-	inline constexpr bool is_valid = get_customization_type<F, Args...>::value != customization_point_type::none;
+	struct is_action_tag_invocable : std::integral_constant<bool,get_customization_type<F, Args...>::value != customization_point_type::none>{};
+	template <typename F, typename... Args>
+	inline constexpr bool is_action_tag_invocable_v = is_action_tag_invocable<F,Args...>::value;
 
 
 	namespace detail {
