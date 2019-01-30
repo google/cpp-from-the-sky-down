@@ -53,7 +53,7 @@ struct bar{}; // bar is another action tag.
 
 ## Proposed calling syntax
 
-Anywhere where a `function name` is used to call a function or member function, `<action tag>` may be used instead. In addition, if `o` is a object, then `o.<action tag>` is equivalent of `<action tag>(o)`
+Anywhere where a `function name` is used to call a function or member function, `<action tag>` may be used instead. In addition,  `t.<action tag>(args..)` is equivalent of `<action tag>(t,args..)`.
 
 ```
 // Declaration
@@ -208,7 +208,7 @@ struct action_tag_overload_set{
 
 ### Universal Function Call Syntax
 
-While universal function call syntax would be very useful, there are backward compatiblity issues. Using `action tags` because we do not have to worry about backward compatiblity we can define that `o.<foo>()` and `<foo>(o)` are equivalent. In addition, the extra object type in the definition of the implementation of the `action tag` allows confident conversion of member functions to `action tags`.
+While universal function call syntax would be very useful, there are backward compatiblity issues. Using `action tags` because we do not have to worry about backward compatiblity we can define that `t.<foo>(args...)` and `<foo>(t,args...)` are equivalent. In addition, the extra object type in the definition of the implementation of the `action tag` allows confident conversion of member functions to `action tags`.
 
 
 ### Extension methods
