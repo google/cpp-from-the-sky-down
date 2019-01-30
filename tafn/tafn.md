@@ -1,5 +1,4 @@
-# Types as Function Names
-
+# Types as function names
 ## TLDR:
 
 A single general addition to the C++ core language will be able to solve what are currently viewed as multiple independent problems:
@@ -20,7 +19,7 @@ A single general addition to the C++ core language will be able to solve what ar
 
 ## Motivation
 
-Currently we use literal names to designate free and member functions. However, this is a source of limitations for C++. We are limited due to the need to maintain backwards compatibility, incomplete namespacing, and lack of meta-programmability for these names. For each of these limitations, there are features that we would like to have, but we do not.
+Currently we use identifiers to designate free and member functions. However, this is a source of limitations for C++. We are limited due to the need to maintain backwards compatibility, incomplete namespacing, and lack of meta-programmability for these names. For each of these limitations, there are features that we would like to have, but we do not.
 
 1. Backwards compatibility limitations
 	* Universal Function Call Syntax
@@ -38,6 +37,8 @@ Currently we use literal names to designate free and member functions. However, 
 	* Runtime polymorphism without inheritance
 	* Exception and non-exception based overloads
 	* Adding monadic bind to pre-existing monad types
+
+All these issues can be addressed if we allow functions to be designated using types.
 
 
 ## Definitions
@@ -247,6 +248,8 @@ auto <to_string>(T& t) -> std::string{
 
 ```
 
+This would also be useful for ranges actions and views where instead of of forcing `operator|` into service with it's precedence quirks, we could actually use something like `v.<action::sort>().<action::unique>().<view::filter>([](auto&){/*stuff/*});`
+
 ### Deducing this
 
 Let's say there object has a data_ member that we would like to expose via a member function.
@@ -273,6 +276,12 @@ friend decltype(auto) <get_data, object>(Self&& self){
   return (std::forward<Self>(self).data_);
 }
 };
+
+object o;
+o.<get_data>();
+<get_data>(o); // same
+
+
 ```
 
 ## Overcoming incomplete namespacing
@@ -302,7 +311,7 @@ std::vector v{1,2,3,...};
 
 ```
 
-in addition, because with `action tags` the namespace of the tag is taken into account for ADL lookup, we do not have to do the `using std::extension_point` dance.
+in addition, because with `action tags` the namespace of the tag is taken into account for ADL lookup, we do not have to do the `using std::size/begin/end` dance.
 
 ```
 // Not needed any more with action tags
@@ -316,7 +325,7 @@ size(v);
 
 ## Overcoming lack of meta-programmability
 
-The final limitation of using literal function names is that we cannot use meta-programming except for the pre-preprocessor token pasting. There is nothing in C++ language outside the pre-processor that can manipulate a function name. The only thing you can do with a function name is to call it or get a function pointer (which you may not be able to do if it is overloaded). The proposed feature would allow meta-programming and open up the following features.
+The final limitation of using identifiers for functions is that we cannot use meta-programming except for the pre-preprocessor token pasting. There is nothing in C++ language outside the pre-processor that can manipulate a function name. The only thing you can do with a function name is to call it or get a function pointer (which you may not be able to do if it is overloaded). The proposed feature would allow meta-programming and open up the following features.
 
 
 ### Overload sets
