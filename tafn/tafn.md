@@ -11,6 +11,11 @@ A single general addition to the C++ core language will be able to solve what ar
 * Smart references/ proxies
 * Forwarding member functions calls to contained objects
 * Runtime polymorphism without inheritance
+* Exception and non-exception based overloads
+* Adding monadic bind to pre-existing monad types
+
+
+
 
 
 ## Motivation
@@ -23,7 +28,7 @@ Using names to designate functions is a source of limitations for C++. The limit
 	* Deducing This
 
 
-2. Incomplement namespacing
+2. Incomplete namespacing
 	* Extension points
 
 3. Lack of meta-programmability
@@ -31,6 +36,8 @@ Using names to designate functions is a source of limitations for C++. The limit
 	* Smart references/proxies
 	* Making containment easier to use vs. inheritance
 	* Runtime polymorphism without inheritance
+	* Exception and non-exception based overloads
+	* Adding monadic bind to pre-existing monad types
 
 
 ## Definitions
@@ -298,7 +305,7 @@ std::vector v{1,2,3,...};
 in addition, because with `action tags` the namespace of the tag is taken into account for ADL lookup, we do not have to do the `using std::extension_point` dance.
 
 ```
-// Not needed any more with actino tags
+// Not needed any more with action tags
 using std::size;
 size(v);
 
@@ -328,7 +335,7 @@ nameespace dumb_reference {
 
 struct reset{};
 
-template<typenaem T>
+template<typename T>
 class basic_dumb_reference{
 	T* t_;
 
@@ -413,6 +420,157 @@ for(auto& v: stuff){
 
 This instead of basing polymporphism on inheritance patterns, it can be based on support for invoking an `action tag` with a set of parameters.
 
+### Exception and non-exception based overloads
+
+Sometimes a class needs both a throwing and a non-throwing version of a member function. The solution adopted in `std::filesystem` and the networking ts, is to have 2 overloads of each member function. 
+
+```
+class my_class{
+
+	void operation1(int i, std::error_code& ec);
+	void operation1(int i){
+		std::error_code ec;
+		operation1(i,ec);
+		if(ec) throw std::system_error(ec);
+	}
+
+	// And so on for all supported operations
+}
+
+```
+
+There is a lot of boilerplate. Using this proposal, we can automatically generate the throwing versions from the non-throwing versions.
+
+```
+#include <system_error>
+
+struct operation1 {};
+struct operation2 {};
+
+
+class  my class{
+
+// stuff
+public:
+
+// std::error_code based error handling
+friend auto <operation1,my_class>(my_class& c, int i, std::error_code& ec)->void{
+	if (i == 2) {
+		ec = std::make_error_code(std::errc::function_not_supported);
+	}
+}
+
+// std::error_code based error handling
+friend auto <operation2, my_class>(my_class& c, int i,
+	int j, std::error_code& ec) -> void {
+	if (j == 2) {
+		ec = std::make_error_code(std::errc::function_not_supported);
+	}
+}
+
+};
+
+
+
+// Automatically generate the throwing counterparts, when an action tag
+// is called without passing in an std::error_code.
+template <typename ActionTag, typename... Args, typename = std::enable_if_t<!std::disjunction_v<std::is_same<std::error_code,std::decay_t<Args>>...>>, typename =
+	std::enable_if_t<is_action_tag_invocable_v<ActionTag, dummy&, Args..., std::error_code&>>
+>
+decltype(auto) <ActionTag,my_class>(Args&&... args) {
+	std::error_code ec;
+
+	auto call = [&]() mutable {
+		return <ActionTag>(std::forward<Args>(args)..., ec);
+	};
+
+	using V = decltype(call());
+	if constexpr (!std::is_same_v<void, V>) {
+		V r = call();
+		if (ec) throw std::system_error(ec);
+		return r;
+	}
+	else {
+		call();
+		if (ec) throw std::system_error(ec);
+	}
+}
+
+```
+
+### Adding monadic bind to existing monad types.
+
+Let's say we have this tree node type.
+
+```
+
+struct get_parent{};
+struct get_child{};
+class node{
+	node* parent;
+	std::vector<node*> children;
+	
+	public:
+	friend auto <get_parent, node>(const node& self)->node*{
+		return parent;
+	}
+
+	friend auto <get_child, node>(const node& self, int i)->node*{
+		if(i >= 0 && i < children.size())
+			return children[i];
+		else
+			return nullptr;
+	}
+}
+
+// We can use like this
+
+node n;
+node* parent = n.<get_parent>();
+
+// Get the first child
+node* child = n.<get_child>(0);
+
+
+```
+
+However, if we want to get the grandparent, we have to write code like
+
+
+```
+node* parent = n.<get_parent>();
+node* grandparent = parent?parent-><get_parent>():nullptr;
+
+```
+However, we observe that the pointer returned is a monad.
+We can use this to write a monadic bind.
+```
+
+template<typename ActionTag>
+struct and_then{};
+
+template <typename ActionTag, typename T, typename... Args>
+auto <and_then<ActionTag>>(T&& t, Args&&... args) -> decltype(<ActionTag>(*std::forward<T>(t), std::forward<Args>(args)...)){
+	if(t){
+		return <ActionTag>(*std::forward<T>(t), std::forward<Args>(args)...);
+	}
+	else{
+		return nullptr;
+	}
+}
+
+
+```
+The we can do stuff like
+```
+node n;
+
+node* great_grandparent = n.<get_parent>().<and_then<get_parent>>().<and_then<get_parent>>();
+
+node* grand_child = n.<get_child>(0).<and_then<get_child>>(0);
+
+
+```
 
 # Implementability, proof of concept
 
