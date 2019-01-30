@@ -20,7 +20,7 @@ A single general addition to the C++ core language will be able to solve what ar
 
 ## Motivation
 
-Using names to designate functions is a source of limitations for C++. The limitations fall into three main categories:
+Currently we use literal names to designate free and member functions. However, this is a source of limitations for C++. We are limited due to the need to maintain backwards compatibility, incomplete namespacing, and lack of meta-programmability for these names. For each of these limitations, there are features that we would like to have, but we do not.
 
 1. Backwards compatibility limitations
 	* Universal Function Call Syntax
@@ -316,6 +316,9 @@ size(v);
 
 ## Overcoming lack of meta-programmability
 
+The final limitation of using literal function names is that we cannot use meta-programming except for the pre-preprocessor token pasting. There is nothing in C++ language outside the pre-processor that can manipulate a function name. The only thing you can do with a function name is to call it or get a function pointer (which you may not be able to do if it is overloaded). The proposed feature would allow meta-programming and open up the following features.
+
+
 ### Overload sets
 
 When calling a generic function such as `transform` it is not convenient to pass in an overloaded function. We either have to specify the exact parameters, or wrap in a lambda. With this proposal, any `action tag` overload set can easily be passed to a generic overload using `action_tag_overload_set`. So if you have `action tag` `foo`, you can call 
@@ -565,12 +568,14 @@ The we can do stuff like
 ```
 node n;
 
-node* great_grandparent = n.<get_parent>().<and_then<get_parent>>().<and_then<get_parent>>();
+auto great_grandparent = n.<get_parent>().<and_then<get_parent>>().<and_then<get_parent>>();
 
-node* grand_child = n.<get_child>(0).<and_then<get_child>>(0);
+auto grand_child = n.<get_child>(0).<and_then<get_child>>(0);
 
 
 ```
+
+This is much simpler, and error prone than before. In addition, even if we change `get_parent` and `get_child` to return `std::shared_ptr<node>` instead of `node*` our code will still work.
 
 # Implementability, proof of concept
 
