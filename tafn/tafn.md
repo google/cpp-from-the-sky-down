@@ -33,6 +33,7 @@ limitations, there are features that we would like to have, but we do not.
 * Runtime polymorphism without inheritance
 * Exception and non-exception based overloads
 * Adding monadic bind to pre-existing monad types
+* Making a monadic type automatically map/bind
 
 All these issues can be addressed if we allow functions to be designated using types.
 ## Definitions
@@ -639,61 +640,80 @@ function names for new code that opts in using the action tag syntax via `functi
 Although, a type is used for action tag, the fact that action tags are types is actually incidental to
 their use. Action tags are never instantiated. Here is an alternative, using declaration of a new
 kind.
-Alternative definition of action tag
-
+### Alternative definition of action tag
+```
 auto <foo>; // foo is an action tag.
+
 template<int N>
 auto <get>; // action tag taking non-type template parameter.
+
 template<typename T>
 auto <numeric_cast>; // action tag taking type template parameter
+
 template<<action_tag>>
 auto <and_then>; // action tag taking another action tag as a parmeter
-Alternative calling syntax
-The calling syntax would be unchanged.
-Alternative definition syntax
-Here is how the definitions would change:
-1. Implementing a specific action tag for a specific type. This would be unchanged
-auto <foo,object>(object& o){
-return 43;
-}
-2. Implementing all action tags for a single type.
+```
 
+### Alternative calling syntax
+The calling syntax would be unchanged.
+
+### Alternative definition syntax
+Here is how the definitions would change:
+
+1. Implementing a specific action tag for a specific type. This would be unchanged
+```
+auto <foo,object>(object& o){
+  return 43;
+}
+```
+2. Implementing all action tags for a single type.
+```
 template<<ActionTag>>
 auto <ActionTag, object>(object& o){
-return 42;
+ return 42;
 }
+```
 3. Implementing an action tag for all types. This would be unchanged.
+```
 template<typename T>
 auto <foo>(T& t){
-return 42;
+  return 42;
 }
+```
+
 4. Implementing all action tags for all types.
+```
 template<<ActionTag>, typename T>
 auto <ActionTag>(T& t){
-return 42;
+  return 42;
 }
-Alternative Example: and_then
+```
 
+### Alternative Example: and_then
+```
 template <<ActionTag>, typename T, typename... Args>
-auto <and_then<ActionTag>>(T&& t, Args&&... args) ->
-decltype(<ActionTag>(*std::forward<T>(t),
-std::forward<Args>(args)...)){
-if(t){
-return <ActionTag>(*std::forward<T>(t),
+auto <and_then<ActionTag>>(T&& t, Args&&... args)
+ -> decltype(<ActionTag>(*std::forward<T>(t),std::forward<Args>(args)...)){
+  if(t){
+    return <ActionTag>(*std::forward<T>(t),std::forward<Args>(args)...);
+  }
+  else{
+    return nullptr;
+  }
+}
+```
 
-std::forward<Args>(args)...);
-}
-else{
-return nullptr;
-}
-}
-
-Thoughts on alternative syntax
+### Thoughts on alternative syntax
 While the alternative definition is interesting, I see the following downsides:
-? We would need to introduce a new kind of declaration. We would also have to make sure
+* We would need to introduce a new kind of declaration. We would also have to make sure
 that all the template type machinery also works with this
-? We have to special case template << action_tag>> for the lexer to not find left shift
+* We have to special case template << action_tag>> for the lexer to not find left shift
 (similar to what was done for double closing angle brackets in C++11
-? Other than saving some characters, no specific advantages of this approach are obvious
+* Other than saving some characters, no specific advantages of this approach are obvious
 to me.
+
 Given the above, I believe that sticking with actions tags as types makes the most sense.
+
+## Acknowledgements
+
+Thanks to Arthur O'Dwyer, James Dennet, and Richard Smith for providing valuable feedback.
