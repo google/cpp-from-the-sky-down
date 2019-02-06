@@ -5,6 +5,7 @@
 Addition of a new call syntax `<type>(args)` is proposed (NB: the angle brackets are part of
 the actual syntax). After defining the semantics of this construct, examples are provided how
 this new call syntax can be used to address the following issues in C++:
+
 * Universal function call syntax
 * Extension methods
 * Deducing this
@@ -20,13 +21,19 @@ Currently we use identifiers to designate free and member functions. However, th
 of limitations for C++. We are limited due to the need to maintain backwards compatibility,
 incomplete namespacing, and lack of meta-programmability for these names. For each of these
 limitations, there are features that we would like to have, but we do not.
+
 1. Backwards compatibility limitations
+
 * Universal function call syntax
 * Extension methods
 * Deducing this
+
 2. Incomplete namespacing
+
 * Extension points
+
 3. Lack of meta-programmability
+
 * Overload sets
 * Smart references/proxies
 * Making composition easier to use vs. inheritance
@@ -36,18 +43,23 @@ limitations, there are features that we would like to have, but we do not.
 * Making a monadic type automatically map/bind
 
 All these issues can be addressed if we allow functions to be designated using types.
+
 ## Definitions
+
 Let action tag be defined as struct declaration (See Alternative to action tag as type at the end
 of the paper for an alternative).
-```
+
+```cpp
 struct foo; // foo is an action tag.
 struct bar; // bar is another action tag.
 ```
 
 ### Proposed calling syntax
+
 Anywhere where a function name is used to call a function or member function, `<action tag>`
 may be used instead. In addition, `t.<action tag>(args..)` is equivalent of `<action tag>(t,args..)`.
-```
+
+```cpp
 // Declaration
 void free_function();
 free_function();
@@ -69,9 +81,10 @@ o.<bar>();
 
 ```
 ### Proposed pointer to function syntax
-Anywhere a function name is used to create a pointer to function, `<action tag>` may be used instead. There is no equivalent to member function pointers since  `o.<action_tag>()` is equivalent to `<action_tag>(o)`.
-```
 
+Anywhere a function name is used to create a pointer to function, `<action tag>` may be used instead. There is no equivalent to member function pointers since  `o.<action_tag>()` is equivalent to `<action_tag>(o)`.
+
+```cpp
 // action tag
 struct foo;
 auto <foo>(double) -> int{
@@ -83,35 +96,46 @@ int(*ptr2)(double) = <foo>;
 ```
 
 ### Proposed definition syntax
+
 Let object be an object type, and foo be an action tag and ActionTag be a generic action tag:
 Then an implementation of an action tag can be accomplished in 4 ways:
+
 1. Implementing a specific action tag for a specific type.
-```
+
+```cpp
 auto <foo,object>(object& o){
   return 43;
 }
 ```
+
 2. Implementing all action tags for a single type.
-```
+
+```cpp
 template<typename ActionTag>
 auto <ActionTag, object>(object& o){
   return 42;
 }
+
 ```
 3. Implementing an action tag for all types.
-```
+
+```cpp
 template<typename T>
 auto <foo>(T& t){
   return 42;
 }
+
 ```
+
 4. Implementing all action tags for all types.
+
+```cpp
 template<typename ActionTag, typename T>
- ```
 auto <ActionTag>(T& t){
   return 42;
 }
 ```
+
 Implementation 1 takes precedence over 2, 2 takes precedence over 3, 3 takes precedence
 over 4. SFINAE and concepts may be used to constrain the implementation. An implementation
 may be a friend of a class. Within precedence levels 1-4, lookup proceeds in a manner consistent
@@ -119,11 +143,13 @@ with ADL, with the addition of the namespace of the action tag to the list of na
 searched.
 
 ### Rationale for distinction between 1,2 and 3,4.
+
 The question arises if in the proposed definition syntax, we need to differentiate between 1,2
 and 3,4 or if partial ordering could be used instead. The issue with partial ordering is that it
 treats all parameters as equal, but many times, in practice, we want the first parameter to be
 privileged. Consider this example:
-```
+
+```cpp
 struct object{
   int foo(double){
     return 42;
@@ -146,7 +172,8 @@ int main(){
 ```
 
 Now imagine that someone is writing the same code using action tags
-```
+
+```cpp
 // action tag
 struct foo;
 struct object{
@@ -165,7 +192,8 @@ o.<foo>(1); // returns 1!!!
 The user is definitely going to be surprised. Looking at the code, it is clear that the 2 parameters
 are not of equal importance. The first parameter is more important than the second parameter.
 By having the optional object type, we can specify that in the code:
-```
+
+```cpp
 // action tag
 struct foo;
 struct object{
@@ -180,6 +208,7 @@ int main(){
   o.<foo>(1); // returns 42
   <foo>(o,1); // returns 42
 }
+
 ```
 
 Without this differentiation, users would not be able to confidently convert member functions to
@@ -187,8 +216,10 @@ action tags, without worrying that overload resolution will find a better overlo
 tag the user explicitly implemented for their type.
 
 ### Supporting types
+
 #### is_action_tag_invocable
-```
+
+```cpp
 // iff <ActionTag>(decltype<Args>()...) is well-formed.
 template<typename ActionTag, typename... Args>
 struct is_action_tag_invocable :std::true_type{}
@@ -202,8 +233,10 @@ is_action_type_invocable<ActionTag,Args...>::value;
 ```
 
 #### action_tag_overload_set
+
 A class that overloads `operator()` and forwards all arguments to an action tag
-```
+
+```cpp
 template<typename ActionTag>
 struct action_tag_overload_set{
   template<typename... T, typename =
@@ -215,9 +248,11 @@ struct action_tag_overload_set{
 ```
 
 ## Applications
+
 ### Overcoming Backwards Compatibility Limitations
 
 #### Universal Function Call Syntax
+
 While universal function call syntax would be very useful, there are backward compatibility
 issues. Using action tags because we do not have to worry about backward compatibility we can
 define that `t.<foo>(args...)` and `<foo>(t,args...)` are equivalent. In addition, the extra object type
@@ -225,11 +260,13 @@ in the definition of the implementation of the action tag allows confident conve
 functions to action tags.
 
 #### Extension methods
+
 Along the same lines of what we are doing, we can easily add new methods to a type. The nice
 thing is that since we are using types, we can use namespacing to make sure they don't conflict
 with future methods.
 For example, wouldn't it be nice for int to have a `to_string` method?
-```
+
+```cpp
 namespace my_methods{
   struct to_string;
   auto <to_string,int>(int i) -> std::string{
@@ -241,7 +278,8 @@ i.<my_methods::to_string>();
 ```
 
 We could even extend this and provide a default to_string implementation.
-```
+
+```cpp
 template<typename T>
 auto <to_string>(T& t) -> std::string{
   std::stringstream s;
@@ -249,27 +287,33 @@ auto <to_string>(T& t) -> std::string{
   return s.str();
 }
 ```
+
 This would also be useful for ranges actions and views where instead of of forcing `operator|` into
 service with it's precedence quirks, we could actually use something like
-```
-v.<action::sort>().<action::unique>().<view::filter>([](auto&){/*stuff/*});
+
+```cpp
+v.<action::sort>().<action::unique>().<view::filter>([](auto&){/*stuff*/});
+
 ```
 #### Deducing this
+
 Let's say there object has a data_ member that we would like to expose via a member function.
-```
+
+```cpp
 class object{
   string data_;
 public:
-  const string& data() const &{return data_;}
   string& data() &{return data_;}
   const string& data() const &{return data_;}
   string&& data()&& {return data_;}
   const string&& data()const && {return data_;}
 };
 ```
+
 We have the same function body, copied 4 times to have different qualifiers. Here is how to do it with
 this proposal.
-```
+
+```cpp
 struct get_data;
 class object{
   string data_;
@@ -279,18 +323,23 @@ class object{
   }
 };
 object o;
-o.<get_data>();
-<get_data>(o); // same
+o.<get_data>(); // string&
+std::as_const(o).<get_data>(); // const string&
+std::move(o).<get_data>(); // string&&
 ```
+
 ### Overcoming incomplete namespacing
+
 #### Customization points
+
 Whenever we define a free function that is called through ADL, we are essentially reserving that
 name across namespaces. An illustration is from
 https://quuxplusone.github.io/blog/2018/06/17/std-size/ . There was a library that defined size in
 it's own namespace, which compiled fine with `C++11`. However, `C++17` introduced `std::size`
 which then caused a conflict. With action tags, this would not be an issue. For example, we
 could put extension points in a hypothetical namespace.
-```
+
+```cpp
 namespace std::extension_points{
   struct size;
   template<typename T>
@@ -299,15 +348,18 @@ namespace std::extension_points{
   }
 }
 ```
+
 Which could then be called
-```
+
+```cpp
 std::vector v{1,2,3,...};
 <std::extension_points::size>(v);
 ```
 
 in addition, because with action tags the namespace of the tag is taken into account for ADL
 lookup, we do not have to do the `using std::size/begin/end` dance.
-```
+
+```cpp
 // Not needed any more with action tags
 using std::size;
 size(v);
@@ -320,17 +372,20 @@ except for the pre-preprocessor token pasting. There is nothing in C++ language 
 pre-processor that can manipulate a function name. The only thing you can do with a function
 name is to call it or get a function pointer (which you may not be able to do if it is overloaded or is a function template).
 The proposed feature would allow meta-programming and open up the following features.
+
 #### Overload sets
 When calling a generic function such as `transform` it is not convenient to pass in an overloaded
 function. We either have to specify the exact parameters, or wrap in a lambda. With this
 proposal, any action tag overload set can easily be passed to a generic overload using
 `action_tag_overload_set`. So if you have action tag `foo`, you can call
 `transform(v.begin(),b.end(), action_tag_overload_set<foo>{});`
+
 #### Smart references and proxies
 While you can easily define a smart pointer in C++ by overloading `operator->()`, there is no easy
 way to define a smart reference that will forward the member function calls. With this proposal,
 you can write smart reference that forwards action tags.
-```
+
+```cpp
 namespace dumb_reference {
   // Action tag which resets the dumb reference. Applies to the dumb reference itself.
   struct reset;
@@ -374,7 +429,8 @@ into a remote procedure call.
 One of the reasons inheritance is used over composition is the convenience of not having to
 manually forward member function calls. With action tags you can automatically forward all
 non-implemented action tags to the contained object.
-```
+
+```cpp
 struct object{
   contained_object contained_;
   template<typename ActionTag, typename Self, typename... T,
@@ -387,9 +443,11 @@ struct object{
 ```
 
 #### Polymorphism without inheritance
+
 You can use template metaprogramming to define a polymorphic_object that takes action tags
 signatures.
-```
+
+```cpp
 template<typename ReturnType, typename ActionTag, typename...
 Parameters>
 struct signature{};
@@ -419,7 +477,8 @@ invoking an action tag with a set of parameters.
 Sometimes a class needs both a throwing and a non-throwing version of a member function.
 The solution adopted in `std::filesystem` and the networking ts, is to have 2 overloads of each
 member function.
-```
+
+```cpp
 class my_class{
   void operation1(int i, std::error_code& ec);
   void operation1(int i){
@@ -430,9 +489,11 @@ class my_class{
   // And so on for all supported operations
 };
 ```
+
 There is a lot of boilerplate. Using this proposal, we can automatically generate the throwing
 versions from the non-throwing versions.
-```
+
+```cpp
 #include <system_error>
 struct operation1;
 struct operation2;
@@ -477,8 +538,10 @@ decltype(auto) <ActionTag,my_class>(Args&&... args) {
 ```
 
 #### Adding monadic bind to existing monad types.
+
 Let's say we have this tree node type.
-```
+
+```cpp
 // Action tags
 struct get_parent;
 struct get_child;
@@ -506,7 +569,8 @@ node* child = n.<get_child>(0);
 ```
 
 However, if we want to get the grandparent, we have to write code like
-```
+
+```cpp
 node* parent = n.<get_parent>();
 node* grandparent = parent?parent-><get_parent>():nullptr;
 ```
@@ -514,7 +578,8 @@ node* grandparent = parent?parent-><get_parent>():nullptr;
 
 However, we observe that the pointer returned is a monad. We can use this to write a monadic
 bind.
-```
+
+```cpp
 template<typename ActionTag>
 struct and_then;
 
@@ -531,7 +596,8 @@ auto <and_then<ActionTag>>(T&& t, Args&&... args)
 ```
 
 The we can do stuff like
-```
+
+```cpp
 node n;
 auto great_grandparent =
 n.<get_parent>().<and_then<get_parent>>().<and_then<get_parent>>();
@@ -546,7 +612,8 @@ work.
 
 In fact, we could take this even further, and implement monadic binding and functor mapping at
 a type level. Using `std::optional` as an example:
-```
+
+```cpp
 template<typename T>
 struct wrap_optional{
   using type = std::optional<T>;
@@ -570,7 +637,8 @@ auto <ActionTag,std::optional<T>>(Self&& self, Args&&... args)
 ```
 
 Then we could do the following
-```
+
+```cpp
 // Reads a optional<string> from istream
 struct read_string;
 auto <read_string>(std::istream&) -> std::optional<std::string>;
@@ -594,47 +662,60 @@ int main(){
 ```
 
 ## Implementability, proof of concept
+
 I am not a compiler engineer and have not been able to implement this in a compiler. However,
 as a proof of concept I simulated this using a library
 https://github.com/google/cpp-from-the-sky-down/tree/master/tafn.
 On the calling side, instead of
-```
+
+```cpp
 o.<foo>();
 <foo>(o);
 ```
+
 It uses:
-```
+
+```cpp
 using tafn::_;
 o *_<foo>();
 *_<foo>(o);
 ```
-On the defintion side:
+
+On the definition side:
 Instead of
-```
+
+```cpp
 auto <foo, object>(object& o){return 42;}
 ```
+
 It has:
-```
+
+```cpp
 auto tafn_customization_point(foo, tafn::type<object>,object &) {
   return 42;
 }
 ```
+
 Using that library, I have been able to implement many of the applications of this technique
 mentioned in this proposal. For the ones I have not yet implemented (mainly polymorphic
 object), I can see a clear path towards how it could be done.
 
 ## Possible extensions: Calling existing functions
+
 NB: The above proposal would be useful in and of itself. However, how do we use these
 mechanisms to optin to calling existing code. Below is a proposal for doing this.
 `C++20` will allow for user defined template parameters. One example from
 http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2018/p0732r2.pdf is `std::fixed_string`.
 Based on that we could define the following.
-```
+
+```cpp
 template<std::fixed_string function_name>
 struct function_literal_name{};
 ```
+
 The calling syntax would be:
-```
+
+```cpp
 std::vector<int> v;
 v.<function_literal_name<"clear">>();
 <function_literal_name<"clear">>(v);
@@ -650,11 +731,14 @@ This would allow such advantages as allowing universal function call syntax, and
 function names for new code that opts in using the action tag syntax via `function_literal_name`.
 
 ## Alternative to action tag as struct
+
 Although, a type is used for action tag, the fact that action tags are types is actually incidental to
 their use. Action tags are never instantiated. Here is an alternative, using declaration of a new
 kind.
+
 ### Alternative definition of action tag
-```
+
+```cpp
 auto <foo>; // foo is an action tag.
 
 template<int N>
@@ -668,26 +752,31 @@ auto <and_then>; // action tag taking another action tag as a parmeter
 ```
 
 ### Alternative calling syntax
+
 The calling syntax would be unchanged.
 
 ### Alternative definition syntax
+
 Here is how the definitions would change:
 
 1. Implementing a specific action tag for a specific type. This would be unchanged
-```
+
+```cpp
 auto <foo,object>(object& o){
   return 43;
 }
 ```
 2. Implementing all action tags for a single type.
-```
+
+```cpp
 template<<ActionTag>>
 auto <ActionTag, object>(object& o){
  return 42;
 }
 ```
 3. Implementing an action tag for all types. This would be unchanged.
-```
+
+```cpp
 template<typename T>
 auto <foo>(T& t){
   return 42;
@@ -695,7 +784,8 @@ auto <foo>(T& t){
 ```
 
 4. Implementing all action tags for all types.
-```
+
+```cpp
 template<<ActionTag>, typename T>
 auto <ActionTag>(T& t){
   return 42;
@@ -703,7 +793,8 @@ auto <ActionTag>(T& t){
 ```
 
 ### Alternative Example: and_then
-```
+
+```cpp
 template <<ActionTag>, typename T, typename... Args>
 auto <and_then<ActionTag>>(T&& t, Args&&... args)
  -> decltype(<ActionTag>(*std::forward<T>(t),std::forward<Args>(args)...)){
@@ -717,7 +808,9 @@ auto <and_then<ActionTag>>(T&& t, Args&&... args)
 ```
 
 ### Thoughts on alternative syntax
+
 While the alternative definition is interesting, I see the following downsides:
+
 * We would need to introduce a new kind of declaration. We would also have to make sure
 that all the template type machinery also works with this
 * We have to special case template << action_tag>> for the lexer to not find left shift
