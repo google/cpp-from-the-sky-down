@@ -5,15 +5,15 @@
 Addition of a new call syntax `<type>(args)` is proposed (NB: the angle brackets are part of
 the actual syntax). After defining the semantics of this construct, examples are provided how
 this new call syntax can be used to address the following issues in C++:
-* Universal Function Call Syntax
-* Extension Methods
-* Deducing This
+* Universal function call syntax
+* Extension methods
+* Deducing this
 * Extension points
-* Smart references/ proxies
-* Forwarding member functions calls to contained objects
+* Overload sets
+* Smart references/proxies
+* Making composition easier to use vs. inheritance
 * Runtime polymorphism without inheritance
-* Exception and non-exception based overloads
-* Adding monadic bind to pre-existing monad types
+
 
 ## Motivation
 Currently we use identifiers to designate free and member functions. However, this is a source
@@ -21,15 +21,15 @@ of limitations for C++. We are limited due to the need to maintain backwards com
 incomplete namespacing, and lack of meta-programmability for these names. For each of these
 limitations, there are features that we would like to have, but we do not.
 1. Backwards compatibility limitations
-* Universal Function Call Syntax
-* Extension Methods
-* Deducing This
+* Universal function call syntax
+* Extension methods
+* Deducing this
 2. Incomplete namespacing
 * Extension points
 3. Lack of meta-programmability
 * Overload sets
 * Smart references/proxies
-* Making containment easier to use vs. inheritance
+* Making composition easier to use vs. inheritance
 * Runtime polymorphism without inheritance
 * Exception and non-exception based overloads
 * Adding monadic bind to pre-existing monad types
@@ -68,8 +68,21 @@ o.<bar>();
 <bar>(o);
 
 ```
+### Proposed pointer to function syntax
+Anywhere a function name is used to create a pointer to function, `<action tag>` may be used instead. There is no equivalent to member function pointers since  `o.<action_tag>()` is equivalent to `<action_tag>(o)`.
+```
 
-Proposed definition syntax
+// action tag
+struct foo;
+auto <foo>(double) -> int{
+  // implementation
+}
+
+int(*ptr)(double) = &<foo>;
+int(*ptr2)(double) = <foo>; 
+```
+
+### Proposed definition syntax
 Let object be an object type, and foo be an action tag and ActionTag be a generic action tag:
 Then an implementation of an action tag can be accomplished in 4 ways:
 1. Implementing a specific action tag for a specific type.
@@ -101,7 +114,7 @@ auto <ActionTag>(T& t){
 ```
 Implementation 1 takes precedence over 2, 2 takes precedence over 3, 3 takes precedence
 over 4. SFINAE and concepts may be used to constrain the implementation. An implementation
-may be a friend of a class. Within predence levels 1-4, lookup proceeds in a manner consistent
+may be a friend of a class. Within precedence levels 1-4, lookup proceeds in a manner consistent
 with ADL, with the addition of the namespace of the action tag to the list of namespaces
 searched.
 
@@ -202,11 +215,11 @@ struct action_tag_overload_set{
 ```
 
 ## Applications
-### Overcoming Backword Compatibility Limitations
+### Overcoming Backwards Compatibility Limitations
 
 #### Universal Function Call Syntax
-While universal function call syntax would be very useful, there are backward compatiblity
-issues. Using action tags because we do not have to worry about backward compatiblity we can
+While universal function call syntax would be very useful, there are backward compatibility
+issues. Using action tags because we do not have to worry about backward compatibility we can
 define that `t.<foo>(args...)` and `<foo>(t,args...)` are equivalent. In addition, the extra object type
 in the definition of the implementation of the action tag allows confident conversion of member
 functions to action tags.
@@ -305,7 +318,7 @@ size(v);
 The final limitation of using identifiers for functions is that we cannot use meta-programming
 except for the pre-preprocessor token pasting. There is nothing in C++ language outside the
 pre-processor that can manipulate a function name. The only thing you can do with a function
-name is to call it or get a function pointer (which you may not be able to do if it is overloaded).
+name is to call it or get a function pointer (which you may not be able to do if it is overloaded or is a function template).
 The proposed feature would allow meta-programming and open up the following features.
 #### Overload sets
 When calling a generic function such as `transform` it is not convenient to pass in an overloaded
@@ -318,7 +331,7 @@ While you can easily define a smart pointer in C++ by overloading `operator->()`
 way to define a smart reference that will forward the member function calls. With this proposal,
 you can write smart reference that forwards action tags.
 ```
-nameespace dumb_reference {
+namespace dumb_reference {
   // Action tag which resets the dumb reference. Applies to the dumb reference itself.
   struct reset;
   template<typename T>
@@ -356,9 +369,9 @@ such things as logging all action tags and parameters if we so desired. In fact,
 use this to create a transparent remoting proxy which will convert member function invocations
 into a remote procedure call.
 
-#### Containment
+#### Composition
 
-One of the reasons inheritance is used over containment is the convenience of not having to
+One of the reasons inheritance is used over composition is the convenience of not having to
 manually forward member function calls. With action tags you can automatically forward all
 non-implemented action tags to the contained object.
 ```
@@ -633,7 +646,7 @@ Let `function_name` be the value of `std::fixed_string`, and `o` be the first pa
 If `o.function_name(parameters...)` is well formed, then this is called. Else if `function_name(o,
 parameters...)` is well-formed then it is called, otherwise ill-formed.
 In the above example `vector::clear` is called.
-This would allow such advantages as allowing UFCS, and forwarding for existing code that uses
+This would allow such advantages as allowing universal function call syntax, and forwarding for existing code that uses
 function names for new code that opts in using the action tag syntax via `function_literal_name`.
 
 ## Alternative to action tag as struct
@@ -716,4 +729,4 @@ Given the above, I believe that sticking with actions tags as types makes the mo
 
 ## Acknowledgements
 
-Thanks to Arthur O'Dwyer, James Dennet, and Richard Smith for providing valuable feedback.
+Thanks to Arthur O'Dwyer, James Dennet, Richard Smith, Waldemar Horvath, and Kyle Konrad for providing valuable feedback.
