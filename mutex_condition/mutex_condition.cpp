@@ -188,7 +188,7 @@ int main() {
   block_q reader_q(q_depth);
   block_q writer_q(q_depth);
   mtq<int> back_pressure(q_depth);
-  for (int i = 0; i < q_depth - 1; ++i) {
+  for (int i = 0; i < q_depth; ++i) {
     back_pressure.push(1);
   }
   latch l(std::thread::hardware_concurrency());
