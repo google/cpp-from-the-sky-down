@@ -5,6 +5,7 @@
 #include <queue>
 #include <sstream>
 #include <thread>
+#include <iostream>
 
 template <typename T>
 class mtq {
@@ -99,6 +100,7 @@ std::shared_ptr<thread_pool> get_default_thread_pool() {
   return pool;
 }
 
+
 template <typename T>
 struct shared {
   T value;
@@ -109,6 +111,7 @@ struct shared {
   std::function<void()> then;
   std::shared_ptr<thread_pool> pool;
 };
+
 
 template <typename T>
 class future {
@@ -139,10 +142,10 @@ class future {
 template<typename T>
 void run_then(std::unique_lock<std::mutex> lock, std::shared_ptr<shared<T>>& s) {
   std::function<void()> f;
-  if (s->done && s->then) {
+  if (s->done) {
     std::swap(f, s->then);
   }
-  lock.release();
+  lock.unlock();
   if(f) f();
  
 }
@@ -153,6 +156,7 @@ class promise {
  promise():shared_(std::make_shared<shared<T>>()){}
  template<typename V>
   void set_value(V&& v) {
+
     std::unique_lock<std::mutex> lock{shared_->mutex};
     shared_->value = std::forward<V>(v);
     shared_->done = true;
@@ -187,8 +191,9 @@ auto future<T>::then(F f) -> future<decltype(f(*this))> {
   using type = decltype(f(*this));
   auto then_shared = std::make_shared<shared<type>>();
   then_shared->pool = shared_->pool;
-  shared_->then = [fut = future<T>(shared_),then_shared,f = std::move(f), pool = shared_->pool]() mutable {
-    pool->add([fut,then_shared,f = std::move(f), p = promise<type>(then_shared)] ()mutable {
+  shared_->then = [shared = shared_,then_shared,f = std::move(f), pool = shared_->pool]() mutable {
+    pool->add([shared,then_shared,f = std::move(f), p = promise<type>(then_shared)] ()mutable {
+      future<T> fut(shared);
       p.set_value(f(fut));
     });
   };
