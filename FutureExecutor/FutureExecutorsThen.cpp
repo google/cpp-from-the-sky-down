@@ -95,11 +95,6 @@ class thread_pool {
   std::vector<std::thread> threads_;
 };
 
-std::shared_ptr<thread_pool> get_default_thread_pool() {
-  static auto pool = std::make_shared<thread_pool>();
-  return pool;
-}
-
 
 template <typename T>
 struct shared {
@@ -168,8 +163,8 @@ class promise {
     std::unique_lock<std::mutex> lock{shared_->mutex};
     shared_->eptr = eptr;
     shared_->done = true;
-    shared_->cvar.notify_one();
     run_then(std::move(lock), shared_);
+    shared_->cvar.notify_one();
     shared_ = nullptr;
   }
 
@@ -222,8 +217,11 @@ auto async(std::shared_ptr<thread_pool> pool, F f, Args... args) -> future<declt
 
 #include <iostream>
 int main() {
-  get_default_thread_pool()->add_thread();
-  auto f = async(get_default_thread_pool(), []() {
+  auto pool = std::make_shared<thread_pool>();
+  pool->add([](){
+    std::cout << "Hi from thread pool\n";
+  });
+  auto f = async(pool, []() {
     std::cout << "Hello\n";
     return 1;
   });
