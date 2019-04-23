@@ -1,11 +1,11 @@
 
 #include <condition_variable>
+#include <iostream>
 #include <mutex>
 #include <optional>
 #include <queue>
 #include <sstream>
 #include <thread>
-#include <iostream>
 
 template <typename T>
 class mtq {
@@ -95,7 +95,6 @@ class thread_pool {
   std::vector<std::thread> threads_;
 };
 
-
 template <typename T>
 struct shared {
   T value;
@@ -106,7 +105,6 @@ struct shared {
   std::function<void()> then;
   std::shared_ptr<thread_pool> pool;
 };
-
 
 template <typename T>
 class future {
@@ -134,24 +132,23 @@ class future {
   std::shared_ptr<shared<T>> shared_;
 };
 
-template<typename T>
-void run_then(std::unique_lock<std::mutex> lock, std::shared_ptr<shared<T>>& s) {
+template <typename T>
+void run_then(std::unique_lock<std::mutex> lock,
+              std::shared_ptr<shared<T>>& s) {
   std::function<void()> f;
   if (s->done) {
     std::swap(f, s->then);
   }
   lock.unlock();
-  if(f) f();
- 
+  if (f) f();
 }
 
 template <typename T>
 class promise {
  public:
- promise():shared_(std::make_shared<shared<T>>()){}
- template<typename V>
+  promise() : shared_(std::make_shared<shared<T>>()) {}
+  template <typename V>
   void set_value(V&& v) {
-
     std::unique_lock<std::mutex> lock{shared_->mutex};
     shared_->value = std::forward<V>(v);
     shared_->done = true;
@@ -177,8 +174,6 @@ class promise {
   std::shared_ptr<shared<T>> shared_;
 };
 
-
-
 template <typename T>
 template <typename F>
 auto future<T>::then(F f) -> future<decltype(f(*this))> {
@@ -186,19 +181,25 @@ auto future<T>::then(F f) -> future<decltype(f(*this))> {
   using type = decltype(f(*this));
   auto then_shared = std::make_shared<shared<type>>();
   then_shared->pool = shared_->pool;
-  shared_->then = [shared = shared_,then_shared,f = std::move(f), pool = shared_->pool]() mutable {
-    pool->add([shared,then_shared,f = std::move(f), p = promise<type>(then_shared)] ()mutable {
+  shared_->then = [shared = shared_, then_shared, f = std::move(f),
+                   pool = shared_->pool]() mutable {
+    pool->add([shared, then_shared, f = std::move(f),
+               p = promise<type>(then_shared)]() mutable {
       future<T> fut(shared);
-      p.set_value(f(fut));
+      try {
+        p.set_value(f(fut));
+      } catch (...) {
+        p.set_exception(std::current_exception());
+      }
     });
   };
   run_then(std::move(lock), shared_);
- return future<type>(then_shared);
+  return future<type>(then_shared);
 }
 
-
 template <typename F, typename... Args>
-auto async(std::shared_ptr<thread_pool> pool, F f, Args... args) -> future<decltype(f(args...))> {
+auto async(std::shared_ptr<thread_pool> pool, F f, Args... args)
+    -> future<decltype(f(args...))> {
   using T = decltype(f(args...));
   auto state = std::make_shared<shared<T>>();
   state->pool = pool;
@@ -206,21 +207,19 @@ auto async(std::shared_ptr<thread_pool> pool, F f, Args... args) -> future<declt
   auto fut = p.get_future();
   auto future_func = [p = std::move(p), f = std::move(f), args...]() mutable {
     try {
-        p.set_value(f(args...));
+      p.set_value(f(args...));
     } catch (...) {
       p.set_exception(std::current_exception());
     }
   };
   pool->add(std::move(future_func));
- return fut;
-} 
+  return fut;
+}
 
 #include <iostream>
 int main() {
   auto pool = std::make_shared<thread_pool>();
-  pool->add([](){
-    std::cout << "Hi from thread pool\n";
-  });
+  pool->add([]() { std::cout << "Hi from thread pool\n"; });
   auto f = async(pool, []() {
     std::cout << "Hello\n";
     return 1;
