@@ -41,12 +41,12 @@ struct vtable_entry<I, Return(Method, Parameters...)> {
   static auto get_entry(type<T>) {
     return reinterpret_cast<vtable_fun>(
         +[](void* t, Parameters... parameters) -> Return {
-          return poly_extend(Method{}, *static_cast<T*>(t), parameters...);
+          return poly_extend(static_cast<Method*>(nullptr), *static_cast<T*>(t), parameters...);
         });
   }
 
   static decltype(auto) call_imp(const vtable_fun* vt,
-                                 const index_type* permutation, Method, void* t,
+                                 const index_type* permutation, Method*, void* t,
                                  Parameters... parameters) {
     return reinterpret_cast<fun_ptr>(vt[permutation[I]])(t, parameters...);
   }
@@ -63,13 +63,13 @@ struct vtable_entry<I, Return(Method, Parameters...) const> {
   static auto get_entry(type<T>) {
     return reinterpret_cast<vtable_fun>(
         +[](const void* t, Parameters... parameters) -> Return {
-          return poly_extend(Method{}, *static_cast<const T*>(t),
+          return poly_extend(static_cast<Method*>(nullptr), *static_cast<const T*>(t),
                              parameters...);
         });
   }
 
   static decltype(auto) call_imp(const vtable_fun* vt,
-                                 const index_type* permutation, Method,
+                                 const index_type* permutation, Method*,
                                  const void* t, Parameters... parameters) {
     return reinterpret_cast<fun_ptr>(vt[permutation[I]])(t, parameters...);
   }
@@ -122,7 +122,7 @@ struct vtable<std::index_sequence<I...>, Signatures...>
 
 
   template <typename VoidType, typename Method, typename... Parameters>
-  decltype(auto) call(Method method, VoidType t,
+  decltype(auto) call(Method* method, VoidType t,
                       Parameters&&... parameters) const {
     return vtable::call_imp(vptr_, permutation_.data(), method, t,
                             std::forward<Parameters>(parameters)...);
@@ -171,7 +171,7 @@ class view {
 
   template <typename Method, typename... Parameters>
   decltype(auto) call(Parameters&&... parameters) const {
-    return vt_.call(Method{}, t_, std::forward<Parameters>(parameters)...);
+    return vt_.call(static_cast<Method*>(nullptr), t_, std::forward<Parameters>(parameters)...);
   }
 };
 
@@ -186,7 +186,7 @@ object_ptr make_object_ptr(const T& t) {
 struct clone {};
 
 template <typename T>
-object_ptr poly_extend(clone, const T& t) {
+object_ptr poly_extend(clone*, const T& t) {
   return make_object_ptr(t);
 }
 }  // namespace detail
@@ -228,13 +228,13 @@ class object {
 
   template <typename Method, typename... Parameters>
   decltype(auto) call(Parameters&&... parameters) {
-    return vt_.call(Method{}, t_.get(),
+    return vt_.call(static_cast<Method*>(nullptr), t_.get(),
                     std::forward<Parameters>(parameters)...);
   }
 
   template <typename Method, typename... Parameters>
   decltype(auto) call(Parameters&&... parameters) const {
-    return vt_.call(Method{}, t_.get(),
+    return vt_.call(static_cast<Method*>(nullptr), t_.get(),
                     std::forward<Parameters>(parameters)...);
   }
 };
