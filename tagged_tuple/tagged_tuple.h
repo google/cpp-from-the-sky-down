@@ -17,14 +17,22 @@
 #include <utility>
 #include <initializer_list>
 #include <type_traits>
+#include "../simple_type_name/simple_type_name.h"
 
 namespace tagged_tuple {
 template <typename Tag, typename T>
 struct member {
   T value;
+  static constexpr std::string_view tag_name =
+      simple_type_name::short_name<Tag>;
   using tag_type = Tag;
   using value_type = T;
 };
+
+template<typename Tag, typename T>
+auto make_member(T t){
+  return member<Tag, T>{std::move(t)};
+}
 
 template <typename... Members>
 struct tagged_tuple : Members... {};

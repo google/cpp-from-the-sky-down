@@ -12,29 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #include <iostream>
+#include "../simple_type_name/simple_type_name.h"
 #include "tagged_tuple.h"
 
 int main() {
-	using namespace tagged_tuple;
+  using namespace tagged_tuple;
   auto t =
-      make_tagged_tuple(member<class A, int>{1}, member<class B, double>{2});
-
+      make_tagged_tuple(make_member<class A>(1), make_member<class B>(2.0));
 
   for_each(t, [](auto& t) { std::cout << t.value; });
 
-  auto nt = append(t, member<class C, int>{3});
-  for_each(nt, [](auto& t) { std::cout << t.value; });
+  auto nt = append(t, make_member<class C>(3));
+  for_each(nt, [](auto& t) {
+    std::cout << "\n" << t.tag_name << ": " << t.value;
+  });
 
   static_assert(tuple_size(nt) == 3);
 
   static_assert(has_tag<C, decltype(nt)>);
-
-
-
 }
-
-
-
-
