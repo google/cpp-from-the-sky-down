@@ -15,14 +15,19 @@
 #include <iostream>
 #include "simple_type_name.h"
 
-namespace test{
+namespace test {
 struct MyClass;
 }
 
+template <typename T>
+class TemplateTester;
+
 int main() {
   std::cout << simple_type_name::short_name<test::MyClass> << "\n";
-  std::cout << simple_type_name::long_name<test::MyClass>  << "\n";
+  std::cout << simple_type_name::long_name<test::MyClass> << "\n";
 
   static_assert(simple_type_name::short_name<int> == "int");
+  static_assert(simple_type_name::short_name<TemplateTester<int>> ==
+                "TemplateTester<int>");
   static_assert(simple_type_name::short_name<class MyClass> == "MyClass");
 }

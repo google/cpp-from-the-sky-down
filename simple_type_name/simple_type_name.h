@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #pragma once
-#include <string_view>
 #include <array>
+#include <string_view>
 
 namespace simple_type_name {
 
@@ -41,8 +41,10 @@ constexpr auto type_to_string_raw() {
 #undef SIMPLE_TYPE_NAME_PRETTY_FUNCTION
 
 template <typename T>
-constexpr decltype(type_to_string_raw<simple_type_name_dummy_type_to_string<T>>())
-    raw_type_function_name = type_to_string_raw<simple_type_name_dummy_type_to_string<T>>();
+constexpr decltype(
+    type_to_string_raw<simple_type_name_dummy_type_to_string<T>>())
+    raw_type_function_name =
+        type_to_string_raw<simple_type_name_dummy_type_to_string<T>>();
 
 template <typename T>
 constexpr std::string_view long_name() {
@@ -67,9 +69,13 @@ constexpr std::string_view long_name() {
 
   if (raw_str.substr(0, struct_name.size()) == struct_name)
     raw_str.remove_prefix(struct_name.size());
-   if (raw_str.substr(0, class_name.size()) == class_name)
+  if (raw_str.substr(0, class_name.size()) == class_name)
     raw_str.remove_prefix(class_name.size());
-  
+
+  while (!raw_str.empty() && raw_str.back() == ' ') {
+    raw_str.remove_suffix(1);
+  }
+
   return raw_str;
 }
 
@@ -77,7 +83,7 @@ template <typename T>
 constexpr std::string_view short_name() {
   auto raw_str = long_name<T>();
   auto pos = raw_str.find_last_of(':');
-  if (pos != std::string::npos) {
+  if (pos != std::string_view::npos) {
     raw_str.remove_prefix(pos + 1);
   }
   return raw_str;
@@ -91,4 +97,3 @@ inline constexpr std::string_view short_name = detail::short_name<T>();
 template <typename T>
 inline constexpr std::string_view long_name = detail::long_name<T>();
 }  // namespace simple_type_name
-
