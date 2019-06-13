@@ -50,12 +50,19 @@ struct column_alias_ref {};
 template <typename E>
 struct expression {
   E e_;
+
+  template <typename Alias>
+  constexpr auto as() const {
+    return e_.as<Alias>();
+  }
 };
 
 template <typename ColumnName, typename TableName = void>
 struct column_ref {
   template <typename Alias>
-  static constexpr column_alias_ref<Alias, ColumnName, TableName> as = {};
+  constexpr column_alias_ref<Alias, ColumnName, TableName> as() const {
+    return {};
+  }
   expression<column_ref> operator()() const { return {*this}; }
 };
 
@@ -260,7 +267,7 @@ template <typename ColumnRef, typename NewName>
 struct as_ref {};
 
 template <typename N1, typename N2 = void>
-inline constexpr auto column = typename column_ref_definer<N1, N2>::type{};
+inline constexpr auto column = expression<typename column_ref_definer<N1, N2>::type>{};
 
 template <typename Table>
 struct table_ref {};
@@ -318,7 +325,7 @@ struct query_builder {
 };
 
 template <typename Column, typename Table>
-std::string to_column_string(column_ref<Column, Table>) {
+std::string to_column_string(expression<column_ref<Column, Table>>) {
   if constexpr (std::is_same_v<Table, void>) {
     return std::string(simple_type_name::short_name<Column>);
   } else {
@@ -329,7 +336,7 @@ std::string to_column_string(column_ref<Column, Table>) {
 
 template <typename Alias, typename Column, typename Table>
 std::string to_column_string(column_alias_ref<Alias, Column, Table>) {
-  return to_column_string(column_ref<Column, Table>{}) + " AS " +
+  return to_column_string(expression<column_ref<Column, Table>>{}) + " AS " +
          std::string(simple_type_name::short_name<Alias>);
 }
 
