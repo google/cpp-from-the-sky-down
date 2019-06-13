@@ -68,6 +68,12 @@ auto append(tagged_tuple<Members...> t, OtherMembers... m) {
       std::move(static_cast<Members&>(t))..., std::move(m)...};
 }
 
+template <typename... Members, typename... OtherMembers>
+auto operator|(tagged_tuple<Members...> t, tagged_tuple<OtherMembers...> m) {
+  return tagged_tuple<Members..., OtherMembers...>{
+      static_cast<Members&&>(t)...,static_cast<OtherMembers&&>(m)... };
+}
+
 template <typename... Members, typename F>
 void for_each(const tagged_tuple<Members...>& m, F f) {
   (f(static_cast<const Members&>(m)), ...);
