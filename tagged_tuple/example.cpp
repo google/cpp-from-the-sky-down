@@ -31,4 +31,20 @@ int main() {
   static_assert(tuple_size(nt) == 3);
 
   static_assert(has_tag<C, decltype(nt)>);
+
+  {
+    auto t = make_tagged_tuple(make_member<class A>(5),
+                               make_member<class V>(std::string("value")));
+    auto t2 = make_tagged_tuple(make_member<class A>(6),
+                                make_member<class Z>(std::string("zvalue")));
+    auto t3 = merge(t, t2);
+
+    auto t4 = make_tagged_tuple(make_member<class X>(t));
+    auto t5 = make_tagged_tuple(make_member<class X>(t2));
+    auto t6 = merge(t4, t5);
+    std::cout << "\n" << t6 << "\n";
+    std::cout << merge(t6, make_tagged_tuple(make_member<X>(
+                               make_tagged_tuple(remove_tag<Z>()))))
+              << "\n";
+  }
 }

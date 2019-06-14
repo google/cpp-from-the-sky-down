@@ -8,4 +8,5 @@ add_executable (tagged_sqlite "tagged_sqlite.cpp" "tagged_sqlite.h")
 
 target_compile_features(tagged_sqlite PUBLIC cxx_std_17)
 
+
 # TODO: Add tests and install targets if needed.

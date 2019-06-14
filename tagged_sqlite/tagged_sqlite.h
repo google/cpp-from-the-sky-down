@@ -3,10 +3,10 @@
 
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <string>
 #include <type_traits>
-#include <array>
 #include "..//simple_type_name/simple_type_name.h"
 #include "..//tagged_tuple/tagged_tuple.h"
 
@@ -36,14 +36,6 @@ inline constexpr bool has_column = decltype(test_has_column(Table{}))::value;
 
 }  // namespace detail
 
-using db = define_database<
-    class mydb,
-    define_table<class customers, define_column<class id, std::int64_t>,
-                 define_column<class name, std::string>>,
-    define_table<class orders, define_column<class id, std::int64_t>,
-                 define_column<class item, std::string>,
-                 define_column<class customerid, std::int64_t>>>;
-
 template <typename Alias, typename ColumnName, typename TableName>
 struct column_alias_ref {};
 
@@ -71,7 +63,7 @@ struct column_ref_definer {
   using type = column_ref<N2, N1>;
 };
 
-template <typename Name>
+template <typename Name, typename T>
 struct parameter_ref {};
 
 template <typename Name, typename T>
@@ -96,30 +88,16 @@ enum class binary_ops {
   size_
 };
 
-template<typename Enum>
+template <typename Enum>
 constexpr auto to_underlying(Enum e) {
   return static_cast<std::underlying_type_t<Enum>>(e);
 }
 
 inline constexpr std::array<std::string_view, to_underlying(binary_ops::size_)>
     binary_ops_to_string{
-	"=",
-	"!=",
-	"<",
-	"<=",
-	">",
-	">=",
-	" and ",
-	" or ",
-	"+",
-	"-",
-	"*",
-	"/",
-	"%",
-};
-
-
-
+        "=",    "!=", "<", "<=", ">", ">=", " and ",
+        " or ", "+",  "-", "*",  "/", "%",
+    };
 
 template <binary_ops bo, typename E1, typename E2>
 struct binary_expression {
@@ -127,102 +105,128 @@ struct binary_expression {
   E2 e2_;
 };
 
-
 template <binary_ops bo, typename E1, typename E2>
-auto make_binary_expression(E1 e1, E2 e2){
+auto make_binary_expression(E1 e1, E2 e2) {
   return binary_expression<bo, E1, E2>{std::move(e1), std::move(e2)};
 }
 
-
 template <typename E1, typename E2>
 auto operator==(expression<E1> e1, expression<E2> e2) {
-  return make_expression(make_binary_expression<binary_ops::equal_>(std::move(e1),std::move(e2)));
+  return make_expression(
+      make_binary_expression<binary_ops::equal_>(std::move(e1), std::move(e2)));
 }
 
 template <typename E1, typename E2>
 auto operator!=(expression<E1> e1, expression<E2> e2) {
-  return make_expression(make_binary_expression<binary_ops::not_equal_>(std::move(e1),std::move(e2)));
+  return make_expression(make_binary_expression<binary_ops::not_equal_>(
+      std::move(e1), std::move(e2)));
 }
 
 template <typename E1, typename E2>
 auto operator<(expression<E1> e1, expression<E2> e2) {
-  return make_expression(make_binary_expression<binary_ops::less_>(std::move(e1),std::move(e2)));
+  return make_expression(
+      make_binary_expression<binary_ops::less_>(std::move(e1), std::move(e2)));
 }
 
 template <typename E1, typename E2>
 auto operator<=(expression<E1> e1, expression<E2> e2) {
-  return make_expression(make_binary_expression<binary_ops::less_equal_>(std::move(e1),std::move(e2)));
+  return make_expression(make_binary_expression<binary_ops::less_equal_>(
+      std::move(e1), std::move(e2)));
 }
 
 template <typename E1, typename E2>
 auto operator>(expression<E1> e1, expression<E2> e2) {
-  return make_expression(make_binary_expression<binary_ops::greater_>(std::move(e1),std::move(e2)));
+  return make_expression(make_binary_expression<binary_ops::greater_>(
+      std::move(e1), std::move(e2)));
 }
 
 template <typename E1, typename E2>
 auto operator>=(expression<E1> e1, expression<E2> e2) {
-  return make_expression(make_binary_expression<binary_ops::greater_equal_>(std::move(e1),std::move(e2)));
+  return make_expression(make_binary_expression<binary_ops::greater_equal_>(
+      std::move(e1), std::move(e2)));
 }
 
 template <typename E1, typename E2>
 auto operator&&(expression<E1> e1, expression<E2> e2) {
-  return make_expression(make_binary_expression<binary_ops::and_>(std::move(e1),std::move(e2)));
+  return make_expression(
+      make_binary_expression<binary_ops::and_>(std::move(e1), std::move(e2)));
 }
 
 template <typename E1, typename E2>
 auto operator||(expression<E1> e1, expression<E2> e2) {
-  return make_expression(make_binary_expression<binary_ops::or_>(std::move(e1),std::move(e2)));
+  return make_expression(
+      make_binary_expression<binary_ops::or_>(std::move(e1), std::move(e2)));
 }
 
 template <typename E1, typename E2>
 auto operator+(expression<E1> e1, expression<E2> e2) {
-  return make_expression(make_binary_expression<binary_ops::add_>(std::move(e1),std::move(e2)));
+  return make_expression(
+      make_binary_expression<binary_ops::add_>(std::move(e1), std::move(e2)));
 }
 
 template <typename E1, typename E2>
 auto operator-(expression<E1> e1, expression<E2> e2) {
-  return make_expression(make_binary_expression<binary_ops::sub_>(std::move(e1),std::move(e2)));
+  return make_expression(
+      make_binary_expression<binary_ops::sub_>(std::move(e1), std::move(e2)));
 }
 
 template <typename E1, typename E2>
 auto operator*(expression<E1> e1, expression<E2> e2) {
-  return make_expression(make_binary_expression<binary_ops::mul_>(std::move(e1),std::move(e2)));
+  return make_expression(
+      make_binary_expression<binary_ops::mul_>(std::move(e1), std::move(e2)));
 }
 
 template <typename E1, typename E2>
 auto operator/(expression<E1> e1, expression<E2> e2) {
-  return make_expression(make_binary_expression<binary_ops::div_>(std::move(e1),std::move(e2)));
+  return make_expression(
+      make_binary_expression<binary_ops::div_>(std::move(e1), std::move(e2)));
 }
 
-template <binary_ops bo,typename E1, typename E2>
-std::string expression_to_string(const expression<binary_expression<bo,E1, E2>>& e) {
-  return expression_to_string(e.e_.e1_) + std::string(binary_ops_to_string[to_underlying(bo)]) + expression_to_string(e.e_.e2_);
+template <binary_ops bo, typename E1, typename E2>
+std::string expression_to_string(
+    const expression<binary_expression<bo, E1, E2>>& e) {
+  return expression_to_string(e.e_.e1_) +
+         std::string(binary_ops_to_string[to_underlying(bo)]) +
+         expression_to_string(e.e_.e2_);
 }
-
-
 
 template <typename E>
 auto make_expression(E e) {
   return expression<E>{std::move(e)};
 }
 
-template <typename E>
-auto operator==(expression<E> e1, std::int64_t i) {
-  return make_expression(binary_expression<binary_ops::equal_,expression<E>, expression<std::int64_t>>{
-      std::move(e1), make_expression(i)});
+template <typename T>
+struct constant_holder {
+  T e_;
+};
+
+template <typename T>
+std::string expression_to_string(const expression<constant_holder<T>>& c) {
+  return std::to_string(c.e_.e_);
 }
 
-template <typename E>
-auto operator*(expression<E> e1, std::int64_t i) {
-  return make_expression(binary_expression<binary_ops::mul_,expression<E>, expression<std::int64_t>>{
-      std::move(e1), make_expression(i)});
+inline std::string expression_to_string(
+    const expression<constant_holder<std::string>>& s) {
+  return s.e_.e_;
 }
 
-template <typename E>
-auto operator<=(expression<E> e1, std::int64_t i) {
-  return make_expression(binary_expression<binary_ops::less_equal_,expression<E>, expression<std::int64_t>>{
-      std::move(e1), make_expression(i)});
+template <typename T>
+constant_holder<T> make_constant(T t) {
+  return {std::move(t)};
 }
+
+inline auto constant(std::string s) {
+  return make_expression(make_constant(std::move(s)));
+}
+
+inline auto constant(int i) {
+  return make_expression(make_constant(std::int64_t{i}));
+}
+inline auto constant(std::int64_t i) {
+  return make_expression(make_constant(i));
+}
+
+inline auto constant(double d) { return make_expression(make_constant(d)); }
 
 template <typename Column, typename Table>
 std::string expression_to_string(const expression<column_ref<Column, Table>>&) {
@@ -234,8 +238,8 @@ std::string expression_to_string(const expression<column_ref<Column, Table>>&) {
   }
 }
 
-template <typename Name>
-std::string expression_to_string(expression<parameter_ref<Name>>) {
+template <typename Name, typename T>
+std::string expression_to_string(expression<parameter_ref<Name, T>>) {
   return " :" + std::string(simple_type_name::short_name<Name>) + " ";
 }
 
@@ -243,18 +247,15 @@ std::string expression_to_string(expression<std::int64_t> i) {
   return std::to_string(i.e_);
 }
 
-template <typename Name>
+template <typename Name, typename T>
 struct parameter_object {
-  expression<parameter_ref<Name>> operator()() const { return {}; }
+  expression<parameter_ref<Name, T>> operator()() const { return {}; }
 
-  template <typename T>
-  parameter_value<Name, T> operator()(T t) const {
-    return {std::move(t)};
-  }
+  parameter_value<Name, T> operator()(T t) const { return {std::move(t)}; }
 };
 
-template <typename Name>
-inline constexpr auto parameter = parameter_object<Name>{};
+template <typename Name, typename T>
+inline constexpr auto parameter = parameter_object<Name, T>{};
 template <typename N1>
 struct column_ref_definer<N1, void> {
   using type = column_ref<N1, void>;
@@ -267,7 +268,8 @@ template <typename ColumnRef, typename NewName>
 struct as_ref {};
 
 template <typename N1, typename N2 = void>
-inline constexpr auto column = expression<typename column_ref_definer<N1, N2>::type>{};
+inline constexpr auto column =
+    expression<typename column_ref_definer<N1, N2>::type>{};
 
 template <typename Table>
 struct table_ref {};

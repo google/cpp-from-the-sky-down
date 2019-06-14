@@ -14,9 +14,9 @@
 
 #pragma once
 
-#include <utility>
 #include <initializer_list>
 #include <type_traits>
+#include <utility>
 #include "../simple_type_name/simple_type_name.h"
 
 namespace tagged_tuple {
@@ -29,8 +29,8 @@ struct member {
   using value_type = T;
 };
 
-template<typename Tag, typename T>
-auto make_member(T t){
+template <typename Tag, typename T>
+auto make_member(T t) {
   return member<Tag, T>{std::move(t)};
 }
 
@@ -71,7 +71,7 @@ auto append(tagged_tuple<Members...> t, OtherMembers... m) {
 template <typename... Members, typename... OtherMembers>
 auto operator|(tagged_tuple<Members...> t, tagged_tuple<OtherMembers...> m) {
   return tagged_tuple<Members..., OtherMembers...>{
-      static_cast<Members&&>(t)...,static_cast<OtherMembers&&>(m)... };
+      static_cast<Members&&>(t)..., static_cast<OtherMembers&&>(m)...};
 }
 
 template <typename... Members, typename F>
@@ -100,7 +100,63 @@ auto make_tagged_tuple(Members... m) {
   return tagged_tuple<Members...>{std::move(m)...};
 }
 
+struct remove_member_tag {};
+
+template <typename Tag>
+auto remove_tag() {
+  return make_member<Tag>(remove_member_tag{});
+}
+
+template <typename T1, typename T2>
+auto merge(const T1&, T2 t2) {
+  return t2;
+}
+
+template <typename... M1, typename... M2>
+auto merge(tagged_tuple<M1...> t1, tagged_tuple<M2...> t2) {
+  using T1 = decltype(t1);
+  using T2 = decltype(t2);
+
+  auto empty_if_in2 = [&](auto& member) mutable {
+    using Member = std::decay_t<decltype(member)>;
+    using Tag = typename Member::tag_type;
+    if constexpr (has_tag<Tag, T2>) {
+      return tagged_tuple<>{};
+    } else {
+      return make_tagged_tuple(std::move(member));
+    }
+  };
+
+  auto combined_if_in1 = [&](auto& member) mutable {
+    using Member = std::decay_t<decltype(member)>;
+    using Tag = typename Member::tag_type;
+    if constexpr (std::is_same_v<remove_member_tag,
+                                 typename Member::value_type>) {
+      return tagged_tuple<>{};
+    } else if constexpr (has_tag<Tag, T1>) {
+      return make_tagged_tuple(make_member<Tag>(
+          merge(std::move(get<Tag>(t1)), std::move(member.value))));
+    } else {
+      return make_tagged_tuple(std::move(member));
+    }
+  };
+
+  auto filtered_t1 = (... | empty_if_in2(static_cast<M1&>(t1)));
+  auto filtered_t2 = (... | combined_if_in1(static_cast<M2&>(t2)));
+  return filtered_t1 | filtered_t2;
+}
+
+namespace detail {}
+
+#include <ostream>
+
+template <typename... Members>
+std::ostream& operator<<(std::ostream& os, const tagged_tuple<Members...>& t) {
+  auto output = [&](auto& v) mutable {
+    os << v.tag_name << ": " << v.value << "\n";
+  };
+  for_each(t, output);
+  return os;
+}
+
 }  // namespace tagged_tuple
-
-
-
