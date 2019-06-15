@@ -35,7 +35,7 @@ auto make_member(T t) {
 }
 
 template <typename... Members>
-struct tagged_tuple : Members... {};
+struct ttuple : Members... {};
 
 template <typename Tag, typename T>
 decltype(auto) get(member<Tag, T>& m) {
@@ -58,29 +58,29 @@ decltype(auto) get(const member<Tag, T>&& m) {
 }
 
 template <typename... Members>
-constexpr auto tuple_size(const tagged_tuple<Members...>&) {
+constexpr auto tuple_size(const ttuple<Members...>&) {
   return sizeof...(Members);
 }
 
 template <typename... Members, typename... OtherMembers>
-auto append(tagged_tuple<Members...> t, OtherMembers... m) {
-  return tagged_tuple<Members..., OtherMembers...>{
+auto append(ttuple<Members...> t, OtherMembers... m) {
+  return ttuple<Members..., OtherMembers...>{
       std::move(static_cast<Members&>(t))..., std::move(m)...};
 }
 
 template <typename... Members, typename... OtherMembers>
-auto operator|(tagged_tuple<Members...> t, tagged_tuple<OtherMembers...> m) {
-  return tagged_tuple<Members..., OtherMembers...>{
-      static_cast<Members&&>(t)..., static_cast<OtherMembers&&>(m)...};
+auto operator|(ttuple<Members...> t, ttuple<OtherMembers...> m) {
+  return ttuple<Members..., OtherMembers...>{static_cast<Members&&>(t)...,
+                                             static_cast<OtherMembers&&>(m)...};
 }
 
 template <typename... Members, typename F>
-void for_each(const tagged_tuple<Members...>& m, F f) {
+void for_each(const ttuple<Members...>& m, F f) {
   (f(static_cast<const Members&>(m)), ...);
 }
 
 template <typename... Members, typename F>
-decltype(auto) apply(const tagged_tuple<Members...>& m, F f) {
+decltype(auto) apply(const ttuple<Members...>& m, F f) {
   return (f(static_cast<const Members&>(m)...));
 }
 
@@ -96,8 +96,8 @@ constexpr bool has_tag =
     decltype(detail::test_has_tag<Tag>(std::declval<Tuple>()))::value;
 
 template <typename... Members>
-auto make_tagged_tuple(Members... m) {
-  return tagged_tuple<Members...>{std::move(m)...};
+auto make_ttuple(Members... m) {
+  return ttuple<Members...>{std::move(m)...};
 }
 
 struct remove_member_tag {};
@@ -113,45 +113,50 @@ auto merge(const T1&, T2 t2) {
 }
 
 template <typename... M1, typename... M2>
-auto merge(tagged_tuple<M1...> t1, tagged_tuple<M2...> t2) {
-  using T1 = decltype(t1);
-  using T2 = decltype(t2);
-
-  auto empty_if_in2 = [&](auto& member) mutable {
-    using Member = std::decay_t<decltype(member)>;
+auto merge(ttuple<M1...> t1, ttuple<M2...> t2) {
+  using T1 = ttuple<M1...>;
+  using T2 = ttuple<M2...>;
+  
+  auto transform_t1 = [&](auto& m) mutable {
+    using Member = std::decay_t<decltype(m)>;
     using Tag = typename Member::tag_type;
     if constexpr (has_tag<Tag, T2>) {
-      return tagged_tuple<>{};
+      auto& v2 = get<Tag>(t2);
+      using V2 = std::decay_t<decltype(v2)>;
+      if constexpr (std::is_same_v<remove_member_tag, V2>) {
+        return ttuple<>{};
+      } else {
+        return make_ttuple(
+            make_member<Tag>(merge(std::move(m.value), std::move(v2))));
+      }
     } else {
-      return make_tagged_tuple(std::move(member));
+      return make_ttuple(std::move(m));
     }
   };
 
-  auto combined_if_in1 = [&](auto& member) mutable {
+  auto transform_t2 = [&](auto& member) mutable {
     using Member = std::decay_t<decltype(member)>;
     using Tag = typename Member::tag_type;
     if constexpr (std::is_same_v<remove_member_tag,
-                                 typename Member::value_type>) {
-      return tagged_tuple<>{};
-    } else if constexpr (has_tag<Tag, T1>) {
-      return make_tagged_tuple(make_member<Tag>(
-          merge(std::move(get<Tag>(t1)), std::move(member.value))));
+                                 typename Member::value_type> ||
+                  has_tag<Tag, T1>) {
+      return ttuple<>{};
     } else {
-      return make_tagged_tuple(std::move(member));
+      return make_ttuple(std::move(member));
     }
   };
 
-  auto filtered_t1 = (... | empty_if_in2(static_cast<M1&>(t1)));
-  auto filtered_t2 = (... | combined_if_in1(static_cast<M2&>(t2)));
+  auto filtered_t1 = (... | transform_t1(static_cast<M1&>(t1)));
+  auto filtered_t2 = (... | transform_t2(static_cast<M2&>(t2)));
   return filtered_t1 | filtered_t2;
 }
 
-namespace detail {}
-
 #include <ostream>
 
+namespace detail {}
+
 template <typename... Members>
-std::ostream& operator<<(std::ostream& os, const tagged_tuple<Members...>& t) {
+std::ostream& operator<<(std::ostream& os, const ttuple<Members...>& t) {
   auto output = [&](auto& v) mutable {
     os << v.tag_name << ": " << v.value << "\n";
   };

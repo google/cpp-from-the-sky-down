@@ -17,9 +17,9 @@
 #include "tagged_tuple.h"
 
 int main() {
-  using namespace tagged_tuple;
+	using namespace tagged_tuple;
   auto t =
-      make_tagged_tuple(make_member<class A>(1), make_member<class B>(2.0));
+      make_ttuple(make_member<class A>(1), make_member<class B>(2.0));
 
   for_each(t, [](auto& t) { std::cout << t.value; });
 
@@ -33,18 +33,19 @@ int main() {
   static_assert(has_tag<C, decltype(nt)>);
 
   {
-    auto t = make_tagged_tuple(make_member<class A>(5),
+    auto t = make_ttuple(make_member<class A>(5),
                                make_member<class V>(std::string("value")));
-    auto t2 = make_tagged_tuple(make_member<class A>(6),
-                                make_member<class Z>(std::string("zvalue")));
+    auto t2 = make_ttuple(make_member<class Z>(std::string("zvalue")),
+                                make_member<class A>(6));
     auto t3 = merge(t, t2);
 
-    auto t4 = make_tagged_tuple(make_member<class X>(t));
-    auto t5 = make_tagged_tuple(make_member<class X>(t2));
+    std::cout << "\n" << t3 << "\n";
+    auto t4 = make_ttuple(make_member<class X>(t));
+    auto t5 = make_ttuple(make_member<class X>(t2));
     auto t6 = merge(t4, t5);
     std::cout << "\n" << t6 << "\n";
-    std::cout << merge(t6, make_tagged_tuple(make_member<X>(
-                               make_tagged_tuple(remove_tag<Z>()))))
+    std::cout << merge(t6, make_ttuple(make_member<X>(
+                               make_ttuple(remove_tag<Z>()))))
               << "\n";
   }
 }

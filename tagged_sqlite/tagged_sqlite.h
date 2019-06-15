@@ -287,9 +287,9 @@ template <typename T1, typename T2>
 struct catter_imp;
 
 template <typename... M1, typename... M2>
-struct catter_imp<tagged_tuple::tagged_tuple<M1...>,
-                  tagged_tuple::tagged_tuple<M2...>> {
-  using type = tagged_tuple::tagged_tuple<M1..., M2...>;
+struct catter_imp<tagged_tuple::ttuple<M1...>,
+                  tagged_tuple::ttuple<M2...>> {
+  using type = tagged_tuple::ttuple<M1..., M2...>;
 };
 
 template <typename T1, typename T2>
@@ -298,7 +298,7 @@ using cat_t = typename catter_imp<T1, T2>::type;
 class from_tag;
 class select_tag;
 
-template <typename Database, typename TTuple = tagged_tuple::tagged_tuple<>>
+template <typename Database, typename TTuple = tagged_tuple::ttuple<>>
 struct query_builder {
   template <typename Database, typename TTuple>
   static auto make_query_builder(TTuple t) {
@@ -313,7 +313,7 @@ struct query_builder {
   auto from(table_ref<Tables>...) && {
     return make_query_builder<Database>(
         std::move(t_) |
-        tagged_tuple::make_tagged_tuple(
+        tagged_tuple::make_ttuple(
             tagged_tuple::make_member<from_tag>(from_type<Tables...>{})));
   }
 
@@ -321,7 +321,7 @@ struct query_builder {
   auto select(Columns...) && {
     return make_query_builder<Database>(
         std::move(t_) |
-        tagged_tuple::make_tagged_tuple(
+        tagged_tuple::make_ttuple(
             tagged_tuple::make_member<select_tag>(select_type<Columns...>{})));
   }
 };
