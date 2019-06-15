@@ -89,6 +89,8 @@ template <typename Tag, typename T>
 std::true_type test_has_tag(const member<Tag, T>&);
 template <typename Tag>
 std::false_type test_has_tag(...);
+
+struct remove_member_tag {};
 }  // namespace detail
 
 template <typename Tag, typename Tuple>
@@ -100,11 +102,9 @@ auto make_ttuple(Members... m) {
   return ttuple<Members...>{std::move(m)...};
 }
 
-struct remove_member_tag {};
-
 template <typename Tag>
 auto remove_tag() {
-  return make_member<Tag>(remove_member_tag{});
+  return make_member<Tag>(detail::remove_member_tag{});
 }
 
 template <typename T1, typename T2>
@@ -116,14 +116,14 @@ template <typename... M1, typename... M2>
 auto merge(ttuple<M1...> t1, ttuple<M2...> t2) {
   using T1 = ttuple<M1...>;
   using T2 = ttuple<M2...>;
-  
+
   auto transform_t1 = [&](auto& m) mutable {
     using Member = std::decay_t<decltype(m)>;
     using Tag = typename Member::tag_type;
     if constexpr (has_tag<Tag, T2>) {
       auto& v2 = get<Tag>(t2);
       using V2 = std::decay_t<decltype(v2)>;
-      if constexpr (std::is_same_v<remove_member_tag, V2>) {
+      if constexpr (std::is_same_v<detail::remove_member_tag, V2>) {
         return ttuple<>{};
       } else {
         return make_ttuple(
@@ -137,7 +137,7 @@ auto merge(ttuple<M1...> t1, ttuple<M2...> t2) {
   auto transform_t2 = [&](auto& member) mutable {
     using Member = std::decay_t<decltype(member)>;
     using Tag = typename Member::tag_type;
-    if constexpr (std::is_same_v<remove_member_tag,
+    if constexpr (std::is_same_v<detail::remove_member_tag,
                                  typename Member::value_type> ||
                   has_tag<Tag, T1>) {
       return ttuple<>{};
@@ -153,14 +153,15 @@ auto merge(ttuple<M1...> t1, ttuple<M2...> t2) {
 
 #include <ostream>
 
-namespace detail {}
-
 template <typename... Members>
 std::ostream& operator<<(std::ostream& os, const ttuple<Members...>& t) {
+  os << "{\n";
   auto output = [&](auto& v) mutable {
     os << v.tag_name << ": " << v.value << "\n";
   };
   for_each(t, output);
+
+  os << "}\n";
   return os;
 }
 
