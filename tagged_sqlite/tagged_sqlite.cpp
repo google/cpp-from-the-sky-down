@@ -26,5 +26,9 @@ int main() {
 
   cout << expression_to_string(e) << std::endl;
 
+
+     
+  cout << "\n" << simple_type_name::long_name<detail::column_type<db,item>::value_type>  << "\n";
+
   return 0;
 }

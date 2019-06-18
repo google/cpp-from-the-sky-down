@@ -11,28 +11,66 @@
 #include "..//tagged_tuple/tagged_tuple.h"
 
 template <typename Tag, typename... Tables>
-struct define_database : Tables... {};
+struct define_database : Tables... {
+  using database_tag_type = Tag;
+};
 
 template <typename Tag, typename... Columns>
-struct define_table : Columns... {};
+struct define_table : Columns... {
+  using table_tag_type = Tag;
+};
 
 template <typename Tag, typename Type>
-struct define_column {};
+struct define_column {
+  using tag_type = Tag;
+  using value_type = Type;
+};
 
 namespace detail {
-template <typename Tag, typename... Tables>
-std::true_type test_has_table(const define_database<Tag, Tables...>&);
-std::false_type test_has_table(...);
-
-template <typename Database, typename Tag>
-inline constexpr bool has_table = decltype(test_has_table(Database{}))::value;
+template <typename T>
+struct t2t {
+  using type = T;
+};
 
 template <typename Tag, typename... Columns>
-std::true_type test_has_column(const define_table<Tag, Columns...>&);
-std::false_type test_has_column(...);
+auto get_table_type(const define_table<Tag, Columns...>& t)
+    -> t2t<define_table<Tag, Columns...>>;
+template <typename Tag>
+auto get_table_type(...) -> t2t<void>;
 
-template <typename Table, typename Tag>
-inline constexpr bool has_column = decltype(test_has_column(Table{}))::value;
+template <typename Tag, typename Type>
+auto get_column_type(const define_column<Tag, Type>& t)
+    -> t2t<define_column<Tag, Type>>;
+
+template <typename Tag>
+auto get_column_type(...) -> t2t<void>;
+
+template <typename Database, typename Tag>
+using table_type = typename decltype(get_table_type<Tag>(Database{}))::type;
+
+template <typename Database, typename TableTag, typename ColumnTag>
+using table_column_type = typename decltype(
+    get_column_type<ColumnTag>(table_type<Database, TableTag>{}))::type;
+
+template <typename Database, typename ColumnTag>
+using column_type =
+    typename decltype(get_column_type<ColumnTag>(Database{}))::type;
+
+template <typename Database, typename Tag>
+inline constexpr bool has_table =
+    !std::is_same_v<decltype(get_table_type<Tag>(Database{})), t2t<void>>;
+
+template <typename Database, typename TableTag, typename Tag>
+inline constexpr bool has_column =
+    decltype(test_has_column(table_type<Database, TableTag>{}))::value;
+
+template <typename Tag, typename DbTag, typename... Tables>
+constexpr bool has_unique_column_helper(define_database<DbTag, Tables...> db) {
+  return (has_column<decltype(db), typename Tables::table_tag_type, Tag> ^ ...);
+}
+
+template <typename Database, typename Tag>
+constexpr bool has_unique_column = has_unique_column_helper<Tag>(Database{});
 
 }  // namespace detail
 
@@ -287,8 +325,7 @@ template <typename T1, typename T2>
 struct catter_imp;
 
 template <typename... M1, typename... M2>
-struct catter_imp<tagged_tuple::ttuple<M1...>,
-                  tagged_tuple::ttuple<M2...>> {
+struct catter_imp<tagged_tuple::ttuple<M1...>, tagged_tuple::ttuple<M2...>> {
   using type = tagged_tuple::ttuple<M1..., M2...>;
 };
 
