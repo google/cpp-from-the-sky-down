@@ -10,9 +10,8 @@
 #include "..//simple_type_name/simple_type_name.h"
 #include "..//tagged_tuple/tagged_tuple.h"
 
-template <typename Tag, typename... Tables>
+template <typename... Tables>
 struct define_database : Tables... {
-  using database_tag_type = Tag;
 };
 
 template <typename Tag, typename... Columns>
@@ -126,6 +125,10 @@ enum class binary_ops {
   size_
 };
 
+template <typename T1, typename T2, binary_ops op>
+using binary_op_type =
+    std::conditional_t < op<binary_ops::add_, bool, std::common_type_t<T1, T2>>;
+
 template <typename Enum>
 constexpr auto to_underlying(Enum e) {
   return static_cast<std::underlying_type_t<Enum>>(e);
@@ -228,6 +231,32 @@ std::string expression_to_string(
          expression_to_string(e.e_.e2_);
 }
 
+template <typename Database, binary_ops bo, typename E1, typename E2, class TT>
+auto process_expression(const expression<binary_expression<bo, E1, E2>>& e,
+                        TT tt) {
+  auto tt_left = process_expression<Database>(e.e_.e1_, std::move(tt));
+  using left_type =
+      std::decay_t<decltype(get<expression_parts::type>(tt_left))>;
+  auto left_string =
+      std::move(get<expression_parts::expression_string>(tt_left));
+  auto tt_right = process_expression<Database>(e.e_.e2_, std::move(tt_left));
+  using right_type =
+      std::decay_t<decltype(get<expression_parts::type>(tt_right))>;
+  auto right_string =
+      std::move(get<expression_parts::expression_string>(tt_right));
+
+  static_assert(std::is_same_v<left_type, right_type>);
+  return tagged_tuple::merge(
+      tt_right,
+      tagged_tuple::make_ttuple(
+          tagged_tuple::make_member<expression_parts::expression_string>(
+              left_string +
+              std::string(binary_ops_to_string[to_underlying(bo)]) +
+              right_string),
+          tagged_tuple::make_member<expression_parts::type>(
+              static_cast<binary_op_type<bo>*>(nullptr))));
+}
+
 template <typename E>
 auto make_expression(E e) {
   return expression<E>{std::move(e)};
@@ -268,6 +297,17 @@ inline auto constant(double d) { return make_expression(make_constant(d)); }
 
 template <typename Column, typename Table>
 std::string expression_to_string(const expression<column_ref<Column, Table>>&) {
+  if constexpr (std::is_same_v<Table, void>) {
+    return std::string(simple_type_name::short_name<Column>);
+  } else {
+    return std::string(simple_type_name::short_name<Table>) + "." +
+           std::string(simple_type_name::short_name<Column>);
+  }
+}
+
+template <typename Database, typename Column, typename Table>
+auto process_expression(const expression<column_ref<Column, Table>>&) {
+  using column_type = 
   if constexpr (std::is_same_v<Table, void>) {
     return std::string(simple_type_name::short_name<Column>);
   } else {
@@ -348,6 +388,8 @@ struct query_builder {
   // query_builder<
   //     Database, cat_t<TTuple, >>
   auto from(table_ref<Tables>...) && {
+    static_assert((detail::has_table<Database, Tables> && ...),
+                  "All tables not found in database");
     return make_query_builder<Database>(
         std::move(t_) |
         tagged_tuple::make_ttuple(
@@ -361,6 +403,16 @@ struct query_builder {
         tagged_tuple::make_ttuple(
             tagged_tuple::make_member<select_tag>(select_type<Columns...>{})));
   }
+  template<typename Expression>
+  auto join(Expression) && {
+    return *this;
+  }
+
+  template<typename Expression>
+  auto where(Expression){
+    return *this;
+  }
+
 };
 
 template <typename Column, typename Table>
