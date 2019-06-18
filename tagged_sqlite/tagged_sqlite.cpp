@@ -7,23 +7,31 @@ using namespace std;
 
 int main() {
   using db = define_database<
-      class mydb,
-      define_table<class customers, define_column<class id, std::int64_t>,
+      define_table<class customers,  //
+                   define_column<class id, std::int64_t>,
                    define_column<class name, std::string>>,
-      define_table<class orders, define_column<class id, std::int64_t>,
+      define_table<class orders,  //
+                   define_column<class id, std::int64_t>,
                    define_column<class item, std::string>,
                    define_column<class customerid, std::int64_t>,
                    define_column<class price, double>>>;
 
-  auto query = query_builder<db>()
-                   .select(column<customisers. id>, column<customers, customerid>,
-                           column<orders, id>.as<class orderid>())
-                   .from(table<customers>, table<orders>)
-	               .join()
-                   .where(column <)
+  auto query =
+      query_builder<db>()
+          .select(column<customers, id>, column<orders, customerid>,
+                  column<name>, column<orders, id>.as<class orderid>(),
+                  column<price>)
+          .from(table<customers>, table<orders>)
+          .join(column<orderid> == column<customerid>)
+          .where(column<price> > parameter<class price_parameter, double>)
+          .build();
 
-                       cout
-               << to_statement(ss) << endl;
+  for (auto& row : execute_query(query, parameter<price_parameter>(100.0))) {
+    std::cout << row.get<customers, id>();
+    std::cout << row.get<name>();
+  }
+
+  cout << to_statement(ss) << endl;
 
   auto e = column<class Test> == constant(5) ||
            column<class A> * constant(5) <= parameter<class P1, std::int64_t>();
