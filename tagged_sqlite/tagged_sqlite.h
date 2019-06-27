@@ -136,8 +136,8 @@ constexpr auto to_underlying(Enum e) {
 
 inline constexpr std::array<std::string_view, to_underlying(binary_ops::size_)>
     binary_ops_to_string{
-        "=",    "!=", "<", "<=", ">", ">=", " and ",
-        " or ", "+",  "-", "*",  "/", "%",
+        " = ",    " != ", " < ", " <= ", " > ", " >= ", " and ",
+        " or ", " + ",  " - ", " * ",  " / ", " % ",
     };
 
 template <binary_ops bo, typename E1, typename E2>
@@ -318,7 +318,7 @@ auto process_expression(const expression<column_ref<Column, Table>>&) {
 
 template <typename Name, typename T>
 std::string expression_to_string(expression<parameter_ref<Name, T>>) {
-  return " :" + std::string(simple_type_name::short_name<Name>) + " ";
+  return " ? ";
 }
 
 std::string expression_to_string(expression<std::int64_t> i) {
@@ -374,6 +374,8 @@ using cat_t = typename catter_imp<T1, T2>::type;
 
 class from_tag;
 class select_tag;
+class join_tag;
+class where_tag;
 
 template <typename Database, typename TTuple = tagged_tuple::ttuple<>>
 struct query_builder {
@@ -404,14 +406,27 @@ struct query_builder {
             tagged_tuple::make_member<select_tag>(select_type<Columns...>{})));
   }
   template<typename Expression>
-  auto join(Expression) && {
-    return *this;
+  auto join(Expression e) && {
+    return make_query_builder<Database>(
+        std::move(t_) |
+        tagged_tuple::make_ttuple(
+            tagged_tuple::make_member<join_tag>(e)));
+ 
   }
 
   template<typename Expression>
-  auto where(Expression){
-    return *this;
+  auto where(Expression e)&&{
+    return make_query_builder<Database>(
+        std::move(t_) |
+        tagged_tuple::make_ttuple(
+            tagged_tuple::make_member<where_tag>(e)));
+ 
   }
+
+  auto build() && {
+	  return t_;
+  }
+
 
 };
 
@@ -436,11 +451,26 @@ std::string to_column_string(column_alias_ref<Alias, Column, Table>) {
 inline std::string join_vector(const std::vector<std::string>& v) {
   std::string ret;
   for (auto& s : v) {
-    ret += s + ",";
+    ret += s + ", ";
   }
-  if (ret.back() == ',') ret.pop_back();
+  if (ret.back() == ' ') ret.resize(ret.size()-2);
 
   return ret;
+}
+
+template<typename...Members>
+std::string to_statement(tagged_tuple::ttuple<Members...> t) {
+	using T = decltype(t);
+	auto statement = to_statement(tagged_tuple::get<select_tag>(t)) +
+		to_statement(tagged_tuple::get<from_tag>(t));
+	if constexpr (tagged_tuple::has_tag<join_tag,T>) {
+		statement = statement + "\nJOIN " + expression_to_string(tagged_tuple::get<join_tag>(t));
+	}
+	if constexpr (tagged_tuple::has_tag<where_tag,T>) {
+		statement = statement + "\nWHERE " + expression_to_string(tagged_tuple::get<where_tag>(t));
+	}
+	return statement;
+
 }
 
 template <typename... Columns>

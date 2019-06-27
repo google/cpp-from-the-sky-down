@@ -7,10 +7,10 @@ using namespace std;
 
 int main() {
   using db = define_database<
-      define_table<class customers,  //
+      define_table<class customers, //
                    define_column<class id, std::int64_t>,
                    define_column<class name, std::string>>,
-      define_table<class orders,  //
+      define_table<class orders, //
                    define_column<class id, std::int64_t>,
                    define_column<class item, std::string>,
                    define_column<class customerid, std::int64_t>,
@@ -23,15 +23,15 @@ int main() {
                   column<price>)
           .from(table<customers>, table<orders>)
           .join(column<orderid> == column<customerid>)
-          .where(column<price> > parameter<class price_parameter, double>)
+          .where(column<price>> parameter<class price_parameter, double>())
           .build();
 
-  for (auto& row : execute_query(query, parameter<price_parameter>(100.0))) {
-    std::cout << row.get<customers, id>();
-    std::cout << row.get<name>();
-  }
+  // for (auto& row : execute_query(query, parameter<price_parameter>(100.0))) {
+  //  std::cout << row.get<customers, id>();
+  //  std::cout << row.get<name>();
+  //}
 
-  cout << to_statement(ss) << endl;
+  cout << to_statement(query) << endl;
 
   auto e = column<class Test> == constant(5) ||
            column<class A> * constant(5) <= parameter<class P1, std::int64_t>();
