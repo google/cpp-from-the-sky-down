@@ -152,12 +152,13 @@ template <typename... Members>
 std::ostream &operator<<(std::ostream &os, const ttuple<Members...> &t) {
   os << "{\n";
   auto output = [&](auto &v) mutable {
-    os << v.tag_name << ": " << v.value << "\n";
+    os << v.tag_name << " : " << v.value << "\n";
   };
   for_each(t, output);
 
   os << "}\n";
   return os;
 }
+
 
 } // namespace tagged_tuple

@@ -19,8 +19,7 @@
 namespace simple_type_name {
 
 namespace detail {
-template <typename T>
-struct simple_type_name_dummy_type_to_string {};
+template <typename T> struct simple_type_name_dummy_type_to_string {};
 
 #if !defined(__clang__) && !defined(__GNUC__) && defined(_MSC_VER)
 #define SIMPLE_TYPE_NAME_PRETTY_FUNCTION __FUNCSIG__
@@ -29,8 +28,7 @@ struct simple_type_name_dummy_type_to_string {};
 
 #endif
 
-template <typename T>
-constexpr auto type_to_string_raw() {
+template <typename T> constexpr auto type_to_string_raw() {
   std::array<char, sizeof(SIMPLE_TYPE_NAME_PRETTY_FUNCTION)> ar{};
   for (std::size_t i = 0; i < ar.size(); ++i) {
     ar[i] = SIMPLE_TYPE_NAME_PRETTY_FUNCTION[i];
@@ -46,8 +44,7 @@ constexpr decltype(
     raw_type_function_name =
         type_to_string_raw<simple_type_name_dummy_type_to_string<T>>();
 
-template <typename T>
-constexpr std::string_view long_name() {
+template <typename T> constexpr std::string_view long_name() {
   std::string_view t("simple_type_name_dummy_type_to_string");
   std::string_view raw_str(raw_type_function_name<T>.data(),
                            raw_type_function_name<T>.size());
@@ -56,9 +53,12 @@ constexpr std::string_view long_name() {
   int last = 0;
   int count = 0;
   for (auto c : raw_str) {
-    if (c == '<') ++count;
-    if (c == '>') --count;
-    if (count == 0) break;
+    if (c == '<')
+      ++count;
+    if (c == '>')
+      --count;
+    if (count == 0)
+      break;
     ++last;
   }
   raw_str.remove_suffix(raw_str.size() - last);
@@ -79,21 +79,30 @@ constexpr std::string_view long_name() {
   return raw_str;
 }
 
-template <typename T>
-constexpr std::string_view short_name() {
+template <typename T> constexpr std::string_view short_name() {
   auto raw_str = long_name<T>();
-  auto pos = raw_str.find_last_of(':');
-  if (pos != std::string_view::npos) {
-    raw_str.remove_prefix(pos + 1);
+  int last = -1;
+  int count = 0;
+  for (int pos = 0; pos < raw_str.size(); ++pos) {
+    auto &c = raw_str[pos];
+    if (c == '<')
+      ++count;
+    if (c == '>')
+      --count;
+    if (c == ':' && count == 0)
+      last = pos;
+  }
+  if (last != -1) {
+    raw_str.remove_prefix(last + 1);
   }
   return raw_str;
 }
 
-}  // namespace detail
+} // namespace detail
 
 template <typename T>
 inline constexpr std::string_view short_name = detail::short_name<T>();
 
 template <typename T>
 inline constexpr std::string_view long_name = detail::long_name<T>();
-}  // namespace simple_type_name
+} // namespace simple_type_name
