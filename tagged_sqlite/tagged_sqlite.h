@@ -256,10 +256,10 @@ auto process_expression(const expression<parameter_ref<Name,T>>& e,
 	return tt_with_parameters_ref;
 }
 
-template <typename T> struct constant_holder { T e_; };
+template <typename T> struct val_holder { T e_; };
 
 template <typename Database, typename T, typename TT>
-auto process_expression(const expression<constant_holder<T>>& e,
+auto process_expression(const expression<val_holder<T>>& e,
 	TT raw_t) {
 	auto tt = add_tag_if_not_present<expression_parts::arguments>(add_tag_if_not_present<expression_parts::parameters_ref>(std::move(raw_t)));
 	auto pr = tagged_tuple::get<expression_parts::parameters_ref>(tt);
@@ -309,31 +309,31 @@ template <typename E> auto make_expression(E e) {
 
 
 template <typename T>
-std::string expression_to_string(const expression<constant_holder<T>> &c) {
+std::string expression_to_string(const expression<val_holder<T>> &c) {
   return std::to_string(c.e_.e_);
 }
 
 inline std::string
-expression_to_string(const expression<constant_holder<std::string>> &s) {
+expression_to_string(const expression<val_holder<std::string>> &s) {
   return s.e_.e_;
 }
 
-template <typename T> constant_holder<T> make_constant(T t) {
+template <typename T> val_holder<T> make_val(T t) {
   return {std::move(t)};
 }
 
-inline auto constant(std::string s) {
-  return make_expression(make_constant(std::move(s)));
+inline auto val(std::string s) {
+  return make_expression(make_val(std::move(s)));
 }
 
-inline auto constant(int i) {
-  return make_expression(make_constant(std::int64_t{i}));
+inline auto val(int i) {
+  return make_expression(make_val(std::int64_t{i}));
 }
-inline auto constant(std::int64_t i) {
-  return make_expression(make_constant(i));
+inline auto val(std::int64_t i) {
+  return make_expression(make_val(i));
 }
 
-inline auto constant(double d) { return make_expression(make_constant(d)); }
+inline auto val(double d) { return make_expression(make_val(d)); }
 
 template <typename Column, typename Table>
 std::string

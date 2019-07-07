@@ -34,12 +34,12 @@ int main() {
   cout << to_statement(query) << endl;
   auto p1 = process_expression<db>(parameter<price_parameter, double>(), tagged_tuple::make_ttuple());
   cout << p1 << endl;
-  auto p2 = process_expression<db>(constant(2), p1);
+  auto p2 = process_expression<db>(val(2), p1);
   cout << p2 << endl;
-  cout << process_expression<db>(constant(4),p2) << endl;
+  cout << process_expression<db>(val(4),p2) << endl;
 
-  auto e = column<class Test> == constant(5) ||
-           column<class A> * constant(5) <= parameter<class P1, std::int64_t>();
+  auto e = column<class Test> == val(5) ||
+           column<class A> * val(5) <= parameter<class P1, std::int64_t>();
 
   cout << expression_to_string(e) << std::endl;
 
