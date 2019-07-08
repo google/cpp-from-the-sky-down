@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // limitations under the License.
 
-#include "polymorphic_view.hpp"
+#include "polymorphic.hpp"
 
 #include <iostream>
 #include <string>
@@ -19,7 +19,7 @@
 
 // Use types instead of names
 // void draw(std::ostream&) -> void(draw, std::ostream&)
-void call_draw(polymorphic::view<void(class draw,std::ostream&) const> d) {
+void call_draw(polymorphic::ref<void(class draw,std::ostream&) const> d) {
   std::cout << "in call_draw\n";
   d.call<draw>(std::cout);
 }
@@ -37,7 +37,7 @@ void poly_extend(class x2*, T& t) {
 }
 
 int main() {
-  std::vector<polymorphic::object<void(class x2), void(draw, std::ostream&) const>> objects;
+  std::vector<polymorphic::object<void(x2), void(draw, std::ostream&) const>> objects;
   for (int i = 0; i < 30; ++i) {
     switch (i % 3) {
       case 0:
