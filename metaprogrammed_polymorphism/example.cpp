@@ -52,6 +52,8 @@ int main() {
     }
   }
   auto o = objects.front();
+  polymorphic::object<void(draw, std::ostream&)const> co(10);
+  auto co1 = co;
   for (const auto& o : objects) call_draw(o);
   for (auto& o : objects) o.call<x2>();
   for (auto& o : objects) call_draw(o);
