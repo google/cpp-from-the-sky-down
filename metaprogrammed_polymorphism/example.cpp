@@ -51,6 +51,7 @@ int main() {
         break;
     }
   }
+  auto o = objects.front();
   for (const auto& o : objects) call_draw(o);
   for (auto& o : objects) o.call<x2>();
   for (auto& o : objects) call_draw(o);
