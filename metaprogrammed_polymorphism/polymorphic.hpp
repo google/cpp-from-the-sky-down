@@ -216,10 +216,10 @@ class object {
   template <typename Poly, typename = std::enable_if_t<detail::is_polymorphic<
                                std::decay_t<Poly>>::value>>
   object(const Poly& other)
-      : vt_(other.get_vtable()), t_(other.template call<detail::clone>()) {}
+      : vt_(other.get_vtable()), t_(other?other.template call<detail::clone>():nullptr) {}
 
   object(const object& other)
-      : vt_{other.get_vtable()}, t_(other.call<detail::clone>()) {}
+      : vt_{other.get_vtable()}, t_(other?other.call<detail::clone>():nullptr) {}
 
   object(object&&) = default;
 
