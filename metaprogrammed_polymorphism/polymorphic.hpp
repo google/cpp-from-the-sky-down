@@ -22,6 +22,16 @@
 namespace polymorphic {
 namespace detail {
 
+// We have a lot of intermediate functions. We want to make sure that we forward
+// the parameters correctly. For non-reference parameters, we always move them.
+template <typename T> struct fwd_helper { using type = T &&; };
+template <typename T> struct fwd_helper<T &> { using type = T &; };
+template <typename T> struct fwd_helper<T &&> { using type = T &&; };
+
+template <typename T, typename U> decltype(auto) fwd(U &&u) {
+  return static_cast<typename fwd_helper<T>::type>(u);
+}
+
 template <typename T> using ptr = T *;
 
 template <typename T> struct type {};
@@ -38,14 +48,16 @@ struct vtable_entry<I, Return(Method, Parameters...)> {
     return reinterpret_cast<vtable_fun>(
         +[](void *t, Parameters... parameters) -> Return {
           return poly_extend(static_cast<Method *>(nullptr),
-                             *static_cast<T *>(t), parameters...);
+                             *static_cast<T *>(t),
+                             fwd<Parameters>(parameters)...);
         });
   }
 
   static decltype(auto) call_imp(const vtable_fun *vt,
                                  const index_type *permutation, Method *,
                                  void *t, Parameters... parameters) {
-    return reinterpret_cast<fun_ptr>(vt[permutation[I]])(t, parameters...);
+    return reinterpret_cast<fun_ptr>(vt[permutation[I]])(
+        t, fwd<Parameters>(parameters)...);
   }
 
   static auto get_index(type<Return(Method, Parameters...)>) { return I; }
@@ -60,14 +72,16 @@ struct vtable_entry<I, Return(Method, Parameters...) const> {
     return reinterpret_cast<vtable_fun>(
         +[](const void *t, Parameters... parameters) -> Return {
           return poly_extend(static_cast<Method *>(nullptr),
-                             *static_cast<const T *>(t), parameters...);
+                             *static_cast<const T *>(t),
+                             fwd<Parameters>(parameters)...);
         });
   }
 
   static decltype(auto) call_imp(const vtable_fun *vt,
                                  const index_type *permutation, Method *,
                                  const void *t, Parameters... parameters) {
-    return reinterpret_cast<fun_ptr>(vt[permutation[I]])(t, parameters...);
+    return reinterpret_cast<fun_ptr>(vt[permutation[I]])(
+        t, fwd<Parameters>(parameters)...);
   }
   static auto get_index(type<Return(Method, Parameters...) const>) { return I; }
 
