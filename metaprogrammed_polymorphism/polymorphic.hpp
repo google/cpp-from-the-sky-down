@@ -32,6 +32,22 @@ template <typename T, typename U> decltype(auto) fwd(U &&u) {
   return static_cast<typename fwd_helper<T>::type>(u);
 }
 
+struct clone {};
+
+struct holder {
+  void *ptr;
+  virtual ~holder() {}
+};
+
+template <typename T> struct holder_imp : holder {
+  T t_;
+  holder_imp(T t) : t_(std::move(t)) { ptr = &t_; }
+};
+
+template <typename T> std::unique_ptr<holder> poly_extend(clone *, const T &t) {
+  return std::make_unique<holder_imp<T>>(t);
+}
+
 template <typename T> using ptr = T *;
 
 template <typename T> struct type {};
@@ -182,26 +198,6 @@ public:
                     std::forward<Parameters>(parameters)...);
   }
 };
-
-namespace detail {
-
-struct clone {};
-
-struct holder {
-  void *ptr;
-  ~holder() {}
-};
-
-template <typename T> struct holder_imp : holder {
-  T t_;
-  holder_imp(T t) : t_(std::move(t)) { ptr = &t_; }
-};
-
-template <typename T> std::unique_ptr<holder> poly_extend(clone *, const T &t) {
-  return std::make_unique<holder_imp<T>>(t);
-}
-
-} // namespace detail
 
 using copyable = std::unique_ptr<detail::holder>(detail::clone) const;
 
