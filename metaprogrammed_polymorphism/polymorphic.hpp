@@ -105,8 +105,6 @@ struct vtable_entry<I, Return(Method, Parameters...) const> {
   using fun_ptr = ptr<Return(const void *, Parameters...)>;
 };
 
-template <typename T> using is_const_t = typename T::is_const;
-
 template <typename... entry> struct entries : entry... {
 
   using entry::call_imp...;
@@ -114,7 +112,7 @@ template <typename... entry> struct entries : entry... {
   using entry::get_index...;
 
   static constexpr bool all_const() {
-    return std::conjunction_v<is_const_t<entry>...>;
+    return std::conjunction_v<typename entry::is_const...>;
   }
 };
 
