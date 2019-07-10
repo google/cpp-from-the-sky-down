@@ -6,6 +6,7 @@ using my_time = int;
 
 struct draw_interface {
   virtual void draw(std::ostream& os) const = 0;
+  virtual ~draw_interface() {}
 };
 struct entity_interface : draw_interface {
   virtual void debug_draw(std::ostream& os) const = 0;
