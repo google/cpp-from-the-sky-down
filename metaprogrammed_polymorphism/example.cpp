@@ -16,45 +16,49 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <memory>
 
 // Use types instead of names
 // void draw(std::ostream&) -> void(draw, std::ostream&)
-void call_draw(polymorphic::ref<void(class draw,std::ostream&) const> d) {
-  std::cout << "in call_draw\n";
-  d.call<draw>(std::cout);
+void call_draw(polymorphic::ref<void(class draw, std::ostream&) const> d) {
+	std::cout << "in call_draw\n";
+	d.call<draw>(std::cout);
 }
 
 
 template <typename T>
 void poly_extend(class draw*, const T& t, std::ostream& os) {
-  os << t << "\n";
+	os << t << "\n";
 }
 
 class x2;
 template <typename T>
-void poly_extend(class x2*, T& t) {
-  t = t + t;
+void poly_extend(class x2*, T& t, std::unique_ptr<int>) {
+	t = t + t;
 }
 
 int main() {
-  std::vector<polymorphic::object<void(x2), void(draw, std::ostream&) const>> objects;
-  for (int i = 0; i < 30; ++i) {
-    switch (i % 3) {
-      case 0:
-        objects.emplace_back(i);
-        break;
-      case 1:
-        objects.emplace_back(double(i) + double(i) / 10.0);
-        break;
-      case 2:
-        objects.emplace_back(std::to_string(i) + " string");
-        break;
-    }
-  }
-  auto o = objects.front();
-  polymorphic::object<void(draw, std::ostream&)const> co(10);
-  auto co1 = co;
-  for (const auto& o : objects) call_draw(o);
-  for (auto& o : objects) o.call<x2>();
-  for (auto& o : objects) call_draw(o);
+	std::vector<polymorphic::object<
+		void(x2,std::unique_ptr<int>),
+		void(draw, std::ostream & os) const
+		>> objects;
+	for (int i = 0; i < 30; ++i) {
+		switch (i % 3) {
+		case 0:
+			objects.emplace_back(i);
+			break;
+		case 1:
+			objects.emplace_back(double(i) + double(i) / 10.0);
+			break;
+		case 2:
+			objects.emplace_back(std::to_string(i) + " string");
+			break;
+		}
+	}
+	auto o = objects.front();
+	polymorphic::object<void(draw, std::ostream&)const> co(10);
+	auto co1 = co;
+	for (const auto& o : objects) call_draw(o);
+	for (auto& o : objects) o.call<x2>(nullptr);
+	for (auto& o : objects) call_draw(o);
 }
