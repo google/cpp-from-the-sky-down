@@ -1,20 +1,15 @@
-﻿# Types as function names
+﻿# P1521R0
+# Types as function names
+
+##### Author: John Bandela
+##### Audience: EWGI
+##### Project: ISO/IEC JTC1/SC22/WG21 14882: Programming Language — C++
+##### Reply-To: John Bandela (jbandela@gmail.com)
+
 
 ## TLDR:
 
-Addition of a new call syntax `<type>(args)` is proposed (NB: the angle brackets are part of
-the actual syntax). After defining the semantics of this construct, examples are provided how
-this new call syntax can be used to address the following issues in C++:
-
-* Universal function call syntax
-* Extension methods
-* Deducing this
-* Extension points
-* Overload sets
-* Smart references/proxies
-* Making composition easier to use vs. inheritance
-* Runtime polymorphism without inheritance
-
+This paper proposes a new call syntax `type.(args)` where `type` is an arbitrary type.
 
 ## Motivation
 Currently we use identifiers to designate free and member functions. However, this is a source
@@ -26,7 +21,6 @@ limitations, there are features that we would like to have, but we do not.
 
 * Universal function call syntax
 * Extension methods
-* Deducing this
 
 2. Incomplete namespacing
 
@@ -36,7 +30,6 @@ limitations, there are features that we would like to have, but we do not.
 
 * Overload sets
 * Smart references/proxies
-* Making composition easier to use vs. inheritance
 * Runtime polymorphism without inheritance
 * Exception and non-exception based overloads
 * Adding monadic bind to pre-existing monad types
@@ -46,18 +39,12 @@ All these issues can be addressed if we allow functions to be designated using t
 
 ## Definitions
 
-Let action tag be defined as struct declaration (See Alternative to action tag as type at the end
-of the paper for an alternative).
-
-```cpp
-struct foo; // foo is an action tag.
-struct bar; // bar is another action tag.
-```
+Let *action_tag* be any type, including an incomplete type.
 
 ### Proposed calling syntax
 
-Anywhere where a function name is used to call a function or member function, `<action tag>`
-may be used instead. In addition, `t.<action tag>(args..)` is equivalent of `<action tag>(t,args..)`.
+Anywhere where a function name is used to call a function or member function, `action_tag.`
+may be used instead. In addition, `t.action_tag.(args..)` is equivalent of `action_tag.(t,args..)`.
 
 ```cpp
 // Declaration
@@ -65,7 +52,7 @@ void free_function();
 free_function();
 // Definition of action tag type
 struct foo;
-<foo>(); // calling an action tag
+foo.(); // calling an action tag
 // Declaration
 struct object{
   void member_function();
@@ -76,151 +63,57 @@ o.member_function();
 // Declaration of action type tag.
 struct bar;
 // The following 2 calls are equivalent.
-o.<bar>();
-<bar>(o);
+o.bar.();
+bar.(o);
 
 ```
-### Proposed pointer to function syntax
-
-Anywhere a function name is used to create a pointer to function, `<action tag>` may be used instead. There is no equivalent to member function pointers since  `o.<action_tag>()` is equivalent to `<action_tag>(o)`.
-
-```cpp
-// action tag
-struct foo;
-auto <foo>(double) -> int{
-  // implementation
-}
-
-int(*ptr)(double) = &<foo>;
-int(*ptr2)(double) = <foo>; 
-```
-
 ### Proposed definition syntax
 
-Let object be an object type, and foo be an action tag and ActionTag be a generic action tag:
-Then an implementation of an action tag can be accomplished in 4 ways:
-
-1. Implementing a specific action tag for a specific type.
+An action_tag may be declared and defined in the following manner:
 
 ```cpp
-auto <foo,object>(object& o){
-  return 43;
+
+// Declare action_tags.
+struct foo;
+struct bar;
+
+// With specified return value
+auto foo.(parameter) -> return_type;
+
+// With deduced return value;
+auto bar.(parameter){
+	return 5;
 }
-```
 
-2. Implementing all action tags for a single type.
+// All function template syntax is supported
+template<typename T>
+auto bar.(T t){
+	return 5;
+}
 
-```cpp
+// Template parameters can be the action_tag
 template<typename ActionTag>
-auto <ActionTag, object>(object& o){
-  return 42;
+auto ActionTag.(object&){
+	// Implement all action tags that take a object as a parameter
 }
 
-```
-3. Implementing an action tag for all types.
-
-```cpp
-template<typename T>
-auto <foo>(T& t){
-  return 42;
-}
-
-```
-
-4. Implementing all action tags for all types.
-
-```cpp
-template<typename ActionTag, typename T>
-auto <ActionTag>(T& t){
-  return 42;
-}
-```
-
-Implementation 1 takes precedence over 2, 2 takes precedence over 3, 3 takes precedence
-over 4. SFINAE and concepts may be used to constrain the implementation. An implementation
-may be a friend of a class. Within precedence levels 1-4, lookup proceeds in a manner consistent
-with ADL, with the addition of the namespace of the action tag to the list of namespaces
-searched.
-
-### Rationale for distinction between 1,2 and 3,4.
-
-The question arises if in the proposed definition syntax, we need to differentiate between 1,2
-and 3,4 or if partial ordering could be used instead. The issue with partial ordering is that it
-treats all parameters as equal, but many times, in practice, we want the first parameter to be
-privileged. Consider this example:
-
-```cpp
-struct object{
-  int foo(double){
-    return 42;
-  }
-};
-int foo(object&, double){
-  return 42;
-}
-// Generic implementation
-template<typename T>
-int foo(T&, int){
-  return 1;
-}
-
-int main(){
-  object o;
-  o.foo(1); // returns 42
-  foo(o,1); // return 1
-}
-```
-
-Now imagine that someone is writing the same code using action tags
-
-```cpp
-// action tag
-struct foo;
-struct object{
-};
-// foo implementation for object
-auto <foo>(object&, double) -> int{ return 42;}
-// foo implementation for any type
-template<typename T>
-auto <foo>(T&, int){ return 1;}
-int main(){
-object o;
-o.<foo>(1); // returns 1!!!
-<foo>(o,1); // returns 1
-```
-
-The user is definitely going to be surprised. Looking at the code, it is clear that the 2 parameters
-are not of equal importance. The first parameter is more important than the second parameter.
-By having the optional object type, we can specify that in the code:
-
-```cpp
-// action tag
-struct foo;
-struct object{
-};
-// foo implementation for object
-auto <foo,object>(object&, double) -> int{ return 42;}
-// foo implementation for any type
-template<typename T>
-auto <foo>(T&, int){ return 1;}
-int main(){
-  object o;
-  o.<foo>(1); // returns 42
-  <foo>(o,1); // returns 42
+// Concepts supported
+template<typename ActionTag>
+requires my_concept<ActionTag>
+auto ActionTag.(object&){
+	// Implement all action tags that take a object as a parameter
 }
 
 ```
 
-Without this differentiation, users would not be able to confidently convert member functions to
-action tags, without worrying that overload resolution will find a better overload than the action
-tag the user explicitly implemented for their type.
+
 
 ### Supporting types
 
 #### is_action_tag_invocable
 
 ```cpp
-// iff <ActionTag>(decltype<Args>()...) is well-formed.
+// iff ActionTag.(declval<Args>()...) is well-formed.
 template<typename ActionTag, typename... Args>
 struct is_action_tag_invocable :std::true_type{}
 // otherwise
@@ -239,10 +132,10 @@ A class that overloads `operator()` and forwards all arguments to an action tag
 ```cpp
 template<typename ActionTag>
 struct action_tag_overload_set{
-  template<typename... T, typename =
-  std::enable_if_t<is_action_tag_invocable_v<ActionTag,T...>>
+  template<typename... T> typename =
+  requires is_action_tag_invocable_v<ActionTag,T...>
   decltype(auto) operator()(T&&... t) const{
-    return <ActionTag>(std::forward<T>(t)...);
+    return ActionTag.(std::forward<T>(t)...);
   }
 };
 ```
@@ -255,9 +148,7 @@ struct action_tag_overload_set{
 
 While universal function call syntax would be very useful, there are backward compatibility
 issues. Using action tags because we do not have to worry about backward compatibility we can
-define that `t.<foo>(args...)` and `<foo>(t,args...)` are equivalent. In addition, the extra object type
-in the definition of the implementation of the action tag allows confident conversion of member
-functions to action tags.
+define that `t.foo.(args...)` and `foo.(t,args...)` are equivalent.
 
 #### Extension methods
 
@@ -269,19 +160,19 @@ For example, wouldn't it be nice for int to have a `to_string` method?
 ```cpp
 namespace my_methods{
   struct to_string;
-  auto <to_string,int>(int i) -> std::string{
+  auto to_string.(int i) -> std::string{
     return std::to_string(i);
   }
 }
 int i = 5;
-i.<my_methods::to_string>();
+i.my_methods::to_string.();
 ```
 
 We could even extend this and provide a default to_string implementation.
 
 ```cpp
 template<typename T>
-auto <to_string>(T& t) -> std::string{
+auto to_string.(const T& t) -> std::string{
   std::stringstream s;
   s << t;
   return s.str();
@@ -292,42 +183,9 @@ This would also be useful for ranges actions and views where instead of of forci
 service with it's precedence quirks, we could actually use something like
 
 ```cpp
-v.<action::sort>().<action::unique>().<view::filter>([](auto&){/*stuff*/});
+v.action::sort.().action::unique.().view::filter.([](auto&){/*stuff*/});
 
 ```
-#### Deducing this
-
-Let's say there object has a data_ member that we would like to expose via a member function.
-
-```cpp
-class object{
-  string data_;
-public:
-  string& data() &{return data_;}
-  const string& data() const &{return data_;}
-  string&& data()&& {return data_;}
-  const string&& data()const && {return data_;}
-};
-```
-
-We have the same function body, copied 4 times to have different qualifiers. Here is how to do it with
-this proposal.
-
-```cpp
-struct get_data;
-class object{
-  string data_;
-  template<typename Self>
-  friend decltype(auto) <get_data, object>(Self&& self){
-    return (std::forward<Self>(self).data_);
-  }
-};
-object o;
-o.<get_data>(); // string&
-std::as_const(o).<get_data>(); // const string&
-std::move(o).<get_data>(); // string&&
-```
-
 ### Overcoming incomplete namespacing
 
 #### Customization points
@@ -343,7 +201,7 @@ could put extension points in a hypothetical namespace.
 namespace std::extension_points{
   struct size;
   template<typename T>
-  auto <size>(T& t){
+  auto size.(T& t){
     return t.size();
   }
 }
@@ -353,7 +211,7 @@ Which could then be called
 
 ```cpp
 std::vector v{1,2,3,...};
-<std::extension_points::size>(v);
+std::extension_points::size.(v);
 ```
 
 in addition, because with action tags the namespace of the tag is taken into account for ADL
@@ -393,14 +251,16 @@ namespace dumb_reference {
   class basic_dumb_reference{
     T* t_;
     public:
-    template<typename ActionTag, typename Self, typename... T,
-    typename =
-    std::enable_if_t<is_action_tag_invocable_v<ActionTag,Self,T...>>>
-    friend decltype(auto) <ActionTag,basic_dumb_reference<T>>(Self&&
-    self, T&&... t){
-      return <ActionTag>(self.t_,std::forward<T>(t)...);
+	
+    template<typename ActionTag, typename Self, typename... Args>
+	requires is_action_tag_invocable_v<ActionTag,Self,Args...>
+	  && std::is_same_v<std::remove_cvref_t<Self>,basic_dumb_reference<T>>
+    friend decltype(auto) ActionTag.(Self&&
+    self, Args&&... args){
+      return ActionTag.(self.t_,std::forward<T>(t)...);
     }
-    friend auto <reset, basic_dumb_reference<T>>(T& t) -> void{
+
+    friend auto reset.(basic_dumb_reference<T>& t) -> void{
       t_ = &t;
     }
   };
@@ -408,10 +268,10 @@ namespace dumb_reference {
 int i = 0;
 int j = 2;
 dumb_reference::basic_dumb_reference<int> ref;
-ref.<dumb_reference::reset>(i);
-ref.<to_string>(); // "0"
-ref.<dumb_reference::reset>(j);
-ref.<to_string>(); // "2"
+ref.dumb_reference::reset.(i);
+ref.to_string.(); // "0"
+ref.dumb_reference::reset.(j);
+ref.to_string.(); // "2"
 }
 ```
 
@@ -421,7 +281,7 @@ member functions of the smart reference itself. Because action tags are namespac
 obvious that the action tag reset applies to the reference itself and not to what is being stored.
 In addition, if we could extend this tecnhique to making for example debugging proxies doing
 such things as logging all action tags and parameters if we so desired. In fact, we could even
-use this to create a transparent remoting proxy which will convert member function invocations
+use this to create a transparent remoting proxy which will convert action tag invocations
 into a remote procedure call.
 
 #### Composition
@@ -433,11 +293,11 @@ non-implemented action tags to the contained object.
 ```cpp
 struct object{
   contained_object contained_;
-  template<typename ActionTag, typename Self, typename... T,
-  typename=std::enable_if_t<is_action_tag_invocable_v<
-   ActionTag,decltype(declval<Self>().contained_),T...>>>
-  friend decltype(auto) <ActionTag,object>(Self&& self, T&&... t){
-    return <ActionTag>(self.contained_,std::forward<T>(t)...);
+  template<typename ActionTag, typename... T>
+  requires is_action_tag_invocable_v<
+   ActionTag,decltype(declval<object>().contained_),T...>
+  friend decltype(auto) ActionTag.(const object& self, T&&... t){
+    return ActionTag.(self.contained_,std::forward<T>(t)...);
   }
 };
 ```
@@ -464,8 +324,8 @@ using foo_and_barable =
 polymorphic_object<signature<void,foo>,signature<void,bar,int>>;
 std::vector<foo_and_barable> stuff;
 for(auto& v: stuff){
-  v.<foo>();
-  v.<bar>(1);
+  v.foo.();
+  v.bar.(1);
 }
 ```
 
@@ -502,25 +362,24 @@ class my class{
 // stuff
 public:
   // std::error_code based error handling
-  friend auto <operation1,my_class>(my_class& c, int i, std::error_code& ec)->void;
+  friend auto operation1.(my_class& c, int i, std::error_code& ec)->void;
 
  // std::error_code based error handling
- friend auto <operation2, my_class>(my_class& c, int i,int j, std::error_code& ec) -> void;
+ friend auto operation2.(my_class& c, int i,int j, std::error_code& ec) -> void;
 
 };
 
 // Automatically generate the throwing counterparts, when an action
 // tag is called without passing in an std::error_code.
-template <typename ActionTag, typename... Args, typename =
-std::enable_if_t<!std::disjunction_v<std::is_same<std::error_code,std:
-:decay_t<Args>>...>>, typename =
-std::enable_if_t<is_action_tag_invocable_v<ActionTag, dummy&,
+template <typename ActionTag, typename... Args> 
+requires !std::disjunction_v<std::is_same<std::error_code,std:
+:decay_t<Args>>...> && is_action_tag_invocable_v<ActionTag, my_class&, 
 Args..., std::error_code&>>
 >
-decltype(auto) <ActionTag,my_class>(Args&&... args) {
+decltype(auto) ActionTag.(my_class& self,Args&&... args) {
   std::error_code ec;
   auto call = [&]() mutable {
-    return <ActionTag>(std::forward<Args>(args)..., ec);
+    return ActionTag.(self,std::forward<Args>(args)..., ec);
   };
 
   using V = decltype(call());
@@ -550,10 +409,10 @@ class node{
   node* parent;
   std::vector<node*> children;
 public:
-  friend auto <get_parent, node>(const node& self)->node*{
+  friend auto get_parent.(const node& self)->node*{
     return parent;
   }
-  friend auto <get_child, node>(const node& self, int i)->node*{
+  friend auto get_child.(const node& self, int i)->node*{
     if(i >= 0 && i < children.size())
       return children[i];
     else
@@ -562,17 +421,17 @@ public:
 };
 // We can use like this
 node n;
-node* parent = n.<get_parent>();
+node* parent = n.get_parent.();
 // Get the first child
-node* child = n.<get_child>(0);
+node* child = n.get_child.(0);
 
 ```
 
 However, if we want to get the grandparent, we have to write code like
 
 ```cpp
-node* parent = n.<get_parent>();
-node* grandparent = parent?parent-><get_parent>():nullptr;
+node* parent = n.get_parent.();
+node* grandparent = parent?parent->get_parent.():nullptr;
 ```
 
 
@@ -585,9 +444,9 @@ struct and_then;
 
 template <typename ActionTag, typename T, typename... Args>
 auto <and_then<ActionTag>>(T&& t, Args&&... args) 
-  ->decltype(<ActionTag>(*std::forward<T>(t),std::forward<Args>(args)...)){
+  ->decltype(ActionTag.(*std::forward<T>(t),std::forward<Args>(args)...)){
   if(t){
-    return <ActionTag>(*std::forward<T>(t),std::forward<Args>(args)...);
+    return ActionTag.(*std::forward<T>(t),std::forward<Args>(args)...);
   }
   else{
     return nullptr;
@@ -600,8 +459,8 @@ The we can do stuff like
 ```cpp
 node n;
 auto great_grandparent =
-n.<get_parent>().<and_then<get_parent>>().<and_then<get_parent>>();
-auto grand_child = n.<get_child>(0).<and_then<get_child>>(0);
+n.get_parent.().and_then<get_parent>.().and_then<get_parent>.();
+auto grand_child = n.get_child.(0).and_then<get_child>.(0);
 ```
 
 This is much simpler, and less error prone than before. In addition, even if we change
@@ -626,13 +485,13 @@ struct wrap_optional<std::optional<T>>{
 template<typename T>
 using wrap_optional_t = typename wrap_optional<T>::type;
 
-template<typename ActionTag, typename T, typename Self, typename...Args>
-auto <ActionTag,std::optional<T>>(Self&& self, Args&&... args)
- -> wrap_optional_t<decltype(<ActionTag>(*std::forward<Self>(self),std::forward<Args>(args)...))>{
+template<typename ActionTag, typename T, typename...Args>
+auto ActionTag.(std::optional<T>& self, Args&&... args)
+ -> wrap_optional_t<decltype(ActionTag.(*self,std::forward<Args>(args)...))>{
   if(!self){
     return std::nullopt;
   }
-  return <ActionTag>(*std::forward<Self>(self),std::forward<Args>(args)...);
+  return ActionTag.(*self,std::forward<Args>(args)...);
 }
 ```
 
@@ -641,114 +500,39 @@ Then we could do the following
 ```cpp
 // Reads a optional<string> from istream
 struct read_string;
-auto <read_string>(std::istream&) -> std::optional<std::string>;
+auto read_string.(std::istream&) -> std::optional<std::string>;
 
 // Converts from a string to optional<T>
 template<typename T>
 struct from_string;
 template<typename T>
-auto <from_string<T>>(std::string_view s) -> std::optional<T>;
+auto from_string<T>.(std::string_view s) -> std::optional<T>;
 
 // Squares an integer
 struct square;
-auto <square>(int i) -> int;
+auto square.(int i) -> int;
 
 int main(){
   auto opt_squared =
-    std::cin.<read_string>()
-            .<from_string<int>()
-            .<square>();
+    std::cin.read_string.()
+            .from_string<int>.()
+            .square.();
 }
 ```
-
-## Implementability, proof of concept
-
-I am not a compiler engineer and have not been able to implement this in a compiler. However,
-as a proof of concept I simulated this using a library
-https://github.com/google/cpp-from-the-sky-down/tree/master/tafn.
-On the calling side, instead of
-
-```cpp
-o.<foo>();
-<foo>(o);
-```
-
-It uses:
-
-```cpp
-using tafn::_;
-o *_<foo>();
-*_<foo>(o);
-```
-
-On the definition side:
-Instead of
-
-```cpp
-auto <foo, object>(object& o){return 42;}
-```
-
-It has:
-
-```cpp
-auto tafn_customization_point(foo, tafn::type<object>,object &) {
-  return 42;
-}
-```
-
-Using that library, I have been able to implement many of the applications of this technique
-mentioned in this proposal. For the ones I have not yet implemented (mainly polymorphic
-object), I can see a clear path towards how it could be done.
-
-## Possible extensions: Calling existing functions
-
-NB: The above proposal would be useful in and of itself. However, how do we use these
-mechanisms to optin to calling existing code. Below is a proposal for doing this.
-`C++20` will allow for user defined template parameters. One example from
-http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2018/p0732r2.pdf is `std::fixed_string`.
-Based on that we could define the following.
-
-```cpp
-template<std::fixed_string function_name>
-struct function_literal_name{};
-```
-
-The calling syntax would be:
-
-```cpp
-std::vector<int> v;
-v.<function_literal_name<"clear">>();
-<function_literal_name<"clear">>(v);
-```
-
-The implementation would be compiler defined and have the following semantics.
-
-Let `function_name` be the value of `std::fixed_string`, and `o` be the first parameter.
-If `o.function_name(parameters...)` is well formed, then this is called. Else if `function_name(o,
-parameters...)` is well-formed then it is called, otherwise ill-formed.
-In the above example `vector::clear` is called.
-This would allow such advantages as allowing universal function call syntax, and forwarding for existing code that uses
-function names for new code that opts in using the action tag syntax via `function_literal_name`.
-
-## Alternative to action tag as struct
-
-Although, a type is used for action tag, the fact that action tags are types is actually incidental to
-their use. Action tags are never instantiated. Here is an alternative, using declaration of a new
-kind.
 
 ### Alternative definition of action tag
 
 ```cpp
-auto <foo>; // foo is an action tag.
+auto foo.; // foo is an action tag.
 
 template<int N>
-auto <get>; // action tag taking non-type template parameter.
+auto get.; // action tag taking non-type template parameter.
 
 template<typename T>
-auto <numeric_cast>; // action tag taking type template parameter
+auto numeric_cast.; // action tag taking type template parameter
 
-template<<action_tag>>
-auto <and_then>; // action tag taking another action tag as a parmeter
+template<auto action_tag.>
+auto and_then.; // action tag taking another action tag as a parmeter
 ```
 
 ### Alternative calling syntax
@@ -757,49 +541,18 @@ The calling syntax would be unchanged.
 
 ### Alternative definition syntax
 
-Here is how the definitions would change:
 
-1. Implementing a specific action tag for a specific type. This would be unchanged
+The definition syntax would be unchanged.
 
-```cpp
-auto <foo,object>(object& o){
-  return 43;
-}
-```
-2. Implementing all action tags for a single type.
-
-```cpp
-template<<ActionTag>>
-auto <ActionTag, object>(object& o){
- return 42;
-}
-```
-3. Implementing an action tag for all types. This would be unchanged.
-
-```cpp
-template<typename T>
-auto <foo>(T& t){
-  return 42;
-}
-```
-
-4. Implementing all action tags for all types.
-
-```cpp
-template<<ActionTag>, typename T>
-auto <ActionTag>(T& t){
-  return 42;
-}
-```
 
 ### Alternative Example: and_then
 
 ```cpp
-template <<ActionTag>, typename T, typename... Args>
-auto <and_then<ActionTag>>(T&& t, Args&&... args)
- -> decltype(<ActionTag>(*std::forward<T>(t),std::forward<Args>(args)...)){
+template <auto ActionTag., typename T, typename... Args>
+auto and_then<ActionTag>.(T&& t, Args&&... args)
+ -> decltype(ActionTag.(*std::forward<T>(t),std::forward<Args>(args)...)){
   if(t){
-    return <ActionTag>(*std::forward<T>(t),std::forward<Args>(args)...);
+    return ActionTag.(*std::forward<T>(t),std::forward<Args>(args)...);
   }
   else{
     return nullptr;
@@ -813,8 +566,6 @@ While the alternative definition is interesting, I see the following downsides:
 
 * We would need to introduce a new kind of declaration. We would also have to make sure
 that all the template type machinery also works with this
-* We have to special case template << action_tag>> for the lexer to not find left shift
-(similar to what was done for double closing angle brackets in C++11
 * Other than saving some characters, no specific advantages of this approach are obvious
 to me.
 
@@ -822,4 +573,4 @@ Given the above, I believe that sticking with actions tags as types makes the mo
 
 ## Acknowledgements
 
-Thanks to Arthur O'Dwyer, James Dennet, Richard Smith, Waldemar Horvath, and Kyle Konrad for providing valuable feedback.
+Thanks to Arthur O'Dwyer, James Dennet, Richard Smith, Waldemar Horvath, Kyle Konrad, Nicol Bolas for providing valuable feedback.
