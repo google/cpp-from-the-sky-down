@@ -2,13 +2,15 @@
 // or project specific include files.
 
 #pragma once
-
-#include "..//simple_type_name/simple_type_name.h"
-#include "..//tagged_tuple/tagged_tuple.h"
 #include <array>
 #include <cstdint>
 #include <string>
+#include <iostream>
 #include <type_traits>
+#include <vector>
+
+#include "..//simple_type_name/simple_type_name.h"
+#include "..//tagged_tuple/tagged_tuple.h"
 
 template <typename... Tables> struct define_database : Tables... {};
 
@@ -70,7 +72,7 @@ struct column_alias_ref {};
 template <typename E> struct expression {
   E e_;
 
-  template <typename Alias> constexpr auto as() const { return e_.as<Alias>(); }
+  template <typename Alias> constexpr auto as() const { return e_.template as<Alias>(); }
 };
 
 template <typename ColumnName, typename TableName = void> struct column_ref {
@@ -215,6 +217,7 @@ namespace expression_parts {
 	struct column_refs;
 	struct parameters_ref;
 	struct arguments;
+  struct type;
 
 }
 
@@ -280,6 +283,7 @@ auto process_expression(const expression<val_holder<T>>& e,
 template <typename Database, binary_ops bo, typename E1, typename E2, class TT>
 auto process_expression(const expression<binary_expression<bo, E1, E2>> &e,
                         TT tt) {
+  using tagged_tuple::get;
   auto tt_left = process_expression<Database>(e.e_.e1_, std::move(tt));
   using left_type =
       std::decay_t<decltype(get<expression_parts::type>(tt_left))>;
@@ -300,7 +304,7 @@ auto process_expression(const expression<binary_expression<bo, E1, E2>> &e,
               std::string(binary_ops_to_string[to_underlying(bo)]) +
               right_string),
           tagged_tuple::make_member<expression_parts::type>(
-              static_cast<binary_op_type<bo> *>(nullptr))));
+              static_cast<binary_op_type<left_type,right_type,bo> *>(nullptr))));
 }
 
 template <typename E> auto make_expression(E e) {
@@ -348,7 +352,7 @@ expression_to_string(const expression<column_ref<Column, Table>> &) {
 
 template <typename Database, typename Column, typename Table>
 auto process_expression(const expression<column_ref<Column, Table>> &) {
-  using column_type = if constexpr (std::is_same_v<Table, void>) {
+  if constexpr (std::is_same_v<Table, void>) {
     return std::string(simple_type_name::short_name<Column>);
   }
   else {
@@ -411,9 +415,9 @@ class where_tag;
 
 template <typename Database, typename TTuple = tagged_tuple::ttuple<>>
 struct query_builder {
-  template <typename Database, typename TTuple>
-  static auto make_query_builder(TTuple t) {
-    return query_builder<Database, TTuple>{std::move(t)};
+  template <typename NewDatabase, typename NewTTuple>
+  static auto make_query_builder(NewTTuple t) {
+    return query_builder<NewDatabase, NewTTuple>{std::move(t)};
   }
 
   TTuple t_;
@@ -467,7 +471,6 @@ std::string to_column_string(column_alias_ref<Alias, Column, Table>) {
          std::string(simple_type_name::short_name<Alias>);
 }
 
-#include <vector>
 
 inline std::string join_vector(const std::vector<std::string> &v) {
   std::string ret;
@@ -511,6 +514,7 @@ template <typename... Tables> std::string to_statement(from_type<Tables...>) {
 
 template <typename Database, typename TTuple>
 std::string to_statement(const query_builder<Database, TTuple> &t) {
+  using tagged_tuple::get;
   std::string ret;
   if constexpr (tagged_tuple::has_tag<select_tag, TTuple>) {
     ret += to_statement(get<select_tag>(t.t_));
@@ -522,6 +526,5 @@ std::string to_statement(const query_builder<Database, TTuple> &t) {
   return ret;
 }
 
-#include <iostream>
 
 // TODO: Reference additional headers your program requires here.
