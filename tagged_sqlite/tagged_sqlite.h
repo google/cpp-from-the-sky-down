@@ -4,8 +4,8 @@
 #pragma once
 #include <array>
 #include <cstdint>
-#include <string>
 #include <iostream>
+#include <string>
 #include <type_traits>
 #include <vector>
 
@@ -72,7 +72,9 @@ struct column_alias_ref {};
 template <typename E> struct expression {
   E e_;
 
-  template <typename Alias> constexpr auto as() const { return e_.template as<Alias>(); }
+  template <typename Alias> constexpr auto as() const {
+    return e_.template as<Alias>();
+  }
 };
 
 template <typename ColumnName, typename TableName = void> struct column_ref {
@@ -213,72 +215,79 @@ expression_to_string(const expression<binary_expression<bo, E1, E2>> &e) {
 }
 
 namespace expression_parts {
-	struct expression_string;
-	struct column_refs;
-	struct parameters_ref;
-	struct arguments;
-  struct type;
+struct expression_string;
+struct column_refs;
+struct parameters_ref;
+struct arguments;
+struct type;
 
+} // namespace expression_parts
+
+template <typename Tag, typename TT> auto add_tag_if_not_present(TT t) {
+  if constexpr (tagged_tuple::has_tag<Tag, TT>) {
+    return std::move(t);
+  } else {
+    return tagged_tuple::append(
+        t, tagged_tuple::make_member<Tag>(tagged_tuple::make_ttuple()));
+  }
 }
 
-template<typename Tag, typename TT>
-auto add_tag_if_not_present(TT t) {
-		if constexpr (tagged_tuple::has_tag<Tag, TT>) {
-			return std::move(t);
-		}
-		else {
-			return tagged_tuple::append(t, tagged_tuple::make_member<Tag>(tagged_tuple::make_ttuple()));
-		}
+template <typename T> struct type_ref { using type = T; };
+
+template <typename T>
+std::ostream &operator<<(std::ostream &os, const type_ref<T> &) {
+  os << "type_ref<" << simple_type_name::short_name<T> << ">";
+  return os;
 }
 
-template<typename T>
-struct type_ref {
-	using type = T;
-
-};
-
-template<typename T>
-std::ostream& operator<<(std::ostream& os, const type_ref<T>&) {
-	os << "type_ref<" << simple_type_name::short_name<T> << ">";
-	return os;
-}
-
-template<typename T>
-using ptr = T*;
-
+template <typename T> using ptr = T *;
 
 template <typename Database, typename Name, typename T, typename TT>
-auto process_expression(const expression<parameter_ref<Name,T>>& e,
-	TT raw_t) {
-	auto tt = add_tag_if_not_present<expression_parts::arguments>(add_tag_if_not_present<expression_parts::parameters_ref>(std::move(raw_t)));
-	auto pr = tagged_tuple::get<expression_parts::parameters_ref>(tt);
-	using C = std::integral_constant<int, tagged_tuple::tuple_size(pr)>;
-	auto pr_appended = tagged_tuple::append(pr, tagged_tuple::make_member<C>(type_ref<Name>()));
+auto process_expression(const expression<parameter_ref<Name, T>> &e, TT raw_t) {
+  auto tt = add_tag_if_not_present<expression_parts::arguments>(
+      add_tag_if_not_present<expression_parts::parameters_ref>(
+          std::move(raw_t)));
+  auto pr = tagged_tuple::get<expression_parts::parameters_ref>(tt);
+  using C = std::integral_constant<int, tagged_tuple::tuple_size(pr)>;
+  auto pr_appended =
+      tagged_tuple::append(pr, tagged_tuple::make_member<C>(type_ref<Name>()));
 
-	auto tt_with_parameters_ref = tagged_tuple::merge(tt, tagged_tuple::make_ttuple(tagged_tuple::make_member<expression_parts::parameters_ref>(std::move(pr_appended))));
-	return tt_with_parameters_ref;
+  auto tt_with_parameters_ref = tagged_tuple::merge(
+      tt, tagged_tuple::make_ttuple(
+              tagged_tuple::make_member<expression_parts::parameters_ref>(
+                  std::move(pr_appended))));
+  return tt_with_parameters_ref;
 }
 
 template <typename T> struct val_holder { T e_; };
 
 template <typename Database, typename T, typename TT>
-auto process_expression(const expression<val_holder<T>>& e,
-	TT raw_t) {
-	auto tt = add_tag_if_not_present<expression_parts::arguments>(add_tag_if_not_present<expression_parts::parameters_ref>(std::move(raw_t)));
-	auto pr = tagged_tuple::get<expression_parts::parameters_ref>(tt);
-	using SizePR = std::integral_constant<int, tagged_tuple::tuple_size(pr)>;
-	auto arg = tagged_tuple::get<expression_parts::arguments>(tt);
-	using SizeArguments = std::integral_constant<int, tagged_tuple::tuple_size(arg)>;
-	auto pr_appended = tagged_tuple::append(pr, tagged_tuple::make_member<SizePR>(type_ref<SizeArguments>()));
+auto process_expression(const expression<val_holder<T>> &e, TT raw_t) {
+  auto tt = add_tag_if_not_present<expression_parts::arguments>(
+      add_tag_if_not_present<expression_parts::parameters_ref>(
+          std::move(raw_t)));
+  auto pr = tagged_tuple::get<expression_parts::parameters_ref>(tt);
+  using SizePR = std::integral_constant<int, tagged_tuple::tuple_size(pr)>;
+  auto arg = tagged_tuple::get<expression_parts::arguments>(tt);
+  using SizeArguments =
+      std::integral_constant<int, tagged_tuple::tuple_size(arg)>;
+  auto pr_appended = tagged_tuple::append(
+      pr, tagged_tuple::make_member<SizePR>(type_ref<SizeArguments>()));
 
-	auto tt_with_parameters_ref = tagged_tuple::merge(tt, tagged_tuple::make_ttuple(tagged_tuple::make_member<expression_parts::parameters_ref>(std::move(pr_appended))));
+  auto tt_with_parameters_ref = tagged_tuple::merge(
+      tt, tagged_tuple::make_ttuple(
+              tagged_tuple::make_member<expression_parts::parameters_ref>(
+                  std::move(pr_appended))));
 
+  auto arg_appended = tagged_tuple::append(
+      arg, tagged_tuple::make_member<SizeArguments>(e.e_.e_));
 
-	auto arg_appended = tagged_tuple::append(arg, tagged_tuple::make_member<SizeArguments>(e.e_.e_));
-
-	return tagged_tuple::merge(tt_with_parameters_ref, tagged_tuple::make_ttuple(tagged_tuple::make_member<expression_parts::arguments>(std::move(arg_appended))));
+  return tagged_tuple::merge(
+      tt_with_parameters_ref,
+      tagged_tuple::make_ttuple(
+          tagged_tuple::make_member<expression_parts::arguments>(
+              std::move(arg_appended))));
 }
- 
 
 template <typename Database, binary_ops bo, typename E1, typename E2, class TT>
 auto process_expression(const expression<binary_expression<bo, E1, E2>> &e,
@@ -304,13 +313,13 @@ auto process_expression(const expression<binary_expression<bo, E1, E2>> &e,
               std::string(binary_ops_to_string[to_underlying(bo)]) +
               right_string),
           tagged_tuple::make_member<expression_parts::type>(
-              static_cast<binary_op_type<left_type,right_type,bo> *>(nullptr))));
+              static_cast<binary_op_type<left_type, right_type, bo> *>(
+                  nullptr))));
 }
 
 template <typename E> auto make_expression(E e) {
   return expression<E>{std::move(e)};
 }
-
 
 template <typename T>
 std::string expression_to_string(const expression<val_holder<T>> &c) {
@@ -322,20 +331,14 @@ expression_to_string(const expression<val_holder<std::string>> &s) {
   return s.e_.e_;
 }
 
-template <typename T> val_holder<T> make_val(T t) {
-  return {std::move(t)};
-}
+template <typename T> val_holder<T> make_val(T t) { return {std::move(t)}; }
 
 inline auto val(std::string s) {
   return make_expression(make_val(std::move(s)));
 }
 
-inline auto val(int i) {
-  return make_expression(make_val(std::int64_t{i}));
-}
-inline auto val(std::int64_t i) {
-  return make_expression(make_val(i));
-}
+inline auto val(int i) { return make_expression(make_val(std::int64_t{i})); }
+inline auto val(std::int64_t i) { return make_expression(make_val(i)); }
 
 inline auto val(double d) { return make_expression(make_val(d)); }
 
@@ -354,8 +357,7 @@ template <typename Database, typename Column, typename Table>
 auto process_expression(const expression<column_ref<Column, Table>> &) {
   if constexpr (std::is_same_v<Table, void>) {
     return std::string(simple_type_name::short_name<Column>);
-  }
-  else {
+  } else {
     return std::string(simple_type_name::short_name<Table>) + "." +
            std::string(simple_type_name::short_name<Column>);
   }
@@ -471,7 +473,6 @@ std::string to_column_string(column_alias_ref<Alias, Column, Table>) {
          std::string(simple_type_name::short_name<Alias>);
 }
 
-
 inline std::string join_vector(const std::vector<std::string> &v) {
   std::string ret;
   for (auto &s : v) {
@@ -525,6 +526,5 @@ std::string to_statement(const query_builder<Database, TTuple> &t) {
   }
   return ret;
 }
-
 
 // TODO: Reference additional headers your program requires here.
