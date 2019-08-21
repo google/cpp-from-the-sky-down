@@ -21,8 +21,8 @@ int main() {
           .select(column<customers, id>, column<orders, customerid>,
                   column<name>, column<orders, id>.as<class orderid>(),
                   column<price>)
-          .from(table<customers>, table<orders>)
-          .join(column<orderid> == column<customerid>)
+          .from(join(table<customers>, table<orders>,
+          column<orderid> == column<customerid>))
           .where(column<price>> parameter<class price_parameter, double>())
           .build();
 
@@ -32,6 +32,7 @@ int main() {
   //}
 
   cout << to_statement(query) << endl;
+//  cout << query << endl;
   auto p1 = process_expression<db>(parameter<price_parameter, double>(), tagged_tuple::make_ttuple());
   cout << p1 << endl;
   auto p2 = process_expression<db>(val(2), p1);
