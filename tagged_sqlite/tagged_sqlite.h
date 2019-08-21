@@ -39,16 +39,26 @@ template <typename Tag, typename ColumnTag, typename... Columns>
 auto get_column_type(const define_table<ColumnTag, Columns...> &t)
     -> decltype(get_column_type<Tag>(t));
 
-
-
 template <typename Tag> auto get_column_type(...) -> t2t<void>;
 
 template <typename Database, typename Tag>
 using table_type = typename decltype(get_table_type<Tag>(Database{}))::type;
 
 template <typename Database, typename TableTag, typename ColumnTag>
-using table_column_type = typename decltype(
-    get_column_type<ColumnTag>(table_type<Database, TableTag>{}))::type::value_type;
+struct table_column_type_helper {
+  using type = typename decltype(get_column_type<ColumnTag>(
+      table_type<Database, TableTag>{}))::type::value_type;
+};
+
+template <typename Database, typename ColumnTag>
+struct table_column_type_helper<Database, void, ColumnTag> {
+  using type = typename decltype(
+      get_column_type<ColumnTag>(Database{}))::type::value_type;
+};
+
+template <typename Database, typename TableTag, typename ColumnTag>
+using table_column_type =
+    typename table_column_type_helper<Database, TableTag, ColumnTag>::type;
 
 template <typename Database, typename ColumnTag>
 using column_type =
@@ -78,10 +88,15 @@ struct column_alias_ref {};
 template <typename E> struct expression {
   E e_;
 
+  using underlying_type = E;
+
   template <typename Alias> constexpr auto as() const {
     return e_.template as<Alias>();
   }
 };
+
+template<typename E>
+using expression_underlying_type = typename E::underlying_type;
 
 template <typename ColumnName, typename TableName = void> struct column_ref {
   template <typename Alias>
@@ -116,14 +131,16 @@ enum class binary_ops {
   size_
 };
 
-template<typename T1, typename T2, binary_ops op>
-auto get_binary_op_type(){
-  if constexpr(op < binary_ops::add_){return true;}
-  else{return std::common_type_t<T1, T2>();}
+template <typename T1, typename T2, binary_ops op> auto get_binary_op_type() {
+  if constexpr (op < binary_ops::add_) {
+    return true;
+  } else {
+    return std::common_type_t<T1, T2>();
+  }
 }
 
 template <typename T1, typename T2, binary_ops op>
-using binary_op_type = decltype(get_binary_op_type<T1,T2,op>());
+using binary_op_type = decltype(get_binary_op_type<T1, T2, op>());
 
 template <typename Enum> constexpr auto to_underlying(Enum e) {
   return static_cast<std::underlying_type_t<Enum>>(e);
@@ -261,7 +278,7 @@ std::ostream &operator<<(std::ostream &os, const parameter_ref<Name, T> &) {
 template <typename T> using ptr = T *;
 
 template <typename Database, typename Name, typename T, typename TT>
-auto process_expression(const expression<parameter_ref<Name, T>> &e, TT raw_t) {
+auto process(const expression<parameter_ref<Name, T>> &e, TT raw_t) {
   auto tt = add_tag_if_not_present<expression_parts::arguments>(
       add_tag_if_not_present<expression_parts::parameters_ref>(
           std::move(raw_t)));
@@ -278,26 +295,17 @@ auto process_expression(const expression<parameter_ref<Name, T>> &e, TT raw_t) {
 }
 
 template <typename Database, typename Name, typename T, typename TT>
-auto process_expression(const expression<column_ref<Name, T>> &e, TT tt) {
-  if constexpr(std::is_same_v<T,void>){
-return tagged_tuple::merge(
+auto process(const expression<column_ref<Name, T>> &e, TT tt) {
+  return tagged_tuple::merge(
       tt, tagged_tuple::make_ttuple(
               tagged_tuple::make_member<expression_parts::type>(
-                  type_ref<detail::column_type<Database,Name>>())));
-
-  }
-  else{
-return tagged_tuple::merge(
-      tt, tagged_tuple::make_ttuple(
-              tagged_tuple::make_member<expression_parts::type>(
-                  type_ref<detail::table_column_type<Database,T,Name>>())));
-  }
+                  type_ref<detail::table_column_type<Database, T, Name>>())));
 }
 
 template <typename T> struct val_holder { T e_; };
 
 template <typename Database, typename T, typename TT>
-auto process_expression(const expression<val_holder<T>> &e, TT raw_t) {
+auto process(const expression<val_holder<T>> &e, TT raw_t) {
   auto tt = add_tag_if_not_present<expression_parts::arguments>(
       add_tag_if_not_present<expression_parts::parameters_ref>(
           std::move(raw_t)));
@@ -326,16 +334,15 @@ auto process_expression(const expression<val_holder<T>> &e, TT raw_t) {
 }
 
 template <typename Database, binary_ops bo, typename E1, typename E2, class TT>
-auto process_expression(const expression<binary_expression<bo, E1, E2>> &e,
-                        TT tt) {
+auto process(const expression<binary_expression<bo, E1, E2>> &e, TT tt) {
   using tagged_tuple::get;
-  auto tt_left = process_expression<Database>(e.e_.e1_, std::move(tt));
+  auto tt_left = process<Database>(e.e_.e1_, std::move(tt));
   using left_type =
       std::decay_t<decltype(get<expression_parts::type>(tt_left))>;
-  auto tt_right = process_expression<Database>(e.e_.e2_, std::move(tt_left));
+  auto tt_right = process<Database>(e.e_.e2_, std::move(tt_left));
   using right_type =
       std::decay_t<decltype(get<expression_parts::type>(tt_right))>;
-      left_type * p = static_cast<right_type*>(nullptr);
+  left_type *p = static_cast<right_type *>(nullptr);
   static_assert(std::is_same_v<left_type, right_type>);
   return tagged_tuple::merge(
       tt_right,
@@ -437,9 +444,15 @@ struct catter_imp<tagged_tuple::ttuple<M1...>, tagged_tuple::ttuple<M2...>> {
 template <typename T1, typename T2>
 using cat_t = typename catter_imp<T1, T2>::type;
 
+struct empty {};
+
 class from_tag;
 class select_tag;
 class where_tag;
+class from_tables;
+class referenced_tables;
+class aliases;
+class selected_columns;
 
 enum class join_type { inner, left, right, full };
 
@@ -449,6 +462,73 @@ struct join_t {
   Table2 t2;
   Expression e_;
 };
+
+template <typename Database, typename Table, typename TT>
+auto process(const table_ref<Table>, TT tt) {
+  static_assert(detail::has_table<Database, Table>, "Missing table");
+  auto tt2 = add_tag_if_not_present<referenced_tables>(std::move(tt));
+  if constexpr (!tagged_tuple::has_tag<
+                    Table, std::decay_t<decltype(
+                               tagged_tuple::get<referenced_tables>(tt2))>>) {
+    return tagged_tuple::merge(std::move(
+        tt2,
+        tagged_tuple::make_ttuple(tagged_tuple::make_member<referenced_tables>(
+            tagged_tuple::make_member<Table>(empty{})))));
+  }
+  return std::move(tt);
+}
+
+template <typename Database, typename Alias, typename Table, typename Column,
+          typename TT>
+auto process(const column_alias_ref<Alias, Column, Table> &, TT tt) {
+  static_assert(detail::has_table<Database, Table>, "Missing table");
+  static_assert(detail::has_column<Database, Table, Column>, "Missing column");
+  auto tt2 = add_tag_if_not_present<aliases>(std::move(tt));
+  static_assert(
+      !tagged_tuple::has_tag<
+          Table,
+          std::decay_t<decltype(tagged_tuple::get<referenced_tables>(tt2))>>,
+      "Aliases already defined");
+  return tagged_tuple::merge(std::move(
+      tt2,
+      tagged_tuple::make_ttuple(tagged_tuple::make_member<aliases>(
+          tagged_tuple::make_member<Alias>(column_ref<Table, Column>()))),
+      tagged_tuple::make_ttuple(tagged_tuple::make_member<selected_columns>(
+          tagged_tuple::make_member<Column>(
+              detail::table_column_type<Database, Table, Column>())))));
+}
+
+template <typename Database, typename Table, typename Column, typename TT>
+auto process(const column_ref<Column, Table> &, TT tt) {
+  static_assert(detail::has_table<Database, Table>, "Missing table");
+  constexpr bool has_table = std::is_same_v<Table, void>;
+  if constexpr (has_table) {
+    static_assert(detail::has_unique_column<Database, Column>,
+                  "Non-unique column without table name");
+  } else {
+    static_assert(detail::has_column<Database, Table, Column>,
+                  "Missing column");
+  }
+  auto tt2 = add_tag_if_not_present<selected_columns>(std::move(tt));
+  static_assert(
+      !tagged_tuple::has_tag<
+          Table,
+          std::decay_t<decltype(tagged_tuple::get<selected_columns>(tt2))>>,
+      "Column already selected");
+  return tagged_tuple::merge(std::move(
+      tt2,
+      tagged_tuple::make_ttuple(tagged_tuple::make_member<selected_columns>(
+          tagged_tuple::make_member<column_ref<Column,Table>>(
+              detail::table_column_type<Database, Table, Column>())))));
+}
+
+template <typename Database, typename Table1, typename Table2,
+          typename Expression, join_type type, typename TT>
+auto process(const join_t<Table1, Table2, Expression, type> &j, TT tt) {
+  auto tt1 = process(j.t1, std::move(tt));
+  auto tt2 = process(j.t2, std::move(tt1));
+  return process(j.e_, std::move(tt2));
+}
 
 template <typename Table1, typename Table2, typename Expression>
 auto join(table_ref<Table1> t1, table_ref<Table2> t2, Expression e) {
