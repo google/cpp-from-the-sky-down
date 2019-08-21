@@ -35,6 +35,12 @@ template <typename Tag, typename Type>
 auto get_column_type(const define_column<Tag, Type> &t)
     -> t2t<define_column<Tag, Type>>;
 
+template <typename Tag, typename ColumnTag, typename... Columns>
+auto get_column_type(const define_table<ColumnTag, Columns...> &t)
+    -> decltype(get_column_type<Tag>(t));
+
+
+
 template <typename Tag> auto get_column_type(...) -> t2t<void>;
 
 template <typename Database, typename Tag>
@@ -284,7 +290,7 @@ return tagged_tuple::merge(
 return tagged_tuple::merge(
       tt, tagged_tuple::make_ttuple(
               tagged_tuple::make_member<expression_parts::type>(
-                  type_ref<detail::table_column_type<Database,Name,T>>())));
+                  type_ref<detail::table_column_type<Database,T,Name>>())));
   }
 }
 

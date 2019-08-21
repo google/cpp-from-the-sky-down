@@ -35,7 +35,7 @@ int main() {
 //  cout << query << endl;
   auto p1 = process_expression<db>(parameter<class price_parameter, double>(), tagged_tuple::make_ttuple());
   cout << p1 << endl;
-  auto p2 = process_expression<db>(val(std::string("a")) == column<name>, p1);
+  auto p2 = process_expression<db>(val("a") == column<orders,item>, p1);
   cout << p2 << endl;
   cout << process_expression<db>(val(4),p2) << endl;
 
