@@ -23,7 +23,7 @@ int main() {
                   column<price>)
           .from(join(table<customers>, table<orders>,
           column<orderid> == column<customerid>))
-          .where(column<price>> parameter<class price_parameter, double>())
+          .where(column<price>  > val(2.0))
           .build();
 
   // for (auto& row : execute_query(query, parameter<price_parameter>(100.0))) {
@@ -33,9 +33,9 @@ int main() {
 
   cout << to_statement(query) << endl;
 //  cout << query << endl;
-  auto p1 = process_expression<db>(parameter<price_parameter, double>(), tagged_tuple::make_ttuple());
+  auto p1 = process_expression<db>(parameter<class price_parameter, double>(), tagged_tuple::make_ttuple());
   cout << p1 << endl;
-  auto p2 = process_expression<db>(val(2), p1);
+  auto p2 = process_expression<db>(val(std::string("a")) == column<name>, p1);
   cout << p2 << endl;
   cout << process_expression<db>(val(4),p2) << endl;
 
