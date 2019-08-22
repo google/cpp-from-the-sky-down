@@ -84,8 +84,18 @@ void for_each(const ttuple<Members...> &m, F f) {
 }
 
 template <typename... Members, typename F>
+void for_each(ttuple<Members...> &m, F f) {
+  (f(static_cast<Members &>(m)), ...);
+}
+
+template <typename... Members, typename F>
 decltype(auto) apply(const ttuple<Members...> &m, F f) {
   return (f(static_cast<const Members &>(m)...));
+}
+
+template <typename... Members, typename F>
+decltype(auto) apply(ttuple<Members...> &m, F f) {
+  return (f(static_cast<Members &>(m)...));
 }
 
 namespace detail {
