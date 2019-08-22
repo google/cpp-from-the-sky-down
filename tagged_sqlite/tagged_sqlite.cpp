@@ -4,7 +4,6 @@
 #include "tagged_sqlite.h"
 #include <exception>
 
-using namespace std;
 
 sqlite3 *init_database() {
   sqlite3 *sqldb;
@@ -83,8 +82,8 @@ int main() {
     print_field<price>(std::cout, row);
     std::cout << "}\n";
   }
-  cout << "The sql statement is:\n" << to_statement(query) << endl;
-  cout << "\nThe parameters to the query are:\n";
+  std::cout << "The sql statement is:\n" << to_statement(query) << "\n";
+  std::cout << "\nThe parameters to the query are:\n";
   std::cout << tagged_tuple::get<expression_parts::arguments>(query);
   return 0;
 }
