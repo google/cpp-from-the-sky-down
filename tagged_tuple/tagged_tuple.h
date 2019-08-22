@@ -16,6 +16,7 @@
 
 #include "../simple_type_name/simple_type_name.h"
 #include <initializer_list>
+#include <ostream>
 #include <type_traits>
 #include <utility>
 
@@ -146,19 +147,30 @@ auto merge(ttuple<M1...> t1, ttuple<M2...> t2) {
   }
 }
 
-#include <ostream>
+namespace detail {
+template <typename V>
+auto has_ostream_op(V &v) -> decltype(std::declval<std::ostream &>() << v);
+
+void has_ostream_op(...);
+
+} // namespace detail
 
 template <typename... Members>
 std::ostream &operator<<(std::ostream &os, const ttuple<Members...> &t) {
   os << "{\n";
   auto output = [&](auto &v) mutable {
-    os << v.tag_name << " : " << v.value << "\n";
+    if constexpr (!std::is_same_v<void,
+                                  decltype(detail::has_ostream_op(v.value))>) {
+      os << v.tag_name << " : " << v.value << "\n";
+    } else {
+      os << v.tag_name << " : "
+         << simple_type_name::short_name<decltype(v.value)> << "\n";
+    }
   };
   for_each(t, output);
 
   os << "}\n";
   return os;
 }
-
 
 } // namespace tagged_tuple
