@@ -35,6 +35,14 @@ template <typename Tag, typename T> auto make_member(T t) {
 
 template <typename... Members> struct ttuple : Members... {};
 
+namespace detail {
+template <typename Tag, typename T> T element_type_helper(member<Tag, T> m);
+}
+
+template <typename Tag, typename TTuple>
+using element_type_t =
+    decltype(detail::element_type_helper<Tag>(std::declval<TTuple>()));
+
 template <typename Tag, typename T> decltype(auto) get(member<Tag, T> &m) {
   return (m.value);
 }
