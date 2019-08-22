@@ -2,8 +2,16 @@
 //
 
 #include "tagged_sqlite.h"
+#include <exception>
 
 using namespace std;
+
+void check_sqlite_return(int r) {
+	if (r != SQLITE_OK) {
+		std::cerr << "SQLITE ERROR " << r;
+		throw std::runtime_error("sqlite error");
+	}
+}
 
 int main()
 {
@@ -31,13 +39,44 @@ int main()
   //}
   std::cout <<(query);
 
+  sqlite3* sqldb;
+  sqlite3_open(":memory:", &sqldb);
+
+  auto const creation = R"(
+CREATE TABLE customers(id PRIMARY_KEY, name TEXT);
+CREATE TABLE orders(id PRIMARY_KEY, item TEXT, customerid INTEGER, price REAL);
+)";
+
+  auto const insertion = R"(
+INSERT INTO customers(id, name) VALUES(1, "John");
+INSERT INTO orders(id,  item , customerid , price ) VALUES(1,"Laptop",1,122.22);
+)";
+
+  int rc;
+  rc = sqlite3_exec(sqldb, creation, 0, 0, nullptr);
+  check_sqlite_return(rc);
+
+  rc = sqlite3_exec(sqldb, insertion, 0, 0, nullptr);
+  check_sqlite_return(rc);
+
+  sqlite3_stmt* stmt;
+  auto query_string = to_statement(query);
+  rc = sqlite3_prepare_v2(sqldb, query_string.c_str(), -1, &stmt, 0);
+  check_sqlite_return(rc);
+  rc = sqlite3_bind_double(stmt, 1, 2.0);
+  check_sqlite_return(rc);
+
+  rc = sqlite3_step(stmt);
+  if (rc != SQLITE_ROW) {
+	  std::cerr << "ERROR IN STEP\n";
+	  return -1;
+  }
+
+  auto row = read_row(query,stmt);
+  
 
   cout << to_statement(query) << endl;
 
-
-  row_type_t<decltype(query)> row;
-
-  tagged_tuple::get<column_ref<price,void>>(row) = 7.7;
 
   std::cout << field<price>(row).value();
 

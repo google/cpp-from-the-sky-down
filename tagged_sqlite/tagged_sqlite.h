@@ -755,4 +755,69 @@ template<typename Table, typename Column, typename RowTuple>
 decltype(auto) field(const RowTuple& r){
   return field_helper<Column,Table>(r);
 }
+
+
+inline bool read_row_into(sqlite3_stmt* stmt, int index,std::optional<std::int64_t>& v) {
+	auto type = sqlite3_column_type(stmt, index);
+	if (type == SQLITE_INTEGER) {
+		v = sqlite3_column_int64(stmt, index);
+		return true;
+	}
+	else if (type == SQLITE_NULL) {
+		v = std::nullopt;
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+
+inline bool read_row_into(sqlite3_stmt* stmt, int index,std::optional<double>& v) {
+	auto type = sqlite3_column_type(stmt, index);
+	if (type == SQLITE_FLOAT) {
+		v = sqlite3_column_double(stmt, index);
+		return true;
+	}
+	else if (type == SQLITE_NULL) {
+		v = std::nullopt;
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+inline bool read_row_into(sqlite3_stmt* stmt, int index,std::optional<std::string_view>& v) {
+	auto type = sqlite3_column_type(stmt, index);
+	if (type == SQLITE_TEXT) {
+		const char* ptr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, index));
+		auto size = sqlite3_column_bytes(stmt, index);
+
+		v = std::string_view(ptr,ptr?size:0);
+		return true;
+	}
+	else if (type == SQLITE_NULL) {
+		v = std::nullopt;
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+
+template<typename TTuple>
+auto read_row(const TTuple& query,sqlite3_stmt* stmt) {
+	using row_type = row_type_t<TTuple>;
+	row_type row;
+	int count = sqlite3_column_count(stmt);
+	if (count != tagged_tuple::tuple_size(row)) {
+		return row;
+	}
+	int index = 0;
+	tagged_tuple::for_each(row, [&](auto& m)mutable {
+		read_row_into(stmt, index, m.value);
+		++index;
+		});
+	return row;
+}
+
 // TODO: Reference additional headers your program requires here.
