@@ -583,6 +583,8 @@ struct query_builder {
 		return query_builder<NewDatabase, NewTTuple>{std::move(t)};
 	}
 
+	using ttuple_type = TTuple;
+
 	TTuple t_;
 
 	template <typename Table>
@@ -640,6 +642,13 @@ struct query_builder {
 
 		}
 	}
+};
+
+template<typename Builder>
+struct query_t{
+	query_t(Builder b):t_(std::move(b).build()){}
+
+	decltype(std::declval<Builder&&>().build()) t_;
 };
 
 template <typename Column, typename Table>
@@ -922,12 +931,16 @@ void bind_query(const Query& query, sqlite3_stmt* stmt) {
 template<typename Query>
 auto execute_query(const Query& query, sqlite3* sqldb) {
 	sqlite3_stmt* stmt;
-	auto query_string = to_statement(query);
+	auto query_string = to_statement(query.t_);
 	auto rc = sqlite3_prepare_v2(sqldb, query_string.c_str(), query_string.size(), &stmt, 0);
 	check_sqlite_return(rc);
-	bind_query(query, stmt);
-	return row_range(query, stmt);
+	bind_query(query.t_, stmt);
+	return row_range(query.t_, stmt);
 }
 
+template<typename DB, typename... Args>
+auto select(Args&&... args){
+	return query_builder<DB>().select(std::forward<Args>(args)...);
+}
 
 // TODO: Reference additional headers your program requires here.

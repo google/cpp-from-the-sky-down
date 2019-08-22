@@ -61,15 +61,14 @@ int main() {
                    define_column<class customerid, std::int64_t>,
                    define_column<class price, double>>>;
 
-  auto query = query_builder<db>()
-                   .select(column<customers, id>, column<customerid>,
+  query_t query = select<db>(column<customers, id>, column<customerid>,
                            column<customers, name>, column<orders, id>,
                            column<orders, item>, column<price>)
                    .from(join(table<orders>, table<customers>,
                               column<customers, id> == column<customerid>))
                    .where(column<price> > val(20.0) &&
-                          column<customers, name> == val("John"))
-                   .build();
+                          column<customers, name> == val("John"));
+                   
   auto sqldb = init_database();
   for (auto &row : execute_query(query, sqldb)) {
     std::cout << "{\n";
@@ -82,8 +81,8 @@ int main() {
     print_field<price>(std::cout, row);
     std::cout << "}\n";
   }
-  std::cout << "The sql statement is:\n" << to_statement(query) << "\n";
+  std::cout << "The sql statement is:\n" << to_statement(query.t_) << "\n";
   std::cout << "\nThe parameters to the query are:\n";
-  std::cout << tagged_tuple::get<expression_parts::arguments>(query);
+  std::cout << tagged_tuple::get<expression_parts::arguments>(query.t_);
   return 0;
 }
