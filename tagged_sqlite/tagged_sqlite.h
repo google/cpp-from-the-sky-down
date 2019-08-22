@@ -8,6 +8,8 @@
 #include <string>
 #include <type_traits>
 #include <vector>
+#include <optional>
+#include <sqlite3.h>
 
 #include "..//simple_type_name/simple_type_name.h"
 #include "..//tagged_tuple/tagged_tuple.h"
@@ -263,6 +265,9 @@ template <typename Tag, typename TT> auto add_tag_if_not_present(TT t) {
 }
 
 template <typename T> struct type_ref { using type = T; };
+
+template<typename TypeRef>
+using remove_type_ref_t = typename TypeRef::type;
 
 template <typename T>
 std::ostream &operator<<(std::ostream &os, const type_ref<T> &) {
@@ -703,17 +708,51 @@ std::string to_statement(const query_builder<Database, TTuple> &t) {
   return ret;
 }
 
-template <typename... T>
-std::ostream &operator<<(std::ostream &os, const select_type<T...> &) {
-  os << "select_type";
-  return os;
+
+template<typename Member>
+using member_value_type_t = typename Member::value_type;
+template<typename Member>
+using member_tag_type_t = typename Member::tag_type;
+
+template<typename T>
+struct result_type{
+  using type = std::optional<T>;
+};
+
+template<>
+struct result_type<std::string>{
+  using type = std::optional<std::string_view>;
+};
+template<typename T>
+using result_type_t = typename result_type<T>::type;
+
+template<typename SelectedColumns>
+struct row_type_helper;
+
+template<typename... Columns>
+struct row_type_helper<tagged_tuple::ttuple<Columns...>>{
+  using type = tagged_tuple::ttuple<tagged_tuple::member<member_tag_type_t<Columns>,result_type_t<remove_type_ref_t<member_value_type_t<Columns>>>>...>;
+};
+
+
+
+
+template<typename Query>
+using row_type_t = typename row_type_helper<tagged_tuple::element_type_t<selected_columns,Query>>::type;
+
+
+template<typename Column, typename Table, typename Value>
+const Value& field_helper(const tagged_tuple::member<column_ref<Column,Table>,Value>& m){
+  return m.value;
 }
 
-template <typename T1, typename T2, typename E>
-std::ostream &operator<<(std::ostream &os,
-                         const join_t<T1, T2, E, join_type::inner> &) {
-  os << "join_t";
-  return os;
+template<typename Column, typename RowTuple>
+decltype(auto) field(const RowTuple& r){
+  return field_helper<Column>(r);
 }
 
+template<typename Table, typename Column, typename RowTuple>
+decltype(auto) field(const RowTuple& r){
+  return field_helper<Column,Table>(r);
+}
 // TODO: Reference additional headers your program requires here.

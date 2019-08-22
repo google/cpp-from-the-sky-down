@@ -33,6 +33,14 @@ int main()
 
 
   cout << to_statement(query) << endl;
+
+
+  row_type_t<decltype(query)> row;
+
+  tagged_tuple::get<column_ref<price,void>>(row) = 7.7;
+
+  std::cout << field<price>(row).value();
+
   //  cout << query << endl;
   return 0;
   auto p1 = process<db>(parameter<class price_parameter, double>(),
