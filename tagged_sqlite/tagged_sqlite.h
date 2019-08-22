@@ -38,7 +38,7 @@ auto get_column_type(const define_column<Tag, Type> &t)
     -> t2t<define_column<Tag, Type>>;
 
 template <typename Tag, typename TableTag, typename... Columns>
-auto get_column_type(const define_table<TableTag, Columns...> &t)
+auto get_column_type_with_table(const define_table<TableTag, Columns...> &t)
     -> decltype(get_column_type<Tag>(t));
 
 template <typename Tag> auto get_column_type(...) -> t2t<void>;
@@ -73,7 +73,7 @@ inline constexpr bool has_table =
 template <typename Database, typename TableTag, typename Tag>
 inline constexpr bool has_column =
     !std::is_same_v<t2t<void>,
-                    decltype(get_column_type<Tag, TableTag>(Database{}))>;
+                    decltype(get_column_type_with_table<Tag, TableTag>(Database{}))>;
 //    decltype(test_has_column(table_type<Database, TableTag>{}))::value;
 
 template <typename Tag, typename DbTag, typename... Tables>
@@ -459,7 +459,7 @@ struct catter_imp<tagged_tuple::ttuple<M1...>, tagged_tuple::ttuple<M2...>> {
 template <typename T1, typename T2>
 using cat_t = typename catter_imp<T1, T2>::type;
 
-struct empty {};
+struct empty_type {};
 
 class from_tag;
 class select_tag;
@@ -488,7 +488,7 @@ auto process(const table_ref<Table>, TT tt) {
     return tagged_tuple::merge(std::move(
         tt2),
         tagged_tuple::make_ttuple(tagged_tuple::make_member<referenced_tables>(
-            tagged_tuple::make_ttuple(tagged_tuple::make_member<Table>(empty{})))));
+			tagged_tuple::make_ttuple(tagged_tuple::make_member<Table>(empty_type{})))));
   }
  else return std::move(tt);
 }
