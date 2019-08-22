@@ -18,7 +18,7 @@ int main()
                    define_column<class price, double>>>;
 
   auto query = query_builder<db>()
-                   .select(column<customers, id>, column<orders, customerid>,
+                   .select(column<customers, id>, column<customerid>,
                            column<customers,name>, column<orders, id>,
                            column<price>)
                    .from(join(table<customers>, table<orders>,
@@ -31,10 +31,10 @@ int main()
   //}
   std::cout <<(query);
 
-  return 0;
 
   cout << to_statement(query) << endl;
   //  cout << query << endl;
+  return 0;
   auto p1 = process<db>(parameter<class price_parameter, double>(),
                         tagged_tuple::make_ttuple());
   cout << p1 << endl;

@@ -506,7 +506,7 @@ auto process(const column_alias_ref<Alias, Column, Table> &, TT tt) {
           tagged_tuple::make_member<Alias>(column_ref<Table, Column>()))),
       tagged_tuple::make_ttuple(tagged_tuple::make_member<selected_columns>(
           tagged_tuple::make_ttuple(tagged_tuple::make_member<Column>(
-              detail::table_column_type<Database, Table, Column>()))))));
+              type_ref<detail::table_column_type<Database, Table, Column>>()))))));
 }
 
 template <typename Database, typename Table, typename Column, typename TT>
@@ -531,7 +531,7 @@ auto process(const column_ref<Column, Table> &, TT tt) {
       tagged_tuple::make_ttuple(
           tagged_tuple::make_member<selected_columns>(tagged_tuple::make_ttuple(
               tagged_tuple::make_member<column_ref<Column, Table>>(
-                  detail::table_column_type<Database, Table, Column>()))),
+                  type_ref<detail::table_column_type<Database, Table, Column>>()))),
           tagged_tuple::make_member<expression_parts::type>(
               type_ref<detail::table_column_type<Database, Table, Column>>())));
 }
