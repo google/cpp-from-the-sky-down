@@ -19,17 +19,19 @@ int main()
 
   auto query = query_builder<db>()
                    .select(column<customers, id>, column<orders, customerid>,
-                           column<name>, column<orders, id>.as<class orderid>(),
+                           column<customers,name>, column<orders, id>,
                            column<price>)
                    .from(join(table<customers>, table<orders>,
-                              column<orderid> == column<customerid>))
+                              column<orders,id> == column<customerid>))
                    .where(column<price> > val(2.0))
                    .build();
-
   // for (auto& row : execute_query(query, parameter<price_parameter>(100.0))) {
   //  std::cout << row.get<customers, id>();
   //  std::cout << row.get<name>();
   //}
+  std::cout <<(query);
+
+  return 0;
 
   cout << to_statement(query) << endl;
   //  cout << query << endl;
