@@ -28,7 +28,8 @@ INSERT INTO orders(id,  item , customerid , price ) VALUES (1,"Laptop",1,122.22)
   return sqldb;
 }
 
-template <typename... Fields> std::string field_names() {
+template <typename... Fields>
+std::string field_names() {
   auto s = (... + (std::string(simple_type_name::short_name<Fields>) + "."));
   if (s.size() > 0) {
     s.pop_back();
@@ -50,11 +51,14 @@ std::ostream &print_field(std::ostream &os, const Row &row) {
 }
 
 int main() {
+  std::string input_name = "John";
+  auto sqldb = init_database();
+
   using db = define_database<
-      define_table<class customers, //
+      define_table<class customers,  //
                    define_column<class id, std::int64_t>,
                    define_column<class name, std::string>>,
-      define_table<class orders, //
+      define_table<class orders,  //
                    define_column<class id, std::int64_t>,
                    define_column<class item, std::string>,
                    define_column<class customerid, std::int64_t>,
@@ -66,22 +70,14 @@ int main() {
                  column<orders, item>, column<price>)
           .from(
               table<orders>.join(table<customers>).on(column<customers, id> == column<customerid>))
-          .where(column<price> > 20.0 && column<orders, id> * 5 + 1 < 600 &&
-                 column<customers, name> == "John");
+          .where(column<price>> 20.0 && column<customers, name> == input_name);
 
-  auto sqldb = init_database();
   for (auto &row : execute_query(query, sqldb)) {
-    std::cout << "{\n";
-    // Access using field
-    auto &v = field<customers, name>(row);
-    std::cout << "Customer Name:" << v.value_or("NULL") << "\n";
-    // Use the convenience print_field function.
-    print_field<customers, name>(std::cout, row);
-    print_field<orders, id>(std::cout, row);
-    print_field<price>(std::cout, row);
-    std::cout << "}\n";
+    std::cout << field<customers, name>(row).value_or("<NULL>") << "\t"
+              << field<orders, item>(row).value_or("<NULL>") << "\t"
+              << field<price>(row).value_or(0.0) << "\n";
   }
-  std::cout << "The sql statement is:\n" << to_statement(query.t_) << "\n";
+  std::cout << "\nThe sql statement is:\n" << to_statement(query.t_) << "\n";
   std::cout << "\nThe parameters to the query are:\n";
   std::cout << tagged_tuple::get<expression_parts::arguments>(query.t_);
   return 0;
