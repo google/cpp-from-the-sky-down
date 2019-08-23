@@ -501,7 +501,33 @@ template <typename N1, typename N2 = void>
 inline constexpr auto column =
     expression<typename column_ref_definer<N1, N2>::type>{};
 
-template <typename Table> struct table_ref { using type = Table; };
+enum class join_type { inner, left, right, full };
+
+template <typename Table1, typename Table2, typename Expression, join_type type>
+struct join_t {
+  Table1 t1;
+  Table2 t2;
+  Expression e_;
+};
+
+template <typename Table1, typename Table2, join_type type>
+struct join_table_info {
+  Table1 t1;
+  Table2 t2;
+
+  template <typename E> auto on(E e) {
+    return join_t<Table1, Table2, E, type>{std::move(t1), std::move(t2),
+                                           std::move(e)};
+  }
+};
+
+
+
+template <typename Table> struct table_ref { using type = Table;
+  template <typename Table2> auto join(Table2 table2) const {
+    return join_table_info<table_ref<Table>,Table2,join_type::inner>{*this,std::move(table2)};
+  }
+ };
 
 template <typename Table> inline constexpr auto table = table_ref<Table>{};
 
@@ -530,14 +556,6 @@ class aliases;
 class selected_columns;
 class potential_selected_columns;
 
-enum class join_type { inner, left, right, full };
-
-template <typename Table1, typename Table2, typename Expression, join_type type>
-struct join_t {
-  Table1 t1;
-  Table2 t2;
-  Expression e_;
-};
 
 template <typename Database, typename Table, typename TT>
 auto process(const table_ref<Table>, TT tt) {

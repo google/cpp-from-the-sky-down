@@ -4,7 +4,6 @@
 #include "tagged_sqlite.h"
 #include <exception>
 
-
 sqlite3 *init_database() {
   sqlite3 *sqldb;
   sqlite3_open(":memory:", &sqldb);
@@ -61,21 +60,22 @@ int main() {
                    define_column<class customerid, std::int64_t>,
                    define_column<class price, double>>>;
 
-  query_t query = select<db>(column<customers, id>, //column<customerid>,
-                           column<customers, name>, column<orders, id>,
-                           column<orders, item>, column<price>)
-                   .from(join(table<orders>, table<customers>,
-                              column<customers, id> == column<customerid>))
-                   .where(column<price> < 200.0 && column<orders,id> * 5 + 1 < 600 &&
-                          column<customers, name> == "John");
-                   
+  query_t query =
+      select<db>(column<customers, id>, column<customerid>,
+                 column<customers, name>, column<orders, id>,
+                 column<orders, item>, column<price>)
+          .from(
+              table<orders>.join(table<customers>).on(column<customers, id> == column<customerid>))
+          .where(column<price> > 20.0 && column<orders, id> * 5 + 1 < 600 &&
+                 column<customers, name> == "John");
+
   auto sqldb = init_database();
   for (auto &row : execute_query(query, sqldb)) {
     std::cout << "{\n";
-	// Access using field
-	auto& v = field<customers, name>(row);
-	std::cout << "Customer Name:" << v.value_or("NULL") << "\n";
-	// Use the convenience print_field function.
+    // Access using field
+    auto &v = field<customers, name>(row);
+    std::cout << "Customer Name:" << v.value_or("NULL") << "\n";
+    // Use the convenience print_field function.
     print_field<customers, name>(std::cout, row);
     print_field<orders, id>(std::cout, row);
     print_field<price>(std::cout, row);
