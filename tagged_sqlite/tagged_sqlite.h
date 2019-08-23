@@ -210,7 +210,7 @@ template <> struct expression<val_holder<std::int64_t>> {
 
 expression(std::string)->expression<val_holder<std::string>>;
 expression(std::string_view)->expression<val_holder<std::string>>;
-expression(const char*)->expression<val_holder<std::string>>;
+expression(const char *)->expression<val_holder<std::string>>;
 expression(double)->expression<val_holder<double>>;
 expression(std::int64_t)->expression<val_holder<std::int64_t>>;
 expression(int)->expression<val_holder<std::int64_t>>;
@@ -222,54 +222,49 @@ std::true_type convertible_to_expression(int);
 template <typename E> std::true_type convertible_to_expression(expression<E>);
 std::false_type convertible_to_expression(...);
 
-template <typename E> std::true_type is_expression(expression<E>*);
+template <typename E> std::true_type is_expression(expression<E> *);
 std::false_type is_expression(...);
 
 template <typename... E>
 inline constexpr bool valid_op_parameters_v = std::conjunction_v<decltype(
     convertible_to_expression(std::declval<E>()))...>
-    &&std::disjunction_v<decltype(is_expression(std::declval<std::add_pointer_t<E>>()))...>;
+    &&std::disjunction_v<decltype(
+        is_expression(std::declval<std::add_pointer_t<E>>()))...>;
 
-template<typename... E>
+template <typename... E>
 using enable_op = std::enable_if_t<valid_op_parameters_v<E...>>;
 
-template <typename E1, typename E2,
-          typename = enable_op<E1, E2>>
+template <typename E1, typename E2, typename = enable_op<E1, E2>>
 auto operator==(E1 e1, E2 e2) {
   return make_expression(make_binary_expression<binary_ops::equal_>(
       expression{std::move(e1)}, expression{std::move(e2)}));
 }
 
-template <typename E1, typename E2,
-          typename = enable_op<E1, E2>>
+template <typename E1, typename E2, typename = enable_op<E1, E2>>
 auto operator!=(E1 e1, E2 e2) {
   return make_expression(make_binary_expression<binary_ops::not_equal_>(
       expression{std::move(e1)}, expression{std::move(e2)}));
 }
 
-template <typename E1, typename E2,
-          typename = enable_op<E1, E2>>
+template <typename E1, typename E2, typename = enable_op<E1, E2>>
 auto operator<(E1 e1, E2 e2) {
   return make_expression(make_binary_expression<binary_ops::less_>(
       expression{std::move(e1)}, expression{std::move(e2)}));
 }
 
-template <typename E1, typename E2,
-          typename = enable_op<E1, E2>>
+template <typename E1, typename E2, typename = enable_op<E1, E2>>
 auto operator<=(E1 e1, E2 e2) {
   return make_expression(make_binary_expression<binary_ops::less_equal_>(
       expression{std::move(e1)}, expression{std::move(e2)}));
 }
 
-template <typename E1, typename E2,
-          typename = enable_op<E1, E2>>
+template <typename E1, typename E2, typename = enable_op<E1, E2>>
 auto operator>(E1 e1, E2 e2) {
   return make_expression(make_binary_expression<binary_ops::greater_>(
       expression{std::move(e1)}, expression{std::move(e2)}));
 }
 
-template <typename E1, typename E2,
-          typename = enable_op<E1, E2>>
+template <typename E1, typename E2, typename = enable_op<E1, E2>>
 auto operator>=(E1 e1, E2 e2) {
   return make_expression(make_binary_expression<binary_ops::greater_equal_>(
       expression{std::move(e1)}, expression{std::move(e2)}));
@@ -287,36 +282,31 @@ auto operator||(expression<E1> e1, expression<E2> e2) {
       make_binary_expression<binary_ops::or_>(std::move(e1), std::move(e2)));
 }
 
-template <typename E1, typename E2,
-          typename = enable_op<E1, E2>>
+template <typename E1, typename E2, typename = enable_op<E1, E2>>
 auto operator+(E1 e1, E2 e2) {
   return make_expression(make_binary_expression<binary_ops::add_>(
       expression{std::move(e1)}, expression{std::move(e2)}));
 }
 
-template <typename E1, typename E2,
-          typename = enable_op<E1, E2>>
+template <typename E1, typename E2, typename = enable_op<E1, E2>>
 auto operator-(E1 e1, E2 e2) {
   return make_expression(make_binary_expression<binary_ops::sub_>(
       expression{std::move(e1)}, expression{std::move(e2)}));
 }
 
-template <typename E1, typename E2,
-          typename = enable_op<E1, E2>>
+template <typename E1, typename E2, typename = enable_op<E1, E2>>
 auto operator*(E1 e1, E2 e2) {
   return make_expression(make_binary_expression<binary_ops::mul_>(
       expression{std::move(e1)}, expression{std::move(e2)}));
 }
 
-template <typename E1, typename E2,
-          typename = enable_op<E1, E2>>
+template <typename E1, typename E2, typename = enable_op<E1, E2>>
 auto operator/(E1 e1, E2 e2) {
   return make_expression(make_binary_expression<binary_ops::div_>(
       expression{std::move(e1)}, expression{std::move(e2)}));
 }
 
-template <typename E1, typename E2,
-          typename = enable_op<E1, E2>>
+template <typename E1, typename E2, typename = enable_op<E1, E2>>
 auto operator%(E1 e1, E2 e2) {
   return make_expression(make_binary_expression<binary_ops::mod_>(
       expression{std::move(e1)}, expression{std::move(e2)}));
@@ -538,6 +528,7 @@ class from_tables;
 class referenced_tables;
 class aliases;
 class selected_columns;
+class potential_selected_columns;
 
 enum class join_type { inner, left, right, full };
 
@@ -579,10 +570,11 @@ auto process(const column_alias_ref<Alias, Column, Table> &, TT tt) {
       tagged_tuple::make_ttuple(
           tagged_tuple::make_member<aliases>(tagged_tuple::make_ttuple(
               tagged_tuple::make_member<Alias>(column_ref<Table, Column>()))),
-          tagged_tuple::make_ttuple(tagged_tuple::make_member<selected_columns>(
-              tagged_tuple::make_ttuple(tagged_tuple::make_member<Column>(
-                  type_ref<detail::table_column_type<Database, Table,
-                                                     Column>>()))))));
+          tagged_tuple::make_ttuple(
+              tagged_tuple::make_member<potential_selected_columns>(
+                  tagged_tuple::make_ttuple(tagged_tuple::make_member<Column>(
+                      type_ref<detail::table_column_type<Database, Table,
+                                                         Column>>()))))));
 }
 
 template <typename Database, typename Table, typename Column, typename TT>
@@ -596,19 +588,20 @@ auto process(const column_ref<Column, Table> &, TT tt) {
     static_assert(detail::has_column<Database, Table, Column>,
                   "Missing column");
   }
-  auto tt2 = add_tag_if_not_present<selected_columns>(std::move(tt));
+  auto tt2 = add_tag_if_not_present<potential_selected_columns>(std::move(tt));
   static_assert(
       !tagged_tuple::has_tag<
-          Table,
-          std::decay_t<decltype(tagged_tuple::get<selected_columns>(tt2))>>,
+          Table, std::decay_t<decltype(
+                     tagged_tuple::get<potential_selected_columns>(tt2))>>,
       "Column already selected");
   return tagged_tuple::merge(
       std::move(tt2),
       tagged_tuple::make_ttuple(
-          tagged_tuple::make_member<selected_columns>(tagged_tuple::make_ttuple(
-              tagged_tuple::make_member<column_ref<Column, Table>>(
-                  type_ref<
-                      detail::table_column_type<Database, Table, Column>>()))),
+          tagged_tuple::make_member<potential_selected_columns>(
+              tagged_tuple::make_ttuple(
+                  tagged_tuple::make_member<column_ref<Column, Table>>(
+                      type_ref<detail::table_column_type<Database, Table,
+                                                         Column>>()))),
           tagged_tuple::make_member<expression_parts::type>(
               type_ref<detail::table_column_type<Database, Table, Column>>())));
 }
@@ -697,8 +690,13 @@ struct query_builder {
 
   auto build() && {
     if constexpr (tagged_tuple::has_tag<select_tag, TTuple>) {
-      auto tt_select = process<Database>(tagged_tuple::get<select_tag>(t_),
-                                         tagged_tuple::make_ttuple());
+      auto tt_select_raw = process<Database>(tagged_tuple::get<select_tag>(t_),
+                                             tagged_tuple::make_ttuple());
+      auto tt_select = tagged_tuple::append(
+          tt_select_raw,
+          tagged_tuple::make_member<selected_columns>(
+              tagged_tuple::get<potential_selected_columns>(tt_select_raw)));
+
       auto tt_from = process<Database>(tagged_tuple::get<from_tag>(t_),
                                        std::move(tt_select));
 

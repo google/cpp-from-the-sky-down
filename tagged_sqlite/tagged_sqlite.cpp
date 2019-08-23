@@ -61,7 +61,7 @@ int main() {
                    define_column<class customerid, std::int64_t>,
                    define_column<class price, double>>>;
 
-  query_t query = select<db>(column<customers, id>, column<customerid>,
+  query_t query = select<db>(column<customers, id>, //column<customerid>,
                            column<customers, name>, column<orders, id>,
                            column<orders, item>, column<price>)
                    .from(join(table<orders>, table<customers>,
