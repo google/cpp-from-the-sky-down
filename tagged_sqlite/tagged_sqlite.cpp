@@ -66,8 +66,8 @@ int main() {
                            column<orders, item>, column<price>)
                    .from(join(table<orders>, table<customers>,
                               column<customers, id> == column<customerid>))
-                   .where(column<price> > val(20.0) &&
-                          column<customers, name> == val("John"));
+                   .where(column<price> < 200.0 && column<orders,id> * 5 + 1 < 600 &&
+                          column<customers, name> == "John");
                    
   auto sqldb = init_database();
   for (auto &row : execute_query(query, sqldb)) {
@@ -77,7 +77,7 @@ int main() {
 	std::cout << "Customer Name:" << v.value_or("NULL") << "\n";
 	// Use the convenience print_field function.
     print_field<customers, name>(std::cout, row);
-    print_field<orders, item>(std::cout, row);
+    print_field<orders, id>(std::cout, row);
     print_field<price>(std::cout, row);
     std::cout << "}\n";
   }
