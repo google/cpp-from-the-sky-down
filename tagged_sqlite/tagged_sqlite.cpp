@@ -50,10 +50,11 @@ std::ostream &print_field(std::ostream &os, const Row &row) {
   return os;
 }
 
-int main() {
-  std::string input_name = "John";
-  auto sqldb = init_database();
+inline std::string get_name_from_user(){
+  return "John";
+}
 
+int main() {
   using db = define_database<
       define_table<class customers,  //
                    define_column<class id, std::int64_t>,
@@ -70,8 +71,9 @@ int main() {
                  column<orders, item>, column<price>)
           .from(
               table<orders>.join(table<customers>).on(column<customers, id> == column<customerid>))
-          .where(column<price> > 20.0 && column<customers, name> == input_name);
+          .where(column<price> > 20.0 && column<customers, name> == get_name_from_user());
 
+  auto sqldb = init_database();
   for (auto &row : execute_query(query, sqldb)) {
     std::cout << field<customers, name>(row).value_or("<NULL>") << "\t"
               << field<orders, item>(row).value_or("<NULL>") << "\t"
