@@ -70,7 +70,7 @@ int main() {
                  column<orders, item>, column<price>)
           .from(
               table<orders>.join(table<customers>).on(column<customers, id> == column<customerid>))
-          .where(column<price>> 20.0 && column<customers, name> == input_name);
+          .where(column<price> > 20.0 && column<customers, name> == input_name);
 
   for (auto &row : execute_query(query, sqldb)) {
     std::cout << field<customers, name>(row).value_or("<NULL>") << "\t"
