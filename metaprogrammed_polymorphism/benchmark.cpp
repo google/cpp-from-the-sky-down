@@ -53,10 +53,21 @@ static void BM_Function(benchmark::State& state) {
 	  benchmark::DoNotOptimize(f(d));
   }
 }
+
+static void BM_NonVirtual(benchmark::State& state) {
+	NonVirtual n;
+  // Perform setup here
+  for (auto _ : state) {
+    // This code gets timed
+	  benchmark::DoNotOptimize(n);
+	  benchmark::DoNotOptimize(n.draw());
+  }
+}
 // Register the function as a benchmark
 BENCHMARK(BM_Virtual);
-BENCHMARK(BM_Poly);
+BENCHMARK(BM_NonVirtual);
 BENCHMARK(BM_PolyNoPermutation);
+BENCHMARK(BM_Poly);
 BENCHMARK(BM_Function);
 
 // Run the benchmark

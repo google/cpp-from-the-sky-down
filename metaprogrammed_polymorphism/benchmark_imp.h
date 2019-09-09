@@ -10,6 +10,10 @@ struct Base {
 	virtual ~Base() {}
 };
 
+struct NonVirtual {
+
+	int draw();
+};
 
 std::function<int(Dummy&)> GetFunction();
 std::unique_ptr<Base> MakeBase();
