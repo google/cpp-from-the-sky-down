@@ -76,6 +76,15 @@ struct vtable_entry<I, Return(Method, Parameters...)> {
         t, fwd<Parameters>(parameters)...);
   }
 
+  static decltype(auto) call_imp(const vtable_fun *vt,
+                                 Method *,
+                                 void *t, Parameters... parameters) {
+    return reinterpret_cast<fun_ptr>(vt[I])(
+        t, fwd<Parameters>(parameters)...);
+  }
+
+
+
   static auto get_index(type<Return(Method, Parameters...)>) { return I; }
 
   using is_const = std::false_type;
@@ -97,6 +106,13 @@ struct vtable_entry<I, Return(Method, Parameters...) const> {
                                  const index_type *permutation, Method *,
                                  const void *t, Parameters... parameters) {
     return reinterpret_cast<fun_ptr>(vt[permutation[I]])(
+        t, fwd<Parameters>(parameters)...);
+  }
+
+  static decltype(auto) call_imp(const vtable_fun *vt,
+                                 Method *,
+                                 const void *t, Parameters... parameters) {
+    return reinterpret_cast<fun_ptr>(vt[I])(
         t, fwd<Parameters>(parameters)...);
   }
   static auto get_index(type<Return(Method, Parameters...) const>) { return I; }
@@ -150,9 +166,41 @@ struct vtable_imp<std::index_sequence<I...>, Signatures...>
   }
 };
 
+template <typename Sequence, typename... Signatures> struct vtable_imp_no_permutation;
+template <size_t... I, typename... Signatures>
+struct vtable_imp_no_permutation<std::index_sequence<I...>, Signatures...>
+    : entries<vtable_entry<I, Signatures>...> {
+  static_assert(sizeof...(Signatures) <=
+                std::numeric_limits<index_type>::max());
+
+  template <typename T> static auto get_vtable(type<T> t) {
+    static const vtable_fun vt[] = {
+        vtable_entry<I, Signatures>::get_entry(t)...};
+    return &vt[0];
+  }
+
+  template <typename T>
+  vtable_imp_no_permutation(type<T> t) : vptr_(get_vtable(t)) {}
+
+  const vtable_fun *vptr_;
+
+  template <typename VoidType, typename Method, typename... Parameters>
+  decltype(auto) call(Method *method, VoidType t,
+                      Parameters &&... parameters) const {
+    return vtable_imp_no_permutation::call_imp(vptr_, method, t,
+                                std::forward<Parameters>(parameters)...);
+  }
+};
+
 template <typename... Signatures>
 using vtable =
     vtable_imp<std::make_index_sequence<sizeof...(Signatures)>, Signatures...>;
+
+template <typename... Signatures>
+using vtable_no_permutation =
+    vtable_imp_no_permutation<std::make_index_sequence<sizeof...(Signatures)>, Signatures...>;
+
+
 
 template <typename T> std::false_type is_vtable(const T *);
 
@@ -183,6 +231,30 @@ public:
   template <typename Poly, typename = std::enable_if_t<detail::is_polymorphic<
                                std::decay_t<Poly>>::value>>
   ref(const Poly &other) : vt_(other.get_vtable()), t_(other.get_ptr()){};
+
+  explicit operator bool() const { return t_ != nullptr; }
+
+  const auto &get_vtable() const { return vt_; }
+
+  auto get_ptr() const { return t_; }
+
+  template <typename Method, typename... Parameters>
+  decltype(auto) call(Parameters &&... parameters) const {
+    return vt_.call(static_cast<Method *>(nullptr), t_,
+                    std::forward<Parameters>(parameters)...);
+  }
+};
+
+template <typename... Signatures> class ref_no_permutation {
+  using vtable_t = detail::vtable_no_permutation<Signatures...>;
+
+  vtable_t vt_;
+  std::conditional_t<vtable_t::all_const(), const void *, void *> t_;
+
+public:
+  template <typename T, typename = std::enable_if_t<
+                            !detail::is_polymorphic<std::decay_t<T>>::value>>
+  ref_no_permutation(T &t) : vt_(detail::type<std::decay_t<T>>{}), t_(&t) {}
 
   explicit operator bool() const { return t_ != nullptr; }
 
