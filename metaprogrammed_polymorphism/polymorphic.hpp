@@ -51,8 +51,8 @@ template <typename T> std::unique_ptr<holder> poly_extend(clone *, const T &t) {
 template <typename T> using ptr = T *;
 
 template <typename T> struct type {};
+template <typename... T> struct typelist {};
 
-using index_type = std::uint8_t;
 
 using vtable_fun = ptr<void()>;
 
@@ -70,22 +70,14 @@ struct vtable_entry<I, Return(Method, Parameters...)> {
   }
 
   static decltype(auto) call_imp(const vtable_fun *vt,
-                                 const index_type *permutation, Method *,
-                                 void *t, Parameters... parameters) {
-    return reinterpret_cast<fun_ptr>(vt[permutation[I]])(
-        t, fwd<Parameters>(parameters)...);
-  }
-
-  static decltype(auto) call_imp(const vtable_fun *vt,
-                                 Method *,
+                                  Method *,
                                  void *t, Parameters... parameters) {
     return reinterpret_cast<fun_ptr>(vt[I])(
         t, fwd<Parameters>(parameters)...);
   }
 
+static constexpr auto get_index(type<Return(Method, Parameters...)>) { return I; }
 
-
-  static auto get_index(type<Return(Method, Parameters...)>) { return I; }
 
   using is_const = std::false_type;
   using fun_ptr = ptr<Return(void *, Parameters...)>;
@@ -103,19 +95,13 @@ struct vtable_entry<I, Return(Method, Parameters...) const> {
   }
 
   static decltype(auto) call_imp(const vtable_fun *vt,
-                                 const index_type *permutation, Method *,
-                                 const void *t, Parameters... parameters) {
-    return reinterpret_cast<fun_ptr>(vt[permutation[I]])(
-        t, fwd<Parameters>(parameters)...);
-  }
-
-  static decltype(auto) call_imp(const vtable_fun *vt,
                                  Method *,
                                  const void *t, Parameters... parameters) {
     return reinterpret_cast<fun_ptr>(vt[I])(
         t, fwd<Parameters>(parameters)...);
   }
-  static auto get_index(type<Return(Method, Parameters...) const>) { return I; }
+
+static constexpr auto get_index(type<Return(Method, Parameters...)const>) { return I; }
 
   using is_const = std::true_type;
   using fun_ptr = ptr<Return(const void *, Parameters...)>;
@@ -137,8 +123,6 @@ template <typename Sequence, typename... Signatures> struct vtable_imp;
 template <size_t... I, typename... Signatures>
 struct vtable_imp<std::index_sequence<I...>, Signatures...>
     : entries<vtable_entry<I, Signatures>...> {
-  static_assert(sizeof...(Signatures) <=
-                std::numeric_limits<index_type>::max());
 
   template <typename T> static auto get_vtable(type<T> t) {
     static const vtable_fun vt[] = {
@@ -147,60 +131,47 @@ struct vtable_imp<std::index_sequence<I...>, Signatures...>
   }
 
   template <typename T>
-  vtable_imp(type<T> t) : vptr_(get_vtable(t)), permutation_{I...} {}
+  vtable_imp(type<T> t) : vptr_(get_vtable(t)) {}
 
   const vtable_fun *vptr_;
-  std::array<detail::index_type, sizeof...(Signatures)> permutation_;
 
-  template <typename OtherSequence, typename... OtherSignatures>
-  vtable_imp(const vtable_imp<OtherSequence, OtherSignatures...> &other)
-      : vptr_(other.vptr_),
-        permutation_{
-            other.permutation_[other.get_index(type<Signatures>{})]...} {}
+template<typename OtherImp>
+static constexpr int get_offset() {
+	constexpr std::array<int, sizeof...(Signatures)> ar{ static_cast<int>(OtherImp::get_index(type<Signatures>{}))... };
+	auto first = ar[0];
+	auto last = first;
+	for (int i = 1; i < ar.size(); ++i) {
+		if (ar[i] != last + 1) {
+			return -1;
+		}
+		last = ar[i];
+	}
+	return first;
+}
+
+  template <typename OtherSequence,typename... OtherSignatures>
+  vtable_imp(const vtable_imp<OtherSequence,OtherSignatures...> &other)
+      : vptr_(other.vptr_ + get_offset<vtable_imp<OtherSequence,OtherSignatures...>>())
+            {
+	  static_assert(get_offset<vtable_imp<OtherSequence, OtherSignatures...>>() != -1);
+  }
+
+  vtable_imp(const vtable_imp&) = default;
 
   template <typename VoidType, typename Method, typename... Parameters>
   decltype(auto) call(Method *method, VoidType t,
                       Parameters &&... parameters) const {
-    return vtable_imp::call_imp(vptr_, permutation_.data(), method, t,
+    return vtable_imp::call_imp(vptr_, method, t,
                                 std::forward<Parameters>(parameters)...);
   }
 };
 
-template <typename Sequence, typename... Signatures> struct vtable_imp_no_permutation;
-template <size_t... I, typename... Signatures>
-struct vtable_imp_no_permutation<std::index_sequence<I...>, Signatures...>
-    : entries<vtable_entry<I, Signatures>...> {
-  static_assert(sizeof...(Signatures) <=
-                std::numeric_limits<index_type>::max());
 
-  template <typename T> static auto get_vtable(type<T> t) {
-    static const vtable_fun vt[] = {
-        vtable_entry<I, Signatures>::get_entry(t)...};
-    return &vt[0];
-  }
 
-  template <typename T>
-  vtable_imp_no_permutation(type<T> t) : vptr_(get_vtable(t)) {}
-
-  const vtable_fun *vptr_;
-
-  template <typename VoidType, typename Method, typename... Parameters>
-  decltype(auto) call(Method *method, VoidType t,
-                      Parameters &&... parameters) const {
-    return vtable_imp_no_permutation::call_imp(vptr_, method, t,
-                                std::forward<Parameters>(parameters)...);
-  }
-};
 
 template <typename... Signatures>
 using vtable =
     vtable_imp<std::make_index_sequence<sizeof...(Signatures)>, Signatures...>;
-
-template <typename... Signatures>
-using vtable_no_permutation =
-    vtable_imp_no_permutation<std::make_index_sequence<sizeof...(Signatures)>, Signatures...>;
-
-
 
 template <typename T> std::false_type is_vtable(const T *);
 
@@ -245,29 +216,6 @@ public:
   }
 };
 
-template <typename... Signatures> class ref_no_permutation {
-  using vtable_t = detail::vtable_no_permutation<Signatures...>;
-
-  vtable_t vt_;
-  std::conditional_t<vtable_t::all_const(), const void *, void *> t_;
-
-public:
-  template <typename T, typename = std::enable_if_t<
-                            !detail::is_polymorphic<std::decay_t<T>>::value>>
-  ref_no_permutation(T &t) : vt_(detail::type<std::decay_t<T>>{}), t_(&t) {}
-
-  explicit operator bool() const { return t_ != nullptr; }
-
-  const auto &get_vtable() const { return vt_; }
-
-  auto get_ptr() const { return t_; }
-
-  template <typename Method, typename... Parameters>
-  decltype(auto) call(Parameters &&... parameters) const {
-    return vt_.call(static_cast<Method *>(nullptr), t_,
-                    std::forward<Parameters>(parameters)...);
-  }
-};
 
 using copyable = std::unique_ptr<detail::holder>(detail::clone) const;
 
@@ -368,6 +316,6 @@ public:
 
 template <typename... Signatures>
 using object = detail::object_imp<detail::vtable<Signatures...>::all_const(),
-                                  Signatures..., copyable>;
+                                  Signatures...,copyable >;
 
 } // namespace polymorphic
