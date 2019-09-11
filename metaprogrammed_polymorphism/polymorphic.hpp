@@ -53,13 +53,58 @@ template <typename T> using ptr = T *;
 template <typename T> struct type {};
 template <typename... T> struct typelist {};
 
+template<typename T,typename Signature>
+struct functions;
+
+template<typename T, typename Return, typename Method,typename... Parameters>
+struct functions<T,Return(Method,Parameters...)> {
+static auto entry_fun(void *t, Parameters... parameters) -> Return  {
+          return poly_extend(static_cast<Method *>(nullptr),
+                             *static_cast<T *>(t),
+                             fwd<Parameters>(parameters)...);
+        }
+};
+
+template<typename T, typename Return, typename Method,typename... Parameters>
+struct functions<T,Return(Method,Parameters...)const> {
+static auto entry_fun(const void *t, Parameters... parameters) ->Return {
+          return poly_extend(static_cast<Method *>(nullptr),
+                             *static_cast<const T *>(t),
+                             fwd<Parameters>(parameters)...);
+        }
+};
+
 
 using vtable_fun = ptr<void()>;
+
+template<typename T, typename... Signatures>
+inline const vtable_fun vtable_entries[] = { reinterpret_cast<vtable_fun>(functions<T,Signatures>::entry_fun)... };
+
+
+template<typename Method, typename T, typename Return, typename... Parameters>
+Return mutable_fun(void *t, Parameters... parameters)  {
+          return poly_extend(static_cast<Method *>(nullptr),
+                             *static_cast<T *>(t),
+                             fwd<Parameters>(parameters)...);
+        }
+
+template<typename Method, typename T, typename Return, typename... Parameters>
+Return const_fun(const void *t, Parameters... parameters)  {
+          return poly_extend(static_cast<Method *>(nullptr),
+                             *static_cast<const T *>(t),
+                             fwd<Parameters>(parameters)...);
+        }
+
+
+
 
 template <size_t I, typename Signature> struct vtable_entry;
 
 template <size_t I, typename Method, typename Return, typename... Parameters>
 struct vtable_entry<I, Return(Method, Parameters...)> {
+
+	template<typename T>
+	inline static const vtable_fun entry = reinterpret_cast<vtable_fun>(static_cast<ptr<Return(void*,Parameters...)>>(&mutable_fun<Method,T,Return,Parameters...>));
   template <typename T> static auto get_entry(type<T>) {
     return reinterpret_cast<vtable_fun>(
         +[](void *t, Parameters... parameters) -> Return {
@@ -85,6 +130,7 @@ static constexpr auto get_index(type<Return(Method, Parameters...)>) { return I;
 
 template <size_t I, typename Method, typename Return, typename... Parameters>
 struct vtable_entry<I, Return(Method, Parameters...) const> {
+
   template <typename T> static auto get_entry(type<T>) {
     return reinterpret_cast<vtable_fun>(
         +[](const void *t, Parameters... parameters) -> Return {
@@ -110,7 +156,7 @@ static constexpr auto get_index(type<Return(Method, Parameters...)const>) { retu
 template <typename... entry> struct entries : entry... {
 
   using entry::call_imp...;
-  using entry::get_entry...;
+  using entry::entry...;
   using entry::get_index...;
 
   static constexpr bool all_const() {
@@ -126,12 +172,12 @@ struct vtable_imp<std::index_sequence<I...>, Signatures...>
 
   template <typename T> static auto get_vtable(type<T> t) {
     static const vtable_fun vt[] = {
-        vtable_entry<I, Signatures>::get_entry(t)...};
+        reinterpret_cast<vtable_fun>(functions<T, Signatures>::entry_fun)...};
     return &vt[0];
   }
 
   template <typename T>
-  vtable_imp(type<T> t) : vptr_(get_vtable(t)) {}
+  vtable_imp(type<T> t) : vptr_(&vtable_entries<T,Signatures...>[0]) {}
 
   const vtable_fun *vptr_;
 
