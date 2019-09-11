@@ -51,14 +51,13 @@ namespace polymorphic {
 		template <typename T> using ptr = T*;
 
 		template <typename T> struct type {};
-		template <typename... T> struct typelist {};
 
 		template<typename T, typename Signature>
-		struct functions;
+		struct trampoline;
 
 		template<typename T, typename Return, typename Method, typename... Parameters>
-		struct functions<T, Return(Method, Parameters...)> {
-			static auto entry_fun(void* t, Parameters... parameters) -> Return {
+		struct trampoline<T, Return(Method, Parameters...)> {
+			static auto jump(void* t, Parameters... parameters) -> Return {
 				return poly_extend(Method{},
 					*static_cast<T*>(t),
 					fwd<Parameters>(parameters)...);
@@ -66,8 +65,8 @@ namespace polymorphic {
 		};
 
 		template<typename T, typename Return, typename Method, typename... Parameters>
-		struct functions<T, Return(Method, Parameters...)const> {
-			static auto entry_fun(const void* t, Parameters... parameters) ->Return {
+		struct trampoline<T, Return(Method, Parameters...)const> {
+			static auto jump(const void* t, Parameters... parameters) ->Return {
 				return poly_extend(Method{},
 					*static_cast<const T*>(t),
 					fwd<Parameters>(parameters)...);
@@ -78,13 +77,13 @@ namespace polymorphic {
 		using vtable_fun = ptr<void()>;
 
 		template<typename T, typename... Signatures>
-		inline const vtable_fun vtable_entries[] = { reinterpret_cast<vtable_fun>(functions<T,Signatures>::entry_fun)... };
+		inline const vtable_fun vtable_entries[] = { reinterpret_cast<vtable_fun>(trampoline<T,Signatures>::jump)... };
 
 
-		template <size_t I, typename Signature> struct vtable_entry;
+		template <size_t I, typename Signature> struct vtable_caller;
 
 		template <size_t I, typename Method, typename Return, typename... Parameters>
-		struct vtable_entry<I, Return(Method, Parameters...)> {
+		struct vtable_caller<I, Return(Method, Parameters...)> {
 
 			static decltype(auto) call_imp(const vtable_fun* vt,
 				Method,
@@ -100,8 +99,9 @@ namespace polymorphic {
 			using fun_ptr = ptr<Return(void*, Parameters...)>;
 		};
 
+
 		template <size_t I, typename Method, typename Return, typename... Parameters>
-		struct vtable_entry<I, Return(Method, Parameters...) const> {
+		struct vtable_caller<I, Return(Method, Parameters...) const> {
 
 			static decltype(auto) call_imp(const vtable_fun* vt,
 				Method,
@@ -116,34 +116,19 @@ namespace polymorphic {
 			using fun_ptr = ptr<Return(const void*, Parameters...)>;
 		};
 
-		template <typename... entry> struct entries : entry... {
+		template <typename... caller> struct callers : caller... {
 
-			using entry::call_imp...;
-			using entry::get_index...;
+			using caller::call_imp...;
+			using caller::get_index...;
 
 			static constexpr bool all_const() {
-				return std::conjunction_v<typename entry::is_const...>;
+				return std::conjunction_v<typename caller::is_const...>;
 			}
 		};
 
 		template <typename Sequence, typename... Signatures> struct vtable_imp;
 
-		template <size_t... I, typename... Signatures>
-		struct vtable_imp<std::index_sequence<I...>, Signatures...>
-			: entries<vtable_entry<I, Signatures>...> {
-
-			template <typename T> static auto get_vtable(type<T> t) {
-				static const vtable_fun vt[] = {
-					reinterpret_cast<vtable_fun>(functions<T, Signatures>::entry_fun)... };
-				return &vt[0];
-			}
-
-			template <typename T>
-			vtable_imp(type<T> t) : vptr_(&vtable_entries<T, Signatures...>[0]) {}
-
-			const vtable_fun* vptr_;
-
-			template<typename OtherImp>
+			template<typename OtherImp,typename... Signatures>
 			static constexpr int get_offset() {
 				constexpr std::array<int, sizeof...(Signatures)> ar{ static_cast<int>(OtherImp::get_index(type<Signatures>{}))... };
 				auto first = ar[0];
@@ -157,11 +142,22 @@ namespace polymorphic {
 				return first;
 			}
 
+
+
+		template <size_t... I, typename... Signatures>
+		struct vtable_imp<std::index_sequence<I...>, Signatures...>
+			: callers<vtable_caller<I, Signatures>...> {
+
+			template <typename T>
+			vtable_imp(type<T> t) : vptr_(&vtable_entries<T, Signatures...>[0]) {}
+
+			const vtable_fun* vptr_;
+
 			template <typename OtherSequence, typename... OtherSignatures>
 			vtable_imp(const vtable_imp<OtherSequence, OtherSignatures...>& other)
-				: vptr_(other.vptr_ + get_offset<vtable_imp<OtherSequence, OtherSignatures...>>())
+				: vptr_(other.vptr_ + get_offset<vtable_imp<OtherSequence, OtherSignatures...>,Signatures...>())
 			{
-				static_assert(get_offset<vtable_imp<OtherSequence, OtherSignatures...>>() != -1);
+				static_assert(get_offset<vtable_imp<OtherSequence, OtherSignatures...>, Signatures...>() != -1);
 			}
 
 			vtable_imp(const vtable_imp&) = default;
@@ -173,6 +169,8 @@ namespace polymorphic {
 					std::forward<Parameters>(parameters)...);
 			}
 		};
+
+
 
 
 
