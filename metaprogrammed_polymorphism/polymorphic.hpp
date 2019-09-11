@@ -81,38 +81,10 @@ template<typename T, typename... Signatures>
 inline const vtable_fun vtable_entries[] = { reinterpret_cast<vtable_fun>(functions<T,Signatures>::entry_fun)... };
 
 
-template<typename Method, typename T, typename Return, typename... Parameters>
-Return mutable_fun(void *t, Parameters... parameters)  {
-          return poly_extend(static_cast<Method *>(nullptr),
-                             *static_cast<T *>(t),
-                             fwd<Parameters>(parameters)...);
-        }
-
-template<typename Method, typename T, typename Return, typename... Parameters>
-Return const_fun(const void *t, Parameters... parameters)  {
-          return poly_extend(static_cast<Method *>(nullptr),
-                             *static_cast<const T *>(t),
-                             fwd<Parameters>(parameters)...);
-        }
-
-
-
-
 template <size_t I, typename Signature> struct vtable_entry;
 
 template <size_t I, typename Method, typename Return, typename... Parameters>
 struct vtable_entry<I, Return(Method, Parameters...)> {
-
-	template<typename T>
-	inline static const vtable_fun entry = reinterpret_cast<vtable_fun>(static_cast<ptr<Return(void*,Parameters...)>>(&mutable_fun<Method,T,Return,Parameters...>));
-  template <typename T> static auto get_entry(type<T>) {
-    return reinterpret_cast<vtable_fun>(
-        +[](void *t, Parameters... parameters) -> Return {
-          return poly_extend(static_cast<Method *>(nullptr),
-                             *static_cast<T *>(t),
-                             fwd<Parameters>(parameters)...);
-        });
-  }
 
   static decltype(auto) call_imp(const vtable_fun *vt,
                                   Method *,
@@ -131,16 +103,7 @@ static constexpr auto get_index(type<Return(Method, Parameters...)>) { return I;
 template <size_t I, typename Method, typename Return, typename... Parameters>
 struct vtable_entry<I, Return(Method, Parameters...) const> {
 
-  template <typename T> static auto get_entry(type<T>) {
-    return reinterpret_cast<vtable_fun>(
-        +[](const void *t, Parameters... parameters) -> Return {
-          return poly_extend(static_cast<Method *>(nullptr),
-                             *static_cast<const T *>(t),
-                             fwd<Parameters>(parameters)...);
-        });
-  }
-
-  static decltype(auto) call_imp(const vtable_fun *vt,
+    static decltype(auto) call_imp(const vtable_fun *vt,
                                  Method *,
                                  const void *t, Parameters... parameters) {
     return reinterpret_cast<fun_ptr>(vt[I])(
@@ -156,7 +119,6 @@ static constexpr auto get_index(type<Return(Method, Parameters...)const>) { retu
 template <typename... entry> struct entries : entry... {
 
   using entry::call_imp...;
-  using entry::entry...;
   using entry::get_index...;
 
   static constexpr bool all_const() {
@@ -241,13 +203,14 @@ template <typename... Signatures> class ref {
   std::conditional_t<vtable_t::all_const(), const void *, void *> t_;
 
 public:
-  template <typename T, typename = std::enable_if_t<
-                            !detail::is_polymorphic<std::decay_t<T>>::value>>
-  ref(T &t) : vt_(detail::type<std::decay_t<T>>{}), t_(&t) {}
+  template <typename T>
+	  ref(T& t) : ref(t, detail::is_polymorphic<std::decay_t<T>>{}) {}
 
-  template <typename Poly, typename = std::enable_if_t<detail::is_polymorphic<
-                               std::decay_t<Poly>>::value>>
-  ref(const Poly &other) : vt_(other.get_vtable()), t_(other.get_ptr()){};
+  template<typename T>
+  ref(T& t, std::false_type): vt_(detail::type<std::decay_t<T>>{}), t_(&t) {}
+
+  template<typename Poly>
+  ref(Poly& other, std::true_type):vt_(other.get_vtable()), t_(other.get_ptr()){}
 
   explicit operator bool() const { return t_ != nullptr; }
 
