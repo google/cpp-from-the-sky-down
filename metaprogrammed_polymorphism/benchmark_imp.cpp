@@ -10,7 +10,7 @@ struct Imp :Base {
 std::unique_ptr<Base> MakeBase() {
 	return std::make_unique<Imp>();
 }
-int poly_extend(draw*, Dummy&) { return 5; }
+int poly_extend(draw, Dummy&) { return 5; }
 
 
 std::function<int(Dummy&)> GetFunction() {

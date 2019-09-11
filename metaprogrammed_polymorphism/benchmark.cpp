@@ -32,17 +32,6 @@ static void BM_Poly(benchmark::State& state) {
   }
 }
 
-static void BM_PolyNoPermutation(benchmark::State& state) {
-	Dummy d;
-	polymorphic::ref_no_permutation<int(draw)> ref(d);
-  // Perform setup here
-  for (auto _ : state) {
-    // This code gets timed
-	  benchmark::DoNotOptimize(ref);
-	  benchmark::DoNotOptimize(ref.call<draw>());
-  }
-}
-
 static void BM_Function(benchmark::State& state) {
 	auto f = GetFunction();
 	Dummy d;
@@ -64,11 +53,10 @@ static void BM_NonVirtual(benchmark::State& state) {
   }
 }
 // Register the function as a benchmark
-BENCHMARK(BM_Virtual);
-BENCHMARK(BM_NonVirtual);
-BENCHMARK(BM_PolyNoPermutation);
 BENCHMARK(BM_Poly);
+BENCHMARK(BM_NonVirtual);
 BENCHMARK(BM_Function);
+BENCHMARK(BM_Virtual);
 
 // Run the benchmark
 BENCHMARK_MAIN();

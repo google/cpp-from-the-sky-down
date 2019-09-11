@@ -18,22 +18,25 @@
 #include <vector>
 #include <memory>
 
+class draw {};
+class x2 {};
+
 // Use types instead of names
 // void draw(std::ostream&) -> void(draw, std::ostream&)
-void call_draw(polymorphic::ref<void(class draw, std::ostream&) const> d) {
+void call_draw(polymorphic::ref<void(draw, std::ostream&) const> d) {
 	std::cout << "in call_draw\n";
 	d.call<draw>(std::cout);
 }
 
 
 template <typename T>
-void poly_extend(class draw*, const T& t, std::ostream& os) {
+void poly_extend(draw, const T& t, std::ostream& os) {
 	os << t << "\n";
 }
 
 class x2;
 template <typename T>
-void poly_extend(class x2*, T& t, std::unique_ptr<int>) {
+void poly_extend(x2, T& t, std::unique_ptr<int>) {
 	t = t + t;
 }
 

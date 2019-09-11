@@ -2,8 +2,8 @@
 #include <functional>
 struct Dummy {};
 
-class draw;
-int poly_extend(draw*, Dummy&);
+class draw {};
+int poly_extend(draw, Dummy&);
 
 struct Base {
 	virtual int draw() = 0;
