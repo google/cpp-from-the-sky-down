@@ -116,37 +116,34 @@ namespace polymorphic {
 			using fun_ptr = ptr<Return(const void*, Parameters...)>;
 		};
 
-		template <typename... caller> struct callers : caller... {
-
-			using caller::call_imp...;
-			using caller::get_index...;
-
-			static constexpr bool all_const() {
-				return std::conjunction_v<typename caller::is_const...>;
-			}
-		};
-
 		template <typename Sequence, typename... Signatures> struct vtable_imp;
 
-			template<typename OtherImp,typename... Signatures>
-			static constexpr int get_offset() {
-				constexpr std::array<int, sizeof...(Signatures)> ar{ static_cast<int>(OtherImp::get_index(type<Signatures>{}))... };
-				auto first = ar[0];
-				auto last = first;
-				for (int i = 1; i < ar.size(); ++i) {
-					if (ar[i] != last + 1) {
-						return -1;
-					}
-					last = ar[i];
+		template<typename OtherImp, typename... Signatures>
+		static constexpr int get_offset() {
+			constexpr std::array<int, sizeof...(Signatures)> ar{ static_cast<int>(OtherImp::get_index(type<Signatures>{}))... };
+			auto first = ar[0];
+			auto previous = first;
+			for (int i = 1; i < ar.size(); ++i) {
+				if (ar[i] != previous + 1) {
+					return -1;
 				}
-				return first;
+				previous = ar[i];
 			}
+			return first;
+		}
 
 
 
 		template <size_t... I, typename... Signatures>
 		struct vtable_imp<std::index_sequence<I...>, Signatures...>
-			: callers<vtable_caller<I, Signatures>...> {
+			: vtable_caller<I, Signatures>... {
+			using vtable_caller<I,Signatures>::call_imp...;
+			using vtable_caller<I,Signatures>::get_index...;
+
+			static constexpr bool all_const() {
+				return std::conjunction_v<typename vtable_caller<I,Signatures>::is_const...>;
+			}
+
 
 			template <typename T>
 			vtable_imp(type<T> t) : vptr_(&vtable_entries<T, Signatures...>[0]) {}
@@ -155,7 +152,7 @@ namespace polymorphic {
 
 			template <typename OtherSequence, typename... OtherSignatures>
 			vtable_imp(const vtable_imp<OtherSequence, OtherSignatures...>& other)
-				: vptr_(other.vptr_ + get_offset<vtable_imp<OtherSequence, OtherSignatures...>,Signatures...>())
+				: vptr_(other.vptr_ + get_offset<vtable_imp<OtherSequence, OtherSignatures...>, Signatures...>())
 			{
 				static_assert(get_offset<vtable_imp<OtherSequence, OtherSignatures...>, Signatures...>() != -1);
 			}
@@ -164,7 +161,7 @@ namespace polymorphic {
 
 			template <typename VoidType, typename Method, typename... Parameters>
 			decltype(auto) call(Method method, VoidType t,
-				Parameters &&... parameters) const {
+				Parameters&&... parameters) const {
 				return vtable_imp::call_imp(vptr_, method, t,
 					std::forward<Parameters>(parameters)...);
 			}
@@ -205,20 +202,22 @@ namespace polymorphic {
 		ref(T& t) : ref(t, detail::is_polymorphic<std::decay_t<T>>{}) {}
 
 		template<typename T>
-		ref(T& t, std::false_type) : vt_(detail::type<std::decay_t<T>>{}), t_(&t) {}
+		ref(T& t, std::false_type) : vt_(detail::type<std::decay_t<T>>()), t_(&t) {}
 
 		template<typename Poly>
-		ref(Poly& other, std::true_type) : vt_(other.get_vtable()), t_(other.get_ptr()) {}
+		ref(Poly& other, std::true_type) : vt_(other.get_vtable()), t_(other.get_ptr()) {
+		
+		}
 
 		explicit operator bool() const { return t_ != nullptr; }
 
-		const auto& get_vtable() const { return vt_; }
+		const vtable_t& get_vtable() const { return vt_; }
 
 		auto get_ptr() const { return t_; }
 
 		template <typename Method, typename... Parameters>
 		decltype(auto) call(Parameters&&... parameters) const {
-			return vt_.call(Method{}, t_,
+			return vtable_t::call_imp(vt_.vptr_,Method{}, t_,
 				std::forward<Parameters>(parameters)...);
 		}
 	};
