@@ -137,11 +137,11 @@ namespace polymorphic {
 		template <size_t... I, typename... Signatures>
 		struct vtable_imp<std::index_sequence<I...>, Signatures...>
 			: vtable_caller<I, Signatures>... {
-			using vtable_caller<I,Signatures>::call_imp...;
-			using vtable_caller<I,Signatures>::get_index...;
+			using vtable_caller<I, Signatures>::call_imp...;
+			using vtable_caller<I, Signatures>::get_index...;
 
 			static constexpr bool all_const() {
-				return std::conjunction_v<typename vtable_caller<I,Signatures>::is_const...>;
+				return std::conjunction_v<typename vtable_caller<I, Signatures>::is_const...>;
 			}
 
 
@@ -176,51 +176,64 @@ namespace polymorphic {
 		using vtable =
 			vtable_imp<std::make_index_sequence<sizeof...(Signatures)>, Signatures...>;
 
-		template <typename T> std::false_type is_vtable(const T*);
-
-		template <typename Sequence, typename... Signatures>
-		std::true_type is_vtable(const vtable_imp<Sequence, Signatures...>&);
-
-		template <typename T, typename = std::void_t<>>
-		struct is_polymorphic : std::false_type {};
 
 		template <typename T>
-		struct is_polymorphic<
-			T, std::void_t<decltype(std::declval<const T&>().get_vtable())>>
-			: decltype(is_vtable(std::declval<const T&>().get_vtable())) {};
+		struct is_polymorphic : std::false_type {};
+
+		template<typename Sequence, typename... Signatures>
+		class ref_impl;
+
+		template<typename Sequence, typename... Signatures>
+		class obj_impl;
+
+
+
+
+		template<typename Sequence, typename... Signatures>
+		struct is_polymorphic<ref_impl<Sequence, Signatures...>> :std::true_type {};
+
+		template<typename Sequence, typename... Signatures>
+		struct is_polymorphic<obj_impl<Sequence, Signatures...>> :std::true_type {};
+
+
+
+
+
+
+
+		template <size_t... I, typename... Signatures>
+		class ref_impl<std::index_sequence<I...>, Signatures...> :private vtable_caller<I, Signatures>... {
+
+			const detail::vtable_fun* vptr_;
+			std::conditional_t<std::conjunction_v<typename vtable_caller<I, Signatures>::is_const...>, const void*, void*> t_;
+
+		public:
+			template <typename T>
+			ref_impl(T& t) : ref_impl(t, detail::is_polymorphic<std::decay_t<T>>{}) {}
+
+			template<typename T>
+			ref_impl(T& t, std::false_type) : vptr_(&detail::vtable_entries<std::decay_t<T>,Signatures...>[0]), t_(&t) {}
+
+			template<typename Poly>
+			ref_impl(Poly& other, std::true_type) : vptr_(other.vptr_ + get_offset<Poly,Signatures...>()), t_(other.get_ptr()) {
+				static_assert(get_offset<Poly, Signatures...>() != -1);
+			}
+
+			explicit operator bool() const { return t_ != nullptr; }
+
+			auto get_ptr() const { return t_; }
+
+			template <typename Method, typename... Parameters>
+			decltype(auto) call(Parameters&&... parameters) const {
+				return this->call_imp(vptr_, Method{}, t_,
+					std::forward<Parameters>(parameters)...);
+			}
+		};
 
 	} // namespace detail
 
-	template <typename... Signatures> class ref {
-		using vtable_t = detail::vtable<Signatures...>;
-
-		vtable_t vt_;
-		std::conditional_t<vtable_t::all_const(), const void*, void*> t_;
-
-	public:
-		template <typename T>
-		ref(T& t) : ref(t, detail::is_polymorphic<std::decay_t<T>>{}) {}
-
-		template<typename T>
-		ref(T& t, std::false_type) : vt_(detail::type<std::decay_t<T>>()), t_(&t) {}
-
-		template<typename Poly>
-		ref(Poly& other, std::true_type) : vt_(other.get_vtable()), t_(other.get_ptr()) {
-		
-		}
-
-		explicit operator bool() const { return t_ != nullptr; }
-
-		const vtable_t& get_vtable() const { return vt_; }
-
-		auto get_ptr() const { return t_; }
-
-		template <typename Method, typename... Parameters>
-		decltype(auto) call(Parameters&&... parameters) const {
-			return vtable_t::call_imp(vt_.vptr_,Method{}, t_,
-				std::forward<Parameters>(parameters)...);
-		}
-	};
+	template<typename... Signatures>
+	using ref = detail::ref_impl < std::make_index_sequence<sizeof...(Signatures)>, Signatures...>;
 
 
 	using copyable = std::unique_ptr<detail::holder>(detail::clone) const;
@@ -255,7 +268,7 @@ namespace polymorphic {
 
 			object_imp& operator=(object_imp&&) = default;
 
-			object_imp& operator=(const object_imp& other) { (*this) = ref(other); }
+			object_imp& operator=(const object_imp& other) { (*this) = ref<Signatures...>(other); }
 
 			explicit operator bool() const { return t_ != nullptr; }
 
@@ -317,6 +330,11 @@ namespace polymorphic {
 					std::forward<Parameters>(parameters)...);
 			}
 		};
+
+		template<bool all_const,typename... Signatures>
+		struct is_polymorphic<object_imp<all_const,Signatures...>> :std::true_type {};
+
+
 
 	} // namespace detail
 
