@@ -1,5 +1,6 @@
 #include <memory>
 #include <functional>
+#include "polymorphic.hpp"
 struct Dummy {};
 
 class draw {};
@@ -17,3 +18,7 @@ struct NonVirtual {
 
 std::function<int(Dummy&)> GetFunction();
 std::unique_ptr<Base> MakeBase();
+
+std::function<int()> GetFunctionRand();
+std::unique_ptr<Base> MakeBaseRand();
+polymorphic::object<int(draw)> GetObjectRand();
