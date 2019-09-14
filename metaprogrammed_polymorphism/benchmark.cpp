@@ -88,11 +88,10 @@ static void BM_PolyRefVector(benchmark::State& state) {
 
 static void BM_Function(benchmark::State& state) {
 	auto f = GetFunction();
-	Dummy d;
 	// Perform setup here
 	for (auto _ : state) {
 		// This code gets timed
-		benchmark::DoNotOptimize(f(d));
+		benchmark::DoNotOptimize(f());
 	}
 }
 

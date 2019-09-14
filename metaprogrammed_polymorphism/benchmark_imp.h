@@ -16,7 +16,7 @@ struct NonVirtual {
 	int draw();
 };
 
-std::function<int(Dummy&)> GetFunction();
+std::function<int()> GetFunction();
 std::unique_ptr<Base> MakeBase();
 
 std::function<int()> GetFunctionRand();

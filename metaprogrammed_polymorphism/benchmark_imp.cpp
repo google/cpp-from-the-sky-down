@@ -20,8 +20,8 @@ int poly_extend(draw, Dummy&) { return 5; }
 int poly_extend(draw, int&) { return 10; }
 
 
-std::function<int(Dummy&)> GetFunction() {
-	return [](Dummy&) {return 5; };
+std::function<int()> GetFunction() {
+	return []() {return 5; };
 }
 
 int NonVirtual::draw() { return 5; }
