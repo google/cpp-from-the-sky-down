@@ -1,5 +1,4 @@
 #include "benchmark_imp.h"
-#include <cstdlib>
 
 struct Imp :Base {
 	int draw() override { return 5; }
@@ -26,24 +25,24 @@ std::function<int()> GetFunction() {
 
 int NonVirtual::draw() { return 5; }
 
-std::function<int()> GetFunctionRand() {
-	if (std::rand() % 2) {
+std::function<int()> GetFunctionRand(int r) {
+	if (r % 2) {
 		return []() {return 5; };
 	}
 	else {
 		return []() {return 10; };
 	}
 }
-std::unique_ptr<Base> MakeBaseRand() {
-	if (std::rand() % 2) {
+std::unique_ptr<Base> MakeBaseRand(int r) {
+	if (r % 2) {
 		return std::make_unique<Imp2>();
 	}
 	else {
 		return std::make_unique<Imp>();
 	}
 }
-polymorphic::object<int(draw)> GetObjectRand() {
-	if (std::rand() % 2) {
+polymorphic::object<int(draw)> GetObjectRand(int r) {
+	if (r % 2) {
 		return { Dummy{} };
 
 	}

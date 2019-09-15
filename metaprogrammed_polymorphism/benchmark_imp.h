@@ -19,6 +19,6 @@ struct NonVirtual {
 std::function<int()> GetFunction();
 std::unique_ptr<Base> MakeBase();
 
-std::function<int()> GetFunctionRand();
-std::unique_ptr<Base> MakeBaseRand();
-polymorphic::object<int(draw)> GetObjectRand();
+std::function<int()> GetFunctionRand(int r);
+std::unique_ptr<Base> MakeBaseRand(int r);
+polymorphic::object<int(draw)> GetObjectRand(int r);

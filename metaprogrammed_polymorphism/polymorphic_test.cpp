@@ -147,7 +147,7 @@ TEST(Polymorphic, CopyMutableRefFromObject) {
 	o.call<x2>();
 	o = i;
 	o.call<x2>();
-	auto r2 = r;
+	auto r2 = o;
 	r2.call<x2>();
 
 	EXPECT_THAT(i, 20);
