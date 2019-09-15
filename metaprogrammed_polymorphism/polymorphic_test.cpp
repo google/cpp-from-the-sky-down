@@ -16,9 +16,15 @@
 #include "polymorphic.hpp"
 
 struct x2 {};
+struct stupid_hash {};
 
 void poly_extend(x2, int& i) { i *= 2; }
 void poly_extend(x2, std::string& s) { s = s + s; }
+
+int poly_extend(stupid_hash, const int& i) { return i; }
+int poly_extend(stupid_hash, const std::string& s) { return static_cast<int>(s.size()); }
+
+
 
 TEST(Polymorphic, MutableRef) {
 	std::string s("hello");
@@ -49,6 +55,73 @@ TEST(Polymorphic, CopyMutableRef) {
 	EXPECT_THAT(s, "hellohello");
 
 }
+
+TEST(Polymorphic, MutableObject) {
+	std::string s("hello");
+	int i = 5;
+
+	polymorphic::object<void(x2)> o{ s };
+	o.call<x2>();
+	const auto& s_ref = *static_cast<std::string*>(o.get_ptr());
+	EXPECT_THAT(s_ref, "hellohello");
+	o = i;
+	o.call<x2>();
+
+	const auto& i_ref = *static_cast<int*>(o.get_ptr());
+	EXPECT_THAT(i_ref, 10);
+
+}
+
+TEST(Polymorphic, CopyMutableObject) {
+	std::string s("hello");
+	int i = 5;
+
+	polymorphic::object<void(x2)> o{ s };
+	auto o2 = o;
+
+	o.call<x2>();
+	const auto& s_ref = *static_cast<std::string*>(o.get_ptr());
+	const auto& s_ref2 = *static_cast<std::string*>(o2.get_ptr());
+	EXPECT_THAT(s_ref, "hellohello");
+	EXPECT_THAT(s_ref2, "hello");
+	o = i;
+	o2 = o;
+	o2.call<x2>();
+
+	const auto& i_ref = *static_cast<int*>(o.get_ptr());
+	const auto& i_ref2 = *static_cast<int*>(o2.get_ptr());
+	EXPECT_THAT(i_ref, 5);
+	EXPECT_THAT(i_ref2, 10);
+}
+
+TEST(Polymorphic, ConstRef) {
+	const std::string s("hello");
+	const int i = 5;
+
+	polymorphic::ref<int(stupid_hash)const> r{ s };
+	EXPECT_THAT(r.call<stupid_hash>(),static_cast<int>(s.size()));
+
+	r = i;
+	EXPECT_THAT(r.call<stupid_hash>(),i);
+}
+
+TEST(Polymorphic, CopyConstRef) {
+	std::string s("hello");
+	const int i = 5;
+
+	polymorphic::ref<int(stupid_hash)const> r{ std::as_const(s) };
+	EXPECT_THAT(r.call<stupid_hash>(),static_cast<int>(s.size()));
+	auto r2 = r;
+
+	s = "jrb";
+	EXPECT_THAT(r.call<stupid_hash>(),static_cast<int>(s.size()));
+	EXPECT_THAT(r2.call<stupid_hash>(),static_cast<int>(s.size()));
+
+	r = i;
+	EXPECT_THAT(r.call<stupid_hash>(),i);
+	EXPECT_THAT(r2.call<stupid_hash>(),static_cast<int>(s.size()));
+}
+
 
 
 

@@ -135,16 +135,14 @@ static void BM_NonVirtualVector(benchmark::State& state) {
 BENCHMARK(BM_NonVirtual);
 BENCHMARK(BM_Virtual);
 BENCHMARK(BM_Function);
-BENCHMARK(BM_PolyObject);
 BENCHMARK(BM_PolyRef);
+BENCHMARK(BM_PolyObject);
 
 BENCHMARK(BM_NonVirtualVector);
 BENCHMARK(BM_VirtualVector);
 BENCHMARK(BM_FunctionVector);
-BENCHMARK(BM_PolyObjectVector);
 BENCHMARK(BM_PolyRefVector);
+BENCHMARK(BM_PolyObjectVector);
 
 
-
-// Run the benchmark
 BENCHMARK_MAIN();

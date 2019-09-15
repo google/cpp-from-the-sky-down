@@ -146,7 +146,8 @@ namespace polymorphic {
 
 			explicit operator bool() const { return t_ != nullptr; }
 
-			auto get_ptr() const { return t_; }
+			auto get_ptr() const { return t_.get_ptr(); }
+			auto get_ptr() { return t_.get_ptr(); }
 
 			template <typename Method, typename... Parameters>
 			decltype(auto) call(Parameters&&... parameters) const {
@@ -190,6 +191,7 @@ namespace polymorphic {
 				impl_ = std::move(other.impl_);
 				ptr_ = std::move(other.ptr_);
 				other.ptr_ = nullptr;
+				return *this;
 			}
 
 			value_holder(const value_holder& other) :impl_(other.impl_ ? other.impl_->clone() : nullptr),ptr_(get_ptr_impl()) {}
@@ -231,6 +233,7 @@ namespace polymorphic {
 				impl_ = std::move(other.impl_);
 				ptr_ = std::move(other.ptr_);
 				other.ptr_ = nullptr;
+				return *this;
 			}
 			template<typename T>
 			shared_ptr_holder(T t,value_tag) :impl_(std::make_shared<const holder_impl<T>>(std::move(t))),ptr_(get_ptr_impl()) {}
