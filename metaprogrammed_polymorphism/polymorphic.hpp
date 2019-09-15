@@ -211,10 +211,14 @@ namespace polymorphic {
 			T* get_ptr()const { return ptr_; }
 			template<typename V>
 			ptr_holder(V& v,value_tag) :ptr_(&v) {}
-			ptr_holder(const ptr_holder&) = default;
-			ptr_holder(ptr_holder&&) = default;
-			ptr_holder& operator=(const ptr_holder&) = default;
-			ptr_holder& operator=(ptr_holder&&) = default;
+
+			template<typename OtherT>
+			ptr_holder(const ptr_holder<OtherT>& other) :ptr_(other.get_ptr()) {}
+			template<typename OtherT>
+			ptr_holder& operator=(const ptr_holder<OtherT>& other) {
+				return (*this) = ptr_holder(other);
+			}
+
 			ptr_holder(value_holder& v) :ptr_(v.get_ptr()) {}
 			ptr_holder(const value_holder& v) :ptr_(v.get_ptr()) {}
 		};

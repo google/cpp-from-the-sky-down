@@ -122,6 +122,39 @@ TEST(Polymorphic, CopyConstRef) {
 	EXPECT_THAT(r2.call<stupid_hash>(),static_cast<int>(s.size()));
 }
 
+TEST(Polymorphic, CopyConstRefFromMutable) {
+	std::string s("hello world");
+	const int i = 5;
+
+	polymorphic::ref<void(x2),int(stupid_hash)const> r{ s };
+	EXPECT_THAT(r.call<stupid_hash>(),static_cast<int>(s.size()));
+
+	polymorphic::ref<int(stupid_hash)const> r2{ i };
+
+	EXPECT_THAT(r2.call<stupid_hash>(),i);
+	r2 = r;
+	EXPECT_THAT(r2.call<stupid_hash>(),static_cast<int>(s.size()));
+	r.call<x2>();
+	EXPECT_THAT(r2.call<stupid_hash>(),static_cast<int>(s.size()));
+	EXPECT_THAT(s, "hello worldhello world");
+}
+
+TEST(Polymorphic, CopyMutableRefFromObject) {
+	std::string s("hello");
+	int i = 5;
+
+	polymorphic::object<void(x2)> o{ s };
+	o.call<x2>();
+	o = i;
+	o.call<x2>();
+	auto r2 = r;
+	r2.call<x2>();
+
+	EXPECT_THAT(i, 20);
+	EXPECT_THAT(s, "hellohello");
+
+}
+
 
 
 
