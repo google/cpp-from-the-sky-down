@@ -90,7 +90,7 @@ namespace polymorphic {
 		};
 
 
-		struct value_type {};
+		struct value_tag {};
 
 		template <typename Holder, typename Sequence, typename... Signatures>
 		class ref_impl;
@@ -131,7 +131,7 @@ namespace polymorphic {
 			template <typename T>
 			ref_impl(T&& t, std::false_type)
 				: vptr_(&detail::vtable<std::decay_t<T>, Signatures...>[0]),
-				t_(std::forward<T>(t), value_type{}) {}
+				t_(std::forward<T>(t), value_tag{}) {}
 
 			template <typename T>
 			ref_impl(T&& other, std::true_type)
@@ -181,7 +181,7 @@ namespace polymorphic {
 			void* ptr_ = nullptr;
 		public:
 			template<typename T>
-			value_holder(T t,value_type) :impl_(std::make_unique<holder_impl<T>>(std::move(t))),ptr_(get_ptr_impl()) {}
+			value_holder(T t,value_tag) :impl_(std::make_unique<holder_impl<T>>(std::move(t))),ptr_(get_ptr_impl()) {}
 
 			value_holder(value_holder&& other)noexcept:impl_(std::move(other.impl_)), ptr_(other.ptr_) {
 				other.ptr_ = nullptr;
@@ -208,7 +208,7 @@ namespace polymorphic {
 			T* ptr_;
 			T* get_ptr()const { return ptr_; }
 			template<typename V>
-			ptr_holder(V& v,value_type) :ptr_(&v) {}
+			ptr_holder(V& v,value_tag) :ptr_(&v) {}
 			ptr_holder(const ptr_holder&) = default;
 			ptr_holder(ptr_holder&&) = default;
 			ptr_holder& operator=(const ptr_holder&) = default;
@@ -233,7 +233,7 @@ namespace polymorphic {
 				other.ptr_ = nullptr;
 			}
 			template<typename T>
-			shared_ptr_holder(T t,value_type) :impl_(std::make_shared<const holder_impl<T>>(std::move(t))),ptr_(get_ptr_impl()) {}
+			shared_ptr_holder(T t,value_tag) :impl_(std::make_shared<const holder_impl<T>>(std::move(t))),ptr_(get_ptr_impl()) {}
 			shared_ptr_holder(const value_holder& v) :impl_(v.clone_ptr()) ,ptr_(get_ptr_impl()){}
 			auto clone_ptr()const { return impl_ ? impl_->clone() : nullptr; }
 		};
