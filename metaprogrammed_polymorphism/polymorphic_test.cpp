@@ -140,18 +140,27 @@ TEST(Polymorphic, CopyConstRefFromMutable) {
 }
 
 TEST(Polymorphic, CopyMutableRefFromObject) {
-	std::string s("hello");
 	int i = 5;
 
-	polymorphic::object<void(x2)> o{ s };
+	polymorphic::object<void(x2),int(stupid_hash)const> o{ i };
 	o.call<x2>();
-	o = i;
-	o.call<x2>();
-	auto r2 = o;
-	r2.call<x2>();
+	polymorphic::ref<void(x2)> r = o;
+	r.call<x2>();
 
-	EXPECT_THAT(i, 20);
-	EXPECT_THAT(s, "hellohello");
+	EXPECT_THAT(20, o.call<stupid_hash>());
+
+}
+
+TEST(Polymorphic, CopyConstRefFromObject) {
+	int i = 5;
+
+	polymorphic::object<void(x2),int(stupid_hash)const> o{ i };
+	o.call<x2>();
+	polymorphic::ref<int(stupid_hash)const> r = std::as_const(o);
+	EXPECT_THAT(10, r.call<stupid_hash>());
+	o.call<x2>();
+	EXPECT_THAT(20, r.call<stupid_hash>());
+
 
 }
 
