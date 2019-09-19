@@ -55,7 +55,7 @@ static void BM_PolyRef(benchmark::State& state) {
 		// This code gets timed
 		benchmark::DoNotOptimize(ref.call<draw>());
 	}
-	static_assert(sizeof(ref) == 2 * sizeof(void*));
+	static_assert(sizeof(ref) == 3 * sizeof(void*));
 }
 
 static void BM_PolyObject(benchmark::State& state) {
@@ -66,7 +66,7 @@ static void BM_PolyObject(benchmark::State& state) {
 		// This code gets timed
 		benchmark::DoNotOptimize(ref.call<draw>());
 	}
-	static_assert(sizeof(ref) == 3 * sizeof(void*));
+	static_assert(sizeof(ref) == 4 * sizeof(void*));
 }
 
 static void BM_PolyObjectVector(benchmark::State& state) {

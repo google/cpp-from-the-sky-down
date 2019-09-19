@@ -62,20 +62,22 @@ namespace polymorphic {
 
 		template <size_t I, typename Signature> struct vtable_caller;
 
+
+
 		template <size_t I, typename Method, typename Return, typename... Parameters>
 		struct vtable_caller<I, Return(Method, Parameters...)> {
-			decltype(auto) operator()(const vtable_fun* vt, Method, void* t,
+			decltype(auto) operator()(const vtable_fun* vt, const std::uint8_t* permutation, Method, void* t,
 				Parameters... parameters) const {
-				return reinterpret_cast<ptr<Return(void*, Parameters...)>>(vt[I])(
+				return reinterpret_cast<ptr<Return(void*, Parameters...)>>(vt[permutation[I]])(
 					t, fwd<Parameters>(parameters)...);
 			}
 		};
 
 		template <std::size_t I, typename Method, typename Return, typename... Parameters>
 		struct vtable_caller<I, Return(Method, Parameters...) const> {
-			decltype(auto) operator()(const vtable_fun* vt, Method, const void* t,
+			decltype(auto) operator()(const vtable_fun* vt, const std::uint8_t* permutation, Method, const void* t,
 				Parameters... parameters) const {
-				return reinterpret_cast<ptr<Return(const void*, Parameters...)>>(vt[I])(t, fwd<Parameters>(parameters)...);
+				return reinterpret_cast<ptr<Return(const void*, Parameters...)>>(vt[permutation[I]])(t, fwd<Parameters>(parameters)...);
 			}
 		};
 
@@ -109,35 +111,21 @@ namespace polymorphic {
 			friend class ref_impl;
 
 			const detail::vtable_fun* vptr_;
+			std::array<std::uint8_t, sizeof...(Signatures)> permutation_;
 			Holder t_;
 
 			static constexpr overload<vtable_caller<I, Signatures>...> call_vtable{};
 			static constexpr overload<index_getter<I, Signatures>...> get_index{};
 
-			template <typename Other> static constexpr int get_offset() {
-				constexpr std::array<int, sizeof...(Signatures)> ar{
-					static_cast<int>(Other::get_index(type<Signatures>{}))... };
-				auto first = ar[0];
-				auto previous = first;
-				for (int i = 1; i < ar.size(); ++i) {
-					if (ar[i] != previous + 1) {
-						return -1;
-					}
-					previous = ar[i];
-				}
-				return first;
-			}
-
 			template <typename T>
 			ref_impl(T&& t, std::false_type)
-				: vptr_(&detail::vtable<std::decay_t<T>, Signatures...>[0]),
+				: vptr_(&detail::vtable<std::decay_t<T>, Signatures...>[0]), permutation_{ I... },
 				t_(std::forward<T>(t), value_tag{}) {}
 
-			template <typename T>
-			ref_impl(T&& other, std::true_type)
-				: vptr_(other.vptr_ + get_offset<std::decay_t<T>>()),
-				t_(std::forward<T>(other).t_) {
-				static_assert(get_offset<std::decay_t<T>>() != -1);
+			template <typename OtherRef>
+			ref_impl(OtherRef&& other, std::true_type)
+				: vptr_(other.vptr_), permutation_{ other.permutation_[other.get_index(type<Signatures>{})]... },
+				t_(std::forward<OtherRef>(other).t_) {
 			}
 
 		public:
@@ -151,13 +139,13 @@ namespace polymorphic {
 
 			template <typename Method, typename... Parameters>
 			decltype(auto) call(Parameters&&... parameters) const {
-				return call_vtable(vptr_, Method{}, t_.get_ptr(),
+				return call_vtable(vptr_, permutation_.data(), Method{}, t_.get_ptr(),
 					std::forward<Parameters>(parameters)...);
 			}
 
 			template <typename Method, typename... Parameters>
 			decltype(auto) call(Parameters&&... parameters) {
-				return call_vtable(vptr_, Method{}, t_.get_ptr(),
+				return call_vtable(vptr_, permutation_.data(), Method{}, t_.get_ptr(),
 					std::forward<Parameters>(parameters)...);
 			}
 		};
@@ -182,9 +170,9 @@ namespace polymorphic {
 			void* ptr_ = nullptr;
 		public:
 			template<typename T>
-			value_holder(T t,value_tag) :impl_(std::make_unique<holder_impl<T>>(std::move(t))),ptr_(get_ptr_impl()) {}
+			value_holder(T t, value_tag) :impl_(std::make_unique<holder_impl<T>>(std::move(t))), ptr_(get_ptr_impl()) {}
 
-			value_holder(value_holder&& other)noexcept:impl_(std::move(other.impl_)), ptr_(other.ptr_) {
+			value_holder(value_holder&& other)noexcept :impl_(std::move(other.impl_)), ptr_(other.ptr_) {
 				other.ptr_ = nullptr;
 			}
 			value_holder& operator=(value_holder&& other)noexcept {
@@ -194,7 +182,7 @@ namespace polymorphic {
 				return *this;
 			}
 
-			value_holder(const value_holder& other) :impl_(other.impl_ ? other.impl_->clone() : nullptr),ptr_(get_ptr_impl()) {}
+			value_holder(const value_holder& other) :impl_(other.impl_ ? other.impl_->clone() : nullptr), ptr_(get_ptr_impl()) {}
 			value_holder& operator=(const value_holder& other) {
 				return (*this) = value_holder(other);
 			}
@@ -210,10 +198,10 @@ namespace polymorphic {
 			T* ptr_;
 			T* get_ptr()const { return ptr_; }
 			template<typename V>
-			ptr_holder(V& v,value_tag) :ptr_(&v) {}
+			ptr_holder(V& v, value_tag) :ptr_(&v) {}
 
 			template<typename OtherT>
-			ptr_holder(const ptr_holder<OtherT>& other) :ptr_(other.get_ptr()) {}
+			ptr_holder(const ptr_holder<OtherT>& other) : ptr_(other.get_ptr()) {}
 			template<typename OtherT>
 			ptr_holder& operator=(const ptr_holder<OtherT>& other) {
 				return (*this) = ptr_holder(other);
@@ -227,10 +215,10 @@ namespace polymorphic {
 			std::shared_ptr<const holder_interface> impl_;
 			const void* ptr_ = nullptr;
 			const void* get_ptr()const { return ptr_; }
-			const void* get_ptr_impl()const { return impl_?impl_->ptr_:nullptr; }
+			const void* get_ptr_impl()const { return impl_ ? impl_->ptr_ : nullptr; }
 			shared_ptr_holder(const shared_ptr_holder&) = default;
 			shared_ptr_holder& operator=(const shared_ptr_holder&) = default;
-			shared_ptr_holder(shared_ptr_holder&& other)noexcept:impl_(std::move(other.impl_)), ptr_(other.ptr_) {
+			shared_ptr_holder(shared_ptr_holder&& other)noexcept :impl_(std::move(other.impl_)), ptr_(other.ptr_) {
 				other.ptr_ = nullptr;
 			}
 			shared_ptr_holder& operator=(shared_ptr_holder&& other)noexcept {
@@ -240,8 +228,8 @@ namespace polymorphic {
 				return *this;
 			}
 			template<typename T>
-			shared_ptr_holder(T t,value_tag) :impl_(std::make_shared<const holder_impl<T>>(std::move(t))),ptr_(get_ptr_impl()) {}
-			shared_ptr_holder(const value_holder& v) :impl_(v.clone_ptr()) ,ptr_(get_ptr_impl()){}
+			shared_ptr_holder(T t, value_tag) :impl_(std::make_shared<const holder_impl<T>>(std::move(t))), ptr_(get_ptr_impl()) {}
+			shared_ptr_holder(const value_holder& v) :impl_(v.clone_ptr()), ptr_(get_ptr_impl()) {}
 			auto clone_ptr()const { return impl_ ? impl_->clone() : nullptr; }
 		};
 
