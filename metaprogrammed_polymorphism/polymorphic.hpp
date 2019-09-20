@@ -62,8 +62,6 @@ namespace polymorphic {
 
 		template <size_t I, typename Signature> struct vtable_caller;
 
-
-
 		template <size_t I, typename Method, typename Return, typename... Parameters>
 		struct vtable_caller<I, Return(Method, Parameters...)> {
 			decltype(auto) operator()(const vtable_fun* vt, const std::uint8_t* permutation, Method, void* t,
@@ -90,7 +88,6 @@ namespace polymorphic {
 		template <std::size_t I, typename Signature> struct index_getter {
 			constexpr int operator()(type<Signature>) const { return I; }
 		};
-
 
 		struct value_tag {};
 
@@ -164,7 +161,6 @@ namespace polymorphic {
 			T t_;
 		};
 
-
 		class value_holder {
 			std::unique_ptr<holder_interface> impl_;
 			void* ptr_ = nullptr;
@@ -232,8 +228,6 @@ namespace polymorphic {
 			shared_ptr_holder(const value_holder& v) :impl_(v.clone_ptr()), ptr_(get_ptr_impl()) {}
 			auto clone_ptr()const { return impl_ ? impl_->clone() : nullptr; }
 		};
-
-
 	} // namespace detail
 
 	template <typename... Signatures>
