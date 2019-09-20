@@ -13,6 +13,7 @@ class: center, middle
 # What is polymorphism?
 --
 ##  Providing a single interface to entities of different types
+--
 ###  - Bjarne Stroustrup
 ---
 # OOP did not invent polymorphism
@@ -148,7 +149,7 @@ circle c;
 smart_draw(c, viewport);
 ```
 --
-# &#x2705
+#  &#x2705;
 ---
 # What about box
 
@@ -158,7 +159,7 @@ smart_draw(b,viewport);
 ```
 
 --
-# &#x274c 
+# &#x274c; 
 
 ---
 # What to do
@@ -166,7 +167,7 @@ smart_draw(b,viewport);
 Write a facade?
 --
 
-# &#x274c 
+# &#x274c;
 ---
 # Use overloaded customization points
 --
@@ -217,6 +218,193 @@ void draw(const box& b){
 }
 
 ```
+---
+
+# Smart Draw
+```cpp
+template<typename Shape>
+void smart_draw(const Shape& s, const box& viewport){
+  auto bounding_box = `get_bounding_box(s)`;
+  if(viewport.overlaps(bounding_box)) `draw(x)`;
+}
+
+
+```
+
+---
+# Spin
+```cpp
+// Move and rotate
+template<typename Shape>
+void spin(const Shape& s){
+  `translate(s,4,2);`
+  `rotate(s,45);`
+}
+
+
+```
+---
+# Use
+```cpp
+cirlce c{...};
+spin(c);
+smart_draw(c,viewport);
+```
+--
+```cpp
+box b{...};
+spin(b);
+smart_draw(b,viewport);
+```
+---
+# Value semantics
+
+```cpp
+circle c1;
+```
+--
+```
+circle c2 = c1;
+```
+--
+```
+spin(c1);
+```
+--
+```
+smart_draw(c1);
+smart_draw(c2);
+
+```
+---
+# Low Coupling
+--
+```cpp
+template<typename Shape>
+void smart_draw(const Shape& s, const box& viewport){
+  auto bounding_box = `get_bounding_box(s)`;
+  if(viewport.overlaps(bounding_box)) `draw(x)`;
+}
+```
+--
+## What operations does this depend on?
+--
+* Get Bounding Box
+* Draw
+
+---
+# PPP
+--
+## Purchasing  Power Parity?
+--
+# &#x274c; 
+
+---
+# Parent's Polymorphic Principles (PPP)
+--
+
+* The requirement of a polymorphic type, by definition, comes from its use
+--
+
+* There are no polymorphic types, only a polymorphic use of similar types
+
+--
+
+From "Inheritance is the base class of evil" by Sean Parent
+
+---
+# PPP
+```cpp
+template<typename Shape>
+void smart_draw(const Shape& s, const box& viewport){
+  auto bounding_box = `get_bounding_box(s)`;
+  if(viewport.overlaps(bounding_box)) `draw(x)`;
+}
+```
+--
+
+#  &#x2705;
+---
+# What has static polymorphism ever done for us?
+--
+*  &#x2705; Low boilerplate
+--
+*  &#x2705; Easy adaptation of existing class
+--
+*  &#x2705; Value semantics
+--
+*  &#x2705; Low coupling
+--
+*  &#x2705; PPP
+--
+*  &#x2705; Performance
+--
+ - Obviously, performance. I mean, performance goes without saying.
+
+---
+# Why don't we just stop now?
+
+--
+
+* &#x274c; Requires everything to be a template and thus live in headers
+```cpp
+template<typename Shape>
+void smart_draw(const Shape& s, const box& viewport){
+```
+--
+
+* &#x274c; Can't store in runtime containers
+```cpp
+vector<???> shapes;
+shapes.push_back(circle{});
+shapes.push_back(box{});
+```
+
+---
+# Dynamic polymorphism - virtual
+--
+## Interface
+--
+```cpp
+struct shape{
+```
+--
+```cpp
+  virtual void draw() const = 0;
+```
+--
+```cpp
+  virtual box get_bounding_box() const = 0;
+```
+--
+```cpp
+  virtual void translate(double x, double y) = 0;
+```
+--
+```cpp
+  virtual void rotate(double degrees) = 0;
+};
+```
+---
+# Don't forget the virtual destructor!
+```cpp
+struct shape{
+  virtual void draw() const = 0;
+  virtual box get_bounding_box() const = 0;
+  virtual void translate(double x, double y) = 0;
+  virtual void rotate(double degrees) = 0;
+  `virtual ~shape(){}`
+};
+```
+---
+
+
+
+
+
+
+
+
 
 
 
