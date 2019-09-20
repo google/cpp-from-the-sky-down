@@ -969,11 +969,19 @@ smart_draw(s2,viewport);
 * &#x2705; Able to be stored in runtime containers
 
 ---
-# How much code?
+# Show me the code?
 --
 ## https://github.com/google/cpp-from-the-sky-down/blob/master/metaprogrammed_polymorphism/polymorphic.hpp
 --
-## 253
+## 248 lines, including comments and whitespace
+
+
+---
+
+# References
+* Sean Parent - Inheritance is the base class of evil - https://www.youtube.com/watch?v=bIhUE5uUFOA
+* Louis Dionne - CppCon 2017 - Runtime polymorphism: Back to basics - https://www.youtube.com/watch?v=gVGtNFg4ay0
+
 
 
 
