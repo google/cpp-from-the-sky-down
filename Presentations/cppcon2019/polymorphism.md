@@ -726,6 +726,266 @@ void poly_extend(`translate`,box& b, double x, double y){
 }
 
 ```
+---
+# Spin implementation
+--
+## Virtual
+--
+```cpp
+void spin(transforming_interface& s){
+  s.`translate`(4,2);
+  s.`rotate`(45);
+}
+```
+--
+## Polymorphic
+--
+```cpp
+void spin(polymorphic::ref<void(translate,double x,double y),
+                          void(rotate,double degrees)> s){
+  s.`call<translate>`(4,2);
+  s.`call<rotate>`(45);
+}
+```
+---
+# Using spin
+```cpp
+class box{
+public:
+  point upper_left()const;
+  void set_upper_left(point);
+  point lower_right()const;
+  void set_lower_right(point);
+  bool overlaps(const box&)const;
+};
+
+class circle{
+public: 
+  void draw() const;
+  box get_bounding_box() const;
+  void translate(double x, double y);
+  void rotate(double degrees);
+};
+```
+--
+## Same definitions we used with overload example
+--
+```cpp
+circle c;
+box b;
+spin(c);
+spin(b);
+```
+--
+
+## &#x2705; There are no polymorphic types, only a polymorphic use of similar types
+---
+# What about const?
+--
+```cpp
+template<typename Shape>
+void smart_draw(`const` Shape& s, const box& viewport){
+  auto bounding_box = get_bounding_box(s);
+  if(viewport.overlaps(bounding_box)) draw(x);
+}
+```
+---
+# Smart Draw
+--
+## Virtual
+--
+```cpp
+struct drawing_interface{
+  virtual void draw() `const` = 0;
+  virtual box get_bounding_box() `const` = 0;
+};
+
+void smart_draw(`const` drawing_interface& s, const box& viewport){
+  auto bounding_box = s.get_bounding_box();
+  if(viewport.overlaps(bounding_box)) s.draw();
+}
+```
+--
+## Polymorphic
+```cpp
+struct draw{};
+struct get_bounding_box{};
+
+void smart_draw(polymorphic::ref<void(draw)`const`,
+                                 box(get_bounding_box)`const`>, const box& viewport){
+  auto bounding_box = s.call<get_bounding_box>();
+  if(viewport.overlaps(bounding_box)) s.call<draw>();
+}
+```
+---
+# Const polymorphic::ref
+```cpp
+polymorphic::ref<void(draw)`const`, 
+                 box(get_bounding_box)`const`>
+```
+--
+## As long as all the function types in a polymorphic::ref are `const` qualified, it will bind to a const object.
+---
+# Using smart_draw
+```cpp
+circle c;
+smart_draw(std::as_const(c),viewport);
+
+```
+---
+# Polymorphic object
+--
+```cpp
+using shape = polymorphic::`object`<
+                 void(draw)`const`, 
+                 box(get_bounding_box)`const`,
+                 void(translate,double x,double y),
+                 void(rotate,double degrees)>;
+```
+--
+```cpp
+shape s1{circle{}};
+shape s2 = s1;
+spin(s1);
+smart_draw(s1,viewport);
+smart_draw(s2,viewport);
+```
+---
+# Store in collection
+```cpp
+std::vector<shape> shapes;
+shapes.push_back(circle{});
+shapes.push_back(box{});
+
+for(auto& s:shapes) smart_draw(s,viewport);
+
+```
+# Value types
+```cpp
+using shape = polymorphic::object<
+                 void(draw)`const`, 
+                 box(get_bounding_box)`const`,
+                 void(translate,double x,double y),
+                 void(rotate,double degrees)>;
+std::vector<shape> shapes;
+circle c1;
+circle c2 = c1;
+spin(c1);
+spin(c2);
+
+shapes.push_back(c1);
+shapes.push_back(c2);
+shapes.push_back(box{});
+
+for(auto& s:shapes) smart_draw(s,viewport);
+
+```
+---
+# Low coupling
+---
+## With virtual, we had to carefully group our member functions to avoid coupling
+--
+```cpp
+struct drawing_interface{
+  virtual void draw() const = 0;
+  virtual box get_bounding_box() const = 0;
+  virtual ~drawing_interface(){}
+};
+struct transforming_interface{
+  virtual void translate(double x, double y) = 0;
+  virtual void rotate(double degrees) = 0;
+  virtual ~transforming_interface(){}
+};
+struct shape: drawing_interface, transforming_interface{};
+```
+--
+## Polymorphic
+* Does not matter how you group the function types.
+---
+# Polymorphic "upcasting"
+--
+```cpp
+void smart_draw(polymorphic::ref<void(`draw`)const,
+                                 box(get_bounding_box)const>, const box& viewport);
+  auto bounding_box = s.call<get_bounding_box>();
+  if(viewport.overlaps(bounding_box)) s.call<draw>();
+}
+```
+--
+```cpp
+using shape1 = polymorphic::object<
+*                void(draw)const, 
+                 box(get_bounding_box)const,
+                 void(translate,double x,double y),
+                 void(rotate,double degrees)>;
+shape1 s1{circle{}};
+smart_draw(s1,viewport);
+```
+--
+```cpp
+using shape2 = polymorphic::object<
+                 box(get_bounding_box)const,
+                 void(translate,double x,double y),
+*                void(draw)const, 
+                 void(rotate,double degrees)>;
+shape2 s2{circle{}};
+smart_draw(s2,viewport);
+
+---
+# Benchmarks
+* Windows Laptop - i7-8550U
+* Fill a vector with different types of polymorphic objects, and then time how long it takes to iterate and call a method on each item.
+
+|Type | Median Time (ns) |
+|---|--- |
+|Non-Virtual | 121 |
+|Virtual | 532 |
+|std::function | 539 |
+|Polymorphic Ref | 515 |
+|Polymorphic Object | 483 |
+
+---
+# Size
+* `sizeof(ref)` typically `3*sizeof(void*)`
+* `sizeof(object)` typically `4*sizeof(void*)`
+---
+
+# Final Assessment 
+--
+*  &#x2705; Low boilerplate
+--
+*  &#x2705; Easy adaptation of existing class
+--
+*  &#x2705; Value semantics
+--
+*  &#x2705; Low coupling
+--
+*  &#x2705; PPP
+--
+*  &#x2705; &#x274c; Performance - Inherent overhead in runtime dispatch
+--
+* &#x2705; Able to be used in non-template functions.
+--
+* &#x2705; Able to be stored in runtime containers
+
+---
+# How much code?
+--
+## https://github.com/google/cpp-from-the-sky-down/blob/master/metaprogrammed_polymorphism/polymorphic.hpp
+--
+## 253
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
