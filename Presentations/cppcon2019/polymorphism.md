@@ -1,6 +1,6 @@
 class: center, middle
 
-# Polymorphism != Virtual
+# Polymorphism != Virtual:Flexible Runtime Polymorpism Without Inheritance
 ## John R. Bandela, MD
 
 ---
@@ -837,11 +837,13 @@ smart_draw(std::as_const(c),viewport);
 --
 ```cpp
 using shape = polymorphic::`object`<
-                 void(draw)`const`, 
-                 box(get_bounding_box)`const`,
+                 void(draw)const, 
+                 box(get_bounding_box)const,
                  void(translate,double x,double y),
                  void(rotate,double degrees)>;
 ```
+---
+# Value Semantics
 --
 ```cpp
 shape s1{circle{}};
@@ -855,26 +857,6 @@ smart_draw(s2,viewport);
 ```cpp
 std::vector<shape> shapes;
 shapes.push_back(circle{});
-shapes.push_back(box{});
-
-for(auto& s:shapes) smart_draw(s,viewport);
-
-```
-# Value types
-```cpp
-using shape = polymorphic::object<
-                 void(draw)`const`, 
-                 box(get_bounding_box)`const`,
-                 void(translate,double x,double y),
-                 void(rotate,double degrees)>;
-std::vector<shape> shapes;
-circle c1;
-circle c2 = c1;
-spin(c1);
-spin(c2);
-
-shapes.push_back(c1);
-shapes.push_back(c2);
 shapes.push_back(box{});
 
 for(auto& s:shapes) smart_draw(s,viewport);
@@ -902,11 +884,11 @@ struct shape: drawing_interface, transforming_interface{};
 ## Polymorphic
 * Does not matter how you group the function types.
 ---
-# Polymorphic "upcasting"
+# Polymorphic conversions
 --
 ```cpp
 void smart_draw(polymorphic::ref<void(`draw`)const,
-                                 box(get_bounding_box)const>, const box& viewport);
+                                 box(get_bounding_box)const> s, const box& viewport);
   auto bounding_box = s.call<get_bounding_box>();
   if(viewport.overlaps(bounding_box)) s.call<draw>();
 }
@@ -922,6 +904,7 @@ shape1 s1{circle{}};
 smart_draw(s1,viewport);
 ```
 --
+
 ```cpp
 using shape2 = polymorphic::object<
                  box(get_bounding_box)const,
@@ -930,6 +913,7 @@ using shape2 = polymorphic::object<
                  void(rotate,double degrees)>;
 shape2 s2{circle{}};
 smart_draw(s2,viewport);
+```
 
 ---
 # Benchmarks
@@ -973,10 +957,378 @@ smart_draw(s2,viewport);
 --
 ## https://github.com/google/cpp-from-the-sky-down/blob/master/metaprogrammed_polymorphism/polymorphic.hpp
 --
-## 248 lines, including comments and whitespace
+## 247 lines, including comments and whitespace
+---
+# VTable
+
+* Use an array of function pointer
+* Each position of the array, corresponds to a function type that is passed in
+* There is a unique array for each type, and each sequence of polymorphic operations
+* Each entry in the vtable, contains a trampoline function to jump to the appropriate overload
+
+---
+# Trampoline Function
+--
+```cpp
+	template <typename T, typename Signature> struct trampoline;
+```
+--
+```cpp
+template <typename T, typename Return, typename Method, typename... Parameters>
+struct trampoline<T, Return(Method, Parameters...)> {
+	static auto jump(void* t, Parameters... parameters) -> Return {
+		return poly_extend(Method{}, *static_cast<T*>(t), parameters...);
+	}
+};
+```
+---
+# Trampoline Function
+```cpp
+	template <typename T, typename `Signature`> struct trampoline;
+
+template <typename T, typename Return, typename Method, typename... Parameters>
+struct trampoline<T, `Return(Method, Parameters...)`> {
+	static auto jump(void* t, Parameters... parameters) -> Return {
+		return poly_extend(Method{}, *static_cast<T*>(t), parameters...);
+	}
+};
+```
+---
+# Trampoline Function
+```cpp
+	template <typename T, typename Signature> struct trampoline;
+
+template <typename T, typename Return, typename Method, typename... Parameters>
+struct trampoline<T, Return(Method, Parameters...)> {
+*	static auto jump(void* t, Parameters... parameters) -> Return {
+		return poly_extend(Method{}, *static_cast<T*>(t), parameters...);
+	}
+};
+```
+---
+# Trampoline Function
+```cpp
+	template <typename T, typename Signature> struct trampoline;
+
+template <typename T, typename Return, typename Method, typename... Parameters>
+struct trampoline<T, Return(Method, Parameters...)> {
+	static auto jump(void* t, Parameters... parameters) -> Return {
+		return `poly_extend`(`Method{}`, *static_cast<T*>(t), parameters...);
+	}
+};
+```
+---
+# Trampoline Function
+```cpp
+	template <typename T, typename Signature> struct trampoline;
+
+template <typename T, typename Return, typename Method, typename... Parameters>
+struct trampoline<`T`, Return(Method, Parameters...)> {
+	static auto jump(`void*` t, Parameters... parameters) -> Return {
+		return poly_extend(Method{}, `*static_cast<T*>(t)`, parameters...);
+	}
+};
+```
+---
+# Build vtable from trampoline functions
+--
+```cpp
+template <typename T, typename... Signatures>
+inline const vtable_fun vtable[] = {	reinterpret_cast<vtable_fun>(trampoline<T, Signatures>::jump)... };
+```
+---
+# Build vtable from trampoline functions
+```cpp
+template <typename T, typename... Signatures>
+inline const vtable_fun vtable[] = {	reinterpret_cast<vtable_fun>(`trampoline<T, Signatures>::jump`)... };
+```
+---
+# Build vtable from trampoline functions
+```cpp
+template <typename T, typename... Signatures>
+inline const `vtable_fun` vtable[] = {	`reinterpret_cast<vtable_fun>`(trampoline<T, Signatures>::jump)... };
+```
+---
+# Calling the vtable
+--
+```cpp
+
+template <size_t I, typename Signature> struct vtable_caller;
+
+template <size_t I, typename Method, typename Return, typename... Parameters>
+struct vtable_caller<I, Return(Method, Parameters...)> {
+	decltype(auto) operator()(const vtable_fun* vt, const std::uint8_t* permutation, Method, void* t,
+		Parameters... parameters) const {
+		return reinterpret_cast<ptr<Return(void*, Parameters...)>>(vt[permutation[I]])(
+			t, parameters...);
+	}
+};
+
+```
+---
+# Calling the vtable
+```cpp
+
+template <size_t I, typename Signature> struct vtable_caller;
+
+template <size_t I, typename Method, typename Return, typename... Parameters>
+struct vtable_caller<I, Return(Method, Parameters...)> {
+	decltype(auto) `operator()`(const vtable_fun* vt, const std::uint8_t* permutation, `Method`, void* t,
+		`Parameters... parameters`) const {
+		return reinterpret_cast<ptr<Return(void*, Parameters...)>>(vt[permutation[I]])(
+			t, parameters...);
+	}
+};
+
+```
+---
+# Calling the vtable
+```cpp
+
+template <size_t I, typename Signature> struct vtable_caller;
+
+template <size_t I, typename Method, typename Return, typename... Parameters>
+struct vtable_caller<I, `Return(Method, Parameters...)`> {
+	decltype(auto) operator()(const vtable_fun* vt, const std::uint8_t* permutation, Method, void* t,
+		Parameters... parameters) const {
+		return reinterpret_cast<`ptr<Return(void*, Parameters...)>`>(vt[permutation[I]])(
+			t, parameters...);
+	}
+};
+
+```
+---
+# Calling the vtable
+```cpp
+
+template <size_t I, typename Signature> struct vtable_caller;
+
+template <`size_t I`, typename Method, typename Return, typename... Parameters>
+struct vtable_caller<`I`, Return(Method, Parameters...)> {
+	decltype(auto) operator()(const vtable_fun* vt, const std::uint8_t* permutation, Method, void* t,
+		Parameters... parameters) const {
+		return reinterpret_cast<ptr<Return(void*, Parameters...)>>(vt[permutation[`I`]])(
+			t, parameters...);
+	}
+};
+
+```
+---
+# Calling the vtable
+```cpp
+
+template <size_t I, typename Signature> struct vtable_caller;
+
+template <size_t I, typename Method, typename Return, typename... Parameters>
+struct vtable_caller<I, Return(Method, Parameters...)> {
+	decltype(auto) operator()(const vtable_fun* vt, const std::uint8_t* `permutation`, Method, void* t,
+		Parameters... parameters) const {
+		return reinterpret_cast<ptr<Return(void*, Parameters...)>>(vt[`permutation[I]`])(
+			t, parameters...);
+	}
+};
+
+```
+---
+# Permutations
+```cpp
+void smart_draw(polymorphic::ref<void(`draw`)const,
+                                 box(get_bounding_box)const> s, const box& viewport);
+  auto bounding_box = s.call<get_bounding_box>();
+  if(viewport.overlaps(bounding_box)) s.call<draw>();
+}
+
+```
+--
+```cpp
+using shape2 = polymorphic::object<
+                 box(get_bounding_box)const,
+                 void(translate,double x,double y),
+*                void(draw)const, 
+                 void(rotate,double degrees)>;
+```
+
+--
+```cpp
+s.permutation_ = {`2`,0}
+```
+---
+# Ref Impl
+```cpp
+template <typename Holder, typename Sequence, typename... Signatures>
+	class ref_impl;
+
+template <typename Holder, size_t... I, typename... Signatures>
+	class ref_impl<Holder, std::index_sequence<I...>, Signatures...> { 
+```
+---
+# Ref Impl
+```cpp
+template <typename Holder, typename Sequence, typename... Signatures>
+	class ref_impl;
+
+template <typename Holder, size_t... I, typename... Signatures>
+	class ref_impl<Holder, std::index_sequence<I...>, Signatures...> { 
+*			const detail::vtable_fun* vptr_;
+
+```
+---
+# Ref Impl
+```cpp
+template <typename Holder, typename Sequence, typename... Signatures>
+	class ref_impl;
+
+template <typename Holder, size_t... I, typename... Signatures>
+	class ref_impl<Holder, std::index_sequence<I...>, Signatures...> { 
+			const detail::vtable_fun* vptr_;
+*			std::array<std::uint8_t, sizeof...(Signatures)> permutation_;
+			Holder t_;
+
+```
+---
+# Ref Impl
+```cpp
+template <typename Holder, typename Sequence, typename... Signatures>
+	class ref_impl;
+
+template <typename Holder, size_t... I, typename... Signatures>
+	class ref_impl<Holder, std::index_sequence<I...>, Signatures...> { 
+			const detail::vtable_fun* vptr_;
+			std::array<std::uint8_t, sizeof...(Signatures)> permutation_;
+*			Holder t_;
+
+```
+---
+# Ref Impl
+```cpp
+template <typename Holder, typename Sequence, typename... Signatures>
+	class ref_impl;
+
+template <typename Holder, size_t... I, typename... Signatures>
+	class ref_impl<Holder, std::index_sequence<I...>, Signatures...> { 
+			const detail::vtable_fun* vptr_;
+			std::array<std::uint8_t, sizeof...(Signatures)> permutation_;
+			Holder t_;
+*			static constexpr overload<vtable_caller<I, Signatures>...> call_vtable{};
+
+
+```
+---
+# Ref Impl
+```cpp
+template <typename Holder, typename Sequence, typename... Signatures>
+	class ref_impl;
+
+template <typename Holder, size_t... I, typename... Signatures>
+	class ref_impl<Holder, std::index_sequence<I...>, Signatures...> { 
+			const detail::vtable_fun* vptr_;
+			std::array<std::uint8_t, sizeof...(Signatures)> permutation_;
+			Holder t_;
+			static constexpr overload<vtable_caller<I, Signatures>...> call_vtable{};
+
+			template <typename `Method`, typename... Parameters>
+*			decltype(auto) call(Parameters&&... parameters) const {
+				return call_vtable(vptr_, permutation_.data(), Method{}, t_.get_ptr(),
+					std::forward<Parameters>(parameters)...);
+			}
+
+
+```
+---
+# Ref Impl
+```cpp
+template <typename Holder, typename Sequence, typename... Signatures>
+	class ref_impl;
+
+template <typename Holder, size_t... I, typename... Signatures>
+	class ref_impl<Holder, std::index_sequence<I...>, Signatures...> { 
+			const detail::vtable_fun* vptr_;
+			std::array<std::uint8_t, sizeof...(Signatures)> permutation_;
+			Holder t_;
+			static constexpr overload<vtable_caller<I, Signatures>...> call_vtable{};
+
+			template <typename Method, typename... Parameters>
+			decltype(auto) call(Parameters&&... parameters) const {
+*				return call_vtable(vptr_, permutation_.data(), `Method`{}, t_.get_ptr(),
+					`std::forward<Parameters>(parameters)...`);
+			}
+
+
+```
+
+---
+# Ref alias
+```cpp
+
+	template <typename... Signatures>
+	using ref = detail::ref_impl<
+		detail::`ptr_holder`<std::conditional_t<
+		`std::conjunction_v`<detail::`is_const_signature<Signatures>...`>,
+		`const void`, void>>,
+		std::make_index_sequence<sizeof...(Signatures)>, Signatures...>;
+```
+---
+# Ref alias
+```cpp
+
+	template <typename... Signatures>
+	using ref = detail::ref_impl<
+		detail::`ptr_holder`<std::conditional_t<
+		`std::conjunction_v`<detail::`is_const_signature<Signatures>...`>,
+		const void, `void`>>,
+		std::make_index_sequence<sizeof...(Signatures)>, Signatures...>;
+```
+---
+# Object alias
+```cpp
+	template <typename... Signatures>
+	using object = detail::ref_impl<
+		`std::conditional_t`<
+		std::conjunction_v<`detail::is_const_signature<Signatures>...`>,
+		`detail::shared_ptr_holder`, detail::value_holder >,
+		std::make_index_sequence<sizeof...(Signatures)>, Signatures...>;
+
+
+```
 
 
 ---
+# Object alias
+```cpp
+	template <typename... Signatures>
+	using object = detail::ref_impl<
+		`std::conditional_t`<
+		std::conjunction_v<`detail::is_const_signature<Signatures>...`>,
+		detail::shared_ptr_holder, `detail::value_holder` >,
+		std::make_index_sequence<sizeof...(Signatures)>, Signatures...>;
+
+```
+
+---
+# Polymorphic 
+--
+*  &#x2705; Low boilerplate
+--
+*  &#x2705; Easy adaptation of existing class
+--
+*  &#x2705; Value semantics
+--
+*  &#x2705; Low coupling
+--
+*  &#x2705; PPP
+--
+*  &#x2705; &#x274c; Performance - Inherent overhead in runtime dispatch
+--
+* &#x2705; Able to be used in non-template functions.
+--
+* &#x2705; Able to be stored in runtime containers
+
+
+
+
+
+
+
 
 # References
 * Sean Parent - Inheritance is the base class of evil - https://www.youtube.com/watch?v=bIhUE5uUFOA
