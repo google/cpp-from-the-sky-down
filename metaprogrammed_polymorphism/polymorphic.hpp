@@ -101,8 +101,7 @@ namespace polymorphic {
 		struct is_ref_impl<ref_impl<Holder, Sequence, Signatures...>> :std::true_type {};
 
 		template <typename Holder, size_t... I, typename... Signatures>
-		class ref_impl<Holder, std::index_sequence<I...>, Signatures...>
-			: private vtable_caller<I, Signatures>... {
+		class ref_impl<Holder, std::index_sequence<I...>, Signatures...> { 
 
 			template <typename OtherHolder, typename OtherSequence, typename... OtherSignatures>
 			friend class ref_impl;
