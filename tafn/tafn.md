@@ -573,4 +573,4 @@ Given the above, I believe that sticking with actions tags as types makes the mo
 
 ## Acknowledgements
 
-Thanks to Arthur O'Dwyer, James Dennet, Richard Smith, Waldemar Horvath, Kyle Konrad, Nicol Bolas for providing valuable feedback.
+Thanks to Arthur O'Dwyer, James Dennet, Richard Smith, Waldemar Horwat, Kyle Konrad, Nicol Bolas for providing valuable feedback.
