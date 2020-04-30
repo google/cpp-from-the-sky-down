@@ -15,24 +15,33 @@
 #include "..//simple_type_name/simple_type_name.h"
 #include "..//tagged_tuple/tagged_tuple.h"
 
-template <typename... Tables> struct define_database : Tables... {};
+namespace skydown {
 
-template <typename Tag, typename... Columns> struct define_table : Columns... {
+template <typename... Tables>
+struct define_database : Tables... {};
+
+template <typename Tag, typename... Columns>
+struct define_table : Columns... {
   using table_tag_type = Tag;
 };
 
-template <typename Tag, typename Type> struct define_column {
+template <typename Tag, typename Type>
+struct define_column {
   using tag_type = Tag;
   using value_type = Type;
 };
 
 namespace detail {
-template <typename T> struct t2t { using type = T; };
+template <typename T>
+struct t2t {
+  using type = T;
+};
 
 template <typename Tag, typename... Columns>
 auto get_table_type(const define_table<Tag, Columns...> &t)
     -> t2t<define_table<Tag, Columns...>>;
-template <typename Tag> auto get_table_type(...) -> t2t<void>;
+template <typename Tag>
+auto get_table_type(...) -> t2t<void>;
 
 template <typename Tag, typename Type>
 auto get_column_type(const define_column<Tag, Type> &t)
@@ -42,7 +51,8 @@ template <typename Tag, typename TableTag, typename... Columns>
 auto get_column_type_with_table(const define_table<TableTag, Columns...> &t)
     -> decltype(get_column_type<Tag>(t));
 
-template <typename Tag> auto get_column_type(...) -> t2t<void>;
+template <typename Tag>
+auto get_column_type(...) -> t2t<void>;
 
 template <typename Database, typename Tag>
 using table_type = typename decltype(get_table_type<Tag>(Database{}))::type;
@@ -84,17 +94,19 @@ constexpr bool has_unique_column_helper(define_database<DbTag, Tables...> db) {
 template <typename Database, typename Tag>
 constexpr bool has_unique_column = has_unique_column_helper<Tag>(Database{});
 
-} // namespace detail
+}  // namespace detail
 
 template <typename Alias, typename ColumnName, typename TableName>
 struct column_alias_ref {};
 
-template <typename E> struct expression {
+template <typename E>
+struct expression {
   E e_;
 
   using underlying_type = E;
 
-  template <typename Alias> constexpr auto as() const {
+  template <typename Alias>
+  constexpr auto as() const {
     return e_.template as<Alias>();
   }
 };
@@ -102,7 +114,8 @@ template <typename E> struct expression {
 template <typename E>
 using expression_underlying_type = typename E::underlying_type;
 
-template <typename ColumnName, typename TableName = void> struct column_ref {
+template <typename ColumnName, typename TableName = void>
+struct column_ref {
   template <typename Alias>
   constexpr column_alias_ref<Alias, ColumnName, TableName> as() const {
     return {};
@@ -110,13 +123,18 @@ template <typename ColumnName, typename TableName = void> struct column_ref {
   expression<column_ref> operator()() const { return {*this}; }
 };
 
-template <typename N1, typename N2> struct column_ref_definer {
+template <typename N1, typename N2>
+struct column_ref_definer {
   using type = column_ref<N2, N1>;
 };
 
-template <typename Name, typename T> struct parameter_ref {};
+template <typename Name, typename T>
+struct parameter_ref {};
 
-template <typename Name, typename T> struct parameter_value { T t_; };
+template <typename Name, typename T>
+struct parameter_value {
+  T t_;
+};
 
 enum class binary_ops {
   equal_ = 0,
@@ -135,7 +153,8 @@ enum class binary_ops {
   size_
 };
 
-template <typename T1, typename T2, binary_ops op> auto get_binary_op_type() {
+template <typename T1, typename T2, binary_ops op>
+auto get_binary_op_type() {
   if constexpr (op < binary_ops::add_) {
     return true;
   } else {
@@ -146,7 +165,8 @@ template <typename T1, typename T2, binary_ops op> auto get_binary_op_type() {
 template <typename T1, typename T2, binary_ops op>
 using binary_op_type = decltype(get_binary_op_type<T1, T2, op>());
 
-template <typename Enum> constexpr auto to_underlying(Enum e) {
+template <typename Enum>
+constexpr auto to_underlying(Enum e) {
   return static_cast<std::underlying_type_t<Enum>>(e);
 }
 
@@ -156,16 +176,19 @@ inline constexpr std::array<std::string_view, to_underlying(binary_ops::size_)>
         " or ", " + ",  " - ", " * ",  " / ", " % ",
     };
 
-template <binary_ops bo, typename E1, typename E2> struct binary_expression {
+template <binary_ops bo, typename E1, typename E2>
+struct binary_expression {
   E1 e1_;
   E2 e2_;
 };
 
-template <typename E> auto make_expression(E e) -> decltype(expression<E>{e}) {
+template <typename E>
+auto make_expression(E e) -> decltype(expression<E>{e}) {
   return expression<E>{std::move(e)};
 }
 
-template <typename E> auto make_expression(expression<E> e) -> expression<E> {
+template <typename E>
+auto make_expression(expression<E> e) -> expression<E> {
   return e;
 }
 
@@ -174,13 +197,18 @@ auto make_binary_expression(E1 e1, E2 e2) {
   return binary_expression<bo, E1, E2>{std::move(e1), std::move(e2)};
 }
 
-template <typename T> struct val_holder { T e_; };
+template <typename T>
+struct val_holder {
+  T e_;
+};
 
-template <typename T> auto make_holder(T t) {
+template <typename T>
+auto make_holder(T t) {
   return val_holder<T>{std::move(t)};
 }
 
-template <> struct expression<val_holder<std::string>> {
+template <>
+struct expression<val_holder<std::string>> {
   using E = val_holder<std::string>;
   expression(std::string e) : e_(make_holder(std::move(e))) {}
   expression(std::string_view e) : e_(make_holder(std::string(e))) {}
@@ -191,7 +219,8 @@ template <> struct expression<val_holder<std::string>> {
   using underlying_type = E;
 };
 
-template <> struct expression<val_holder<double>> {
+template <>
+struct expression<val_holder<double>> {
   using E = val_holder<double>;
   expression(double e) : e_(make_holder(std::move(e))) {}
   expression(E e) : e_{std::move(e)} {}
@@ -199,7 +228,8 @@ template <> struct expression<val_holder<double>> {
 
   using underlying_type = E;
 };
-template <> struct expression<val_holder<std::int64_t>> {
+template <>
+struct expression<val_holder<std::int64_t>> {
   using E = val_holder<std::int64_t>;
   expression(std::int64_t e) : e_(make_holder(std::move(e))) {}
   expression(E e) : e_{std::move(e)} {}
@@ -219,10 +249,12 @@ std::true_type convertible_to_expression(std::string_view);
 std::true_type convertible_to_expression(double);
 std::true_type convertible_to_expression(std::int64_t);
 std::true_type convertible_to_expression(int);
-template <typename E> std::true_type convertible_to_expression(expression<E>);
+template <typename E>
+std::true_type convertible_to_expression(expression<E>);
 std::false_type convertible_to_expression(...);
 
-template <typename E> std::true_type is_expression(expression<E> *);
+template <typename E>
+std::true_type is_expression(expression<E> *);
 std::false_type is_expression(...);
 
 template <typename... E>
@@ -313,8 +345,8 @@ auto operator%(E1 e1, E2 e2) {
 }
 
 template <binary_ops bo, typename E1, typename E2>
-std::string
-expression_to_string(const expression<binary_expression<bo, E1, E2>> &e) {
+std::string expression_to_string(
+    const expression<binary_expression<bo, E1, E2>> &e) {
   return expression_to_string(e.e_.e1_) +
          std::string(binary_ops_to_string[to_underlying(bo)]) +
          expression_to_string(e.e_.e2_);
@@ -327,9 +359,10 @@ struct parameters_ref;
 struct arguments;
 struct type;
 
-} // namespace expression_parts
+}  // namespace expression_parts
 
-template <typename Tag, typename TT> auto add_tag_if_not_present(TT t) {
+template <typename Tag, typename TT>
+auto add_tag_if_not_present(TT t) {
   if constexpr (tagged_tuple::has_tag<Tag, TT>) {
     return std::move(t);
   } else {
@@ -338,30 +371,35 @@ template <typename Tag, typename TT> auto add_tag_if_not_present(TT t) {
   }
 }
 
-template <typename T> struct type_ref { using type = T; };
+template <typename T>
+struct type_ref {
+  using type = T;
+};
 
-template <typename TypeRef> using remove_type_ref_t = typename TypeRef::type;
+template <typename TypeRef>
+using remove_type_ref_t = typename TypeRef::type;
 
 template <typename T>
 std::ostream &operator<<(std::ostream &os, const type_ref<T> &) {
-  os << "type_ref<" << simple_type_name::short_name<T> << ">";
+  os << "type_ref<" << skydown::short_type_name<T> << ">";
   return os;
 }
 
 template <typename Column, typename Table>
 std::ostream &operator<<(std::ostream &os, const column_ref<Column, Table> &) {
-  os << simple_type_name::short_name<column_ref<Column, Table>>;
+  os << skydown::short_type_name<column_ref<Column, Table>>;
   return os;
 }
 
 template <typename Name, typename T>
 std::ostream &operator<<(std::ostream &os, const parameter_ref<Name, T> &) {
-  os << "parameter_ref<" << simple_type_name::short_name<Name> << ","
-     << simple_type_name::short_name<T> << ">";
+  os << "parameter_ref<" << skydown::short_type_name<Name> << ","
+     << skydown::short_type_name<T> << ">";
   return os;
 }
 
-template <typename T> using ptr = T *;
+template <typename T>
+using ptr = T *;
 
 template <typename Database, typename Name, typename T, typename TT>
 auto process(const parameter_ref<Name, T> &e, TT raw_t) {
@@ -440,7 +478,10 @@ std::string expression_to_string(const expression<val_holder<T>> &c) {
   return "?";
 }
 
-template <typename T> val_holder<T> make_val(T t) { return {std::move(t)}; }
+template <typename T>
+val_holder<T> make_val(T t) {
+  return {std::move(t)};
+}
 
 inline auto val(std::string s) {
   return make_expression(make_val(std::move(s)));
@@ -452,23 +493,23 @@ inline auto val(std::int64_t i) { return make_expression(make_val(i)); }
 inline auto val(double d) { return make_expression(make_val(d)); }
 
 template <typename Column, typename Table>
-std::string
-expression_to_string(const expression<column_ref<Column, Table>> &) {
+std::string expression_to_string(
+    const expression<column_ref<Column, Table>> &) {
   if constexpr (std::is_same_v<Table, void>) {
-    return std::string(simple_type_name::short_name<Column>);
+    return std::string(skydown::short_type_name<Column>);
   } else {
-    return std::string(simple_type_name::short_name<Table>) + "." +
-           std::string(simple_type_name::short_name<Column>);
+    return std::string(skydown::short_type_name<Table>) + "." +
+           std::string(skydown::short_type_name<Column>);
   }
 }
 
 template <typename Database, typename Column, typename Table>
 auto process_expression(const expression<column_ref<Column, Table>> &) {
   if constexpr (std::is_same_v<Table, void>) {
-    return std::string(simple_type_name::short_name<Column>);
+    return std::string(skydown::short_type_name<Column>);
   } else {
-    return std::string(simple_type_name::short_name<Table>) + "." +
-           std::string(simple_type_name::short_name<Column>);
+    return std::string(skydown::short_type_name<Table>) + "." +
+           std::string(skydown::short_type_name<Column>);
   }
 }
 
@@ -481,7 +522,8 @@ std::string expression_to_string(expression<std::int64_t> i) {
   return std::to_string(i.e_);
 }
 
-template <typename Name, typename T> struct parameter_object {
+template <typename Name, typename T>
+struct parameter_object {
   expression<parameter_ref<Name, T>> operator()() const { return {}; }
 
   parameter_value<Name, T> operator()(T t) const { return {std::move(t)}; }
@@ -489,13 +531,16 @@ template <typename Name, typename T> struct parameter_object {
 
 template <typename Name, typename T>
 inline constexpr auto parameter = parameter_object<Name, T>{};
-template <typename N1> struct column_ref_definer<N1, void> {
+template <typename N1>
+struct column_ref_definer<N1, void> {
   using type = column_ref<N1, void>;
 };
 
-template <typename... ColumnRefs> struct column_ref_holder {};
+template <typename... ColumnRefs>
+struct column_ref_holder {};
 
-template <typename ColumnRef, typename NewName> struct as_ref {};
+template <typename ColumnRef, typename NewName>
+struct as_ref {};
 
 template <typename N1, typename N2 = void>
 inline constexpr auto column =
@@ -515,27 +560,36 @@ struct join_table_info {
   Table1 t1;
   Table2 t2;
 
-  template <typename E> auto on(E e) {
+  template <typename E>
+  auto on(E e) {
     return join_t<Table1, Table2, E, type>{std::move(t1), std::move(t2),
                                            std::move(e)};
   }
 };
 
-
-
-template <typename Table> struct table_ref { using type = Table;
-  template <typename Table2> auto join(Table2 table2) const {
-    return join_table_info<table_ref<Table>,Table2,join_type::inner>{*this,std::move(table2)};
+template <typename Table>
+struct table_ref {
+  using type = Table;
+  template <typename Table2>
+  auto join(Table2 table2) const {
+    return join_table_info<table_ref<Table>, Table2, join_type::inner>{
+        *this, std::move(table2)};
   }
- };
+};
 
-template <typename Table> inline constexpr auto table = table_ref<Table>{};
+template <typename Table>
+inline constexpr auto table = table_ref<Table>{};
 
-template <typename Expression> struct from_type { Expression e; };
+template <typename Expression>
+struct from_type {
+  Expression e;
+};
 
-template <typename... ColumnRefs> struct select_type {};
+template <typename... ColumnRefs>
+struct select_type {};
 
-template <typename T1, typename T2> struct catter_imp;
+template <typename T1, typename T2>
+struct catter_imp;
 
 template <typename... M1, typename... M2>
 struct catter_imp<tagged_tuple::ttuple<M1...>, tagged_tuple::ttuple<M2...>> {
@@ -555,7 +609,6 @@ class referenced_tables;
 class aliases;
 class selected_columns;
 class potential_selected_columns;
-
 
 template <typename Database, typename Table, typename TT>
 auto process(const table_ref<Table>, TT tt) {
@@ -632,7 +685,8 @@ auto process(const join_t<Table1, Table2, Expression, type> &j, TT tt) {
   return process<Database>(j.e_, std::move(tt2));
 }
 
-template <typename Database, typename TT> auto process_helper(TT tt) {
+template <typename Database, typename TT>
+auto process_helper(TT tt) {
   return std::move(tt);
 }
 
@@ -693,14 +747,16 @@ struct query_builder {
                             tagged_tuple::make_member<from_tag>(std::move(j))));
   }
 
-  template <typename... Columns> auto select(Columns...) && {
+  template <typename... Columns>
+  auto select(Columns...) && {
     return make_query_builder<Database>(
         std::move(t_) |
         tagged_tuple::make_ttuple(
             tagged_tuple::make_member<select_tag>(select_type<Columns...>{})));
   }
 
-  template <typename Expression> auto where(Expression e) && {
+  template <typename Expression>
+  auto where(Expression e) && {
     return make_query_builder<Database>(
         std::move(t_) |
         tagged_tuple::make_ttuple(tagged_tuple::make_member<where_tag>(e)));
@@ -730,7 +786,8 @@ struct query_builder {
   }
 };
 
-template <typename Builder> struct query_t {
+template <typename Builder>
+struct query_t {
   query_t(Builder b) : t_(std::move(b).build()) {}
 
   decltype(std::declval<Builder &&>().build()) t_;
@@ -739,17 +796,17 @@ template <typename Builder> struct query_t {
 template <typename Column, typename Table>
 std::string to_column_string(expression<column_ref<Column, Table>>) {
   if constexpr (std::is_same_v<Table, void>) {
-    return std::string(simple_type_name::short_name<Column>);
+    return std::string(skydown::short_type_name<Column>);
   } else {
-    return std::string(simple_type_name::short_name<Table>) + "." +
-           std::string(simple_type_name::short_name<Column>);
+    return std::string(skydown::short_type_name<Table>) + "." +
+           std::string(skydown::short_type_name<Column>);
   }
 }
 
 template <typename Alias, typename Column, typename Table>
 std::string to_column_string(column_alias_ref<Alias, Column, Table>) {
   return to_column_string(expression<column_ref<Column, Table>>{}) + " AS " +
-         std::string(simple_type_name::short_name<Alias>);
+         std::string(skydown::short_type_name<Alias>);
 }
 
 inline std::string join_vector(const std::vector<std::string> &v) {
@@ -757,17 +814,17 @@ inline std::string join_vector(const std::vector<std::string> &v) {
   for (auto &s : v) {
     ret += s + ", ";
   }
-  if (ret.back() == ' ')
-    ret.resize(ret.size() - 2);
+  if (ret.back() == ' ') ret.resize(ret.size() - 2);
 
   return ret;
 }
-template <typename Table> std::string to_statement(const table_ref<Table> &) {
-  return std::string(simple_type_name::short_name<Table>);
+template <typename Table>
+std::string to_statement(const table_ref<Table> &) {
+  return std::string(skydown::short_type_name<Table>);
 }
 template <typename Table1, typename Table2, typename Expression>
-std::string
-to_statement(const join_t<Table1, Table2, Expression, join_type::inner> &j) {
+std::string to_statement(
+    const join_t<Table1, Table2, Expression, join_type::inner> &j) {
   return std::string("\nFROM ") + to_statement(j.t1) + " JOIN " +
          to_statement(j.t2) + " ON " + expression_to_string(j.e_);
 }
@@ -791,9 +848,10 @@ std::string to_statement(select_type<Columns...>) {
   return std::string("SELECT ") + join_vector(v);
 }
 
-template <typename... Tables> std::string to_statement(from_type<Tables...>) {
+template <typename... Tables>
+std::string to_statement(from_type<Tables...>) {
   std::vector<std::string> v{
-      std::string(simple_type_name::short_name<Tables>)...};
+      std::string(skydown::short_type_name<Tables>)...};
   return std::string("\nFROM ") + join_vector(v);
 }
 
@@ -813,16 +871,23 @@ std::string to_statement(const query_builder<Database, TTuple> &t) {
 
 template <typename Member>
 using member_value_type_t = typename Member::value_type;
-template <typename Member> using member_tag_type_t = typename Member::tag_type;
+template <typename Member>
+using member_tag_type_t = typename Member::tag_type;
 
-template <typename T> struct result_type { using type = std::optional<T>; };
+template <typename T>
+struct result_type {
+  using type = std::optional<T>;
+};
 
-template <> struct result_type<std::string> {
+template <>
+struct result_type<std::string> {
   using type = std::optional<std::string_view>;
 };
-template <typename T> using result_type_t = typename result_type<T>::type;
+template <typename T>
+using result_type_t = typename result_type<T>::type;
 
-template <typename SelectedColumns> struct row_type_helper;
+template <typename SelectedColumns>
+struct row_type_helper;
 
 template <typename... Columns>
 struct row_type_helper<tagged_tuple::ttuple<Columns...>> {
@@ -836,8 +901,8 @@ using row_type_t = typename row_type_helper<
     tagged_tuple::element_type_t<selected_columns, Query>>::type;
 
 template <typename Column, typename Table, typename Value>
-const Value &
-field_helper(const tagged_tuple::member<column_ref<Column, Table>, Value> &m) {
+const Value &field_helper(
+    const tagged_tuple::member<column_ref<Column, Table>, Value> &m) {
   return m.value;
 }
 
@@ -920,8 +985,8 @@ auto read_row(const TTuple &query, sqlite3_stmt *stmt) {
   return row;
 }
 
-template <typename Query> struct row_range {
-
+template <typename Query>
+struct row_range {
   using row_type = row_type_t<Query>;
   row_type row;
   Query query;
@@ -1003,8 +1068,10 @@ auto execute_query(const Query &query, sqlite3 *sqldb) {
   return row_range(query.t_, stmt);
 }
 
-template <typename DB, typename... Args> auto select(Args &&... args) {
+template <typename DB, typename... Args>
+auto select(Args &&... args) {
   return query_builder<DB>().select(std::forward<Args>(args)...);
 }
 
-// TODO: Reference additional headers your program requires here.
+}  // namespace skydown
+

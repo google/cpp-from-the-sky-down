@@ -24,7 +24,7 @@ namespace tagged_tuple {
 template <typename Tag, typename T> struct member {
   T value;
   static constexpr std::string_view tag_name =
-      simple_type_name::short_name<Tag>;
+      skydown::short_type_name<Tag>;
   using tag_type = Tag;
   using value_type = T;
 };
@@ -182,7 +182,7 @@ std::ostream &operator<<(std::ostream &os, const ttuple<Members...> &t) {
       os << v.tag_name << " : " << v.value << "\n";
     } else {
       os << v.tag_name << " : "
-         << simple_type_name::short_name<decltype(v.value)> << "\n";
+         << skydown::short_type_name<decltype(v.value)> << "\n";
     }
   };
   for_each(t, output);

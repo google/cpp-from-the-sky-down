@@ -17,7 +17,7 @@
 #include <cstdint>
 #include <string_view>
 
-namespace simple_type_name {
+namespace skydown {
 
 namespace detail {
 
@@ -91,23 +91,23 @@ constexpr std::string_view short_name() {
 }  // namespace detail
 
 template <typename T>
-inline constexpr std::string_view short_name = detail::short_name<T>();
+inline constexpr std::string_view short_type_name = detail::short_name<T>();
 
 template <typename T>
-inline constexpr std::string_view long_name = detail::long_name<T>();
+inline constexpr std::string_view long_type_name = detail::long_name<T>();
 
 namespace simple_type_name_testing {
-static_assert(long_name<long double> == detail::long_double_string);
-static_assert(short_name<long double> == detail::long_double_string);
+static_assert(long_type_name<long double> == detail::long_double_string);
+static_assert(short_type_name<long double> == detail::long_double_string);
 
 struct MyClass;
 
 template <typename T>
 class TemplateTester;
 
-static_assert(simple_type_name::short_name<int> == "int");
-static_assert(simple_type_name::short_name<TemplateTester<int>> ==
+static_assert(skydown::short_type_name<int> == "int");
+static_assert(skydown::short_type_name<TemplateTester<int>> ==
               "TemplateTester<int>");
-static_assert(simple_type_name::short_name<MyClass> == "MyClass");
+static_assert(skydown::short_type_name<MyClass> == "MyClass");
 }  // namespace simple_type_name_testing
-}  // namespace simple_type_name
+}  // namespace skydown

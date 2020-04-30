@@ -20,10 +20,10 @@ INSERT INTO orders(id,  item , customerid , price ) VALUES (1,"Laptop",1,122.22)
 
   int rc;
   rc = sqlite3_exec(sqldb, creation, 0, 0, nullptr);
-  check_sqlite_return(rc);
+  skydown::check_sqlite_return(rc);
 
   rc = sqlite3_exec(sqldb, insertion, 0, 0, nullptr);
-  check_sqlite_return(rc);
+  skydown::check_sqlite_return(rc);
 
   return sqldb;
 }
@@ -54,7 +54,17 @@ inline std::string get_name_from_user(){
   return "John";
 }
 
+
 int main() {
+    using skydown::define_database;
+    using skydown::define_table;
+    using skydown::define_column;
+    using skydown::table;
+    using skydown::column;
+    using skydown::field;
+    using skydown::query_t;
+    using skydown::execute_query;
+    using skydown::select;
   using db = define_database<
       define_table<class customers,  //
                    define_column<class id, std::int64_t>,
@@ -81,6 +91,6 @@ int main() {
   }
   std::cout << "\nThe sql statement is:\n" << to_statement(query.t_) << "\n";
   std::cout << "\nThe parameters to the query are:\n";
-  std::cout << tagged_tuple::get<expression_parts::arguments>(query.t_);
+  std::cout << tagged_tuple::get<skydown::expression_parts::arguments>(query.t_);
   return 0;
 }
