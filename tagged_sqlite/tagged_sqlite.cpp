@@ -91,6 +91,6 @@ int main() {
   }
   std::cout << "\nThe sql statement is:\n" << to_statement(query.t_) << "\n";
   std::cout << "\nThe parameters to the query are:\n";
-  std::cout << tagged_tuple::get<skydown::expression_parts::arguments>(query.t_);
+  std::cout << skydown::get<skydown::expression_parts::arguments>(query.t_);
   return 0;
 }

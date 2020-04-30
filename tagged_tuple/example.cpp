@@ -13,15 +13,22 @@
 // limitations under the License.
 
 #include <iostream>
+
 #include "../simple_type_name/simple_type_name.h"
 #include "tagged_tuple.h"
 
 int main() {
-	using namespace tagged_tuple;
-  auto t =
-      make_ttuple(make_member<class A>(1), make_member<class B>(2.0));
+  using skydown::tagged_tuple;
+  using skydown::tag;
+  using skydown::make_member;
+  using skydown::has_tag;
+  using skydown::remove_tag;
 
-  for_each(t, [](auto& t) { std::cout << t.value; });
+  auto t = tagged_tuple{tag<class A> = 1, tag<class B> = 2.0};
+
+  std::cout << "B = " << tag<B>(t) << "\n";
+
+  for_each(t, [](auto& t) { std::cout << t.value << "\n"; });
 
   auto nt = append(t, make_member<class C>(3));
   for_each(nt, [](auto& t) {
@@ -33,19 +40,19 @@ int main() {
   static_assert(has_tag<C, decltype(nt)>);
 
   {
-    auto t = make_ttuple(make_member<class A>(5),
-                               make_member<class V>(std::string("value")));
-    auto t2 = make_ttuple(make_member<class Z>(std::string("zvalue")),
-                                make_member<class A>(6));
+    auto t = tagged_tuple{tag<class A> = 5,
+                          make_member<class V>(std::string("value"))};
+    auto t2 = tagged_tuple{make_member<class Z>(std::string("zvalue")),
+                           make_member<class A>(6)};
     auto t3 = merge(t, t2);
 
     std::cout << "\n" << t3 << "\n";
-    auto t4 = make_ttuple(make_member<class X>(t));
-    auto t5 = make_ttuple(make_member<class X>(t2));
+    auto t4 = tagged_tuple{make_member<class X>(t)};
+    auto t5 = tagged_tuple{make_member<class X>(t2)};
     auto t6 = merge(t4, t5);
     std::cout << "\n" << t6 << "\n";
-    std::cout << merge(t6, make_ttuple(make_member<X>(
-                               make_ttuple(remove_tag<Z>()))))
+    std::cout << merge(t6, tagged_tuple{make_member<X>(
+                               tagged_tuple{remove_tag<Z>})})
               << "\n";
   }
 }

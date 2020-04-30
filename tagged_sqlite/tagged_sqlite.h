@@ -363,11 +363,11 @@ struct type;
 
 template <typename Tag, typename TT>
 auto add_tag_if_not_present(TT t) {
-  if constexpr (tagged_tuple::has_tag<Tag, TT>) {
+  if constexpr (has_tag<Tag, TT>) {
     return std::move(t);
   } else {
-    return tagged_tuple::append(
-        t, tagged_tuple::make_member<Tag>(tagged_tuple::make_ttuple()));
+    return append(
+        t, make_member<Tag>(tagged_tuple{}));
   }
 }
 
@@ -406,17 +406,17 @@ auto process(const parameter_ref<Name, T> &e, TT raw_t) {
   auto tt = add_tag_if_not_present<expression_parts::arguments>(
       add_tag_if_not_present<expression_parts::parameters_ref>(
           std::move(raw_t)));
-  auto pr = tagged_tuple::get<expression_parts::parameters_ref>(tt);
-  using C = std::integral_constant<int, tagged_tuple::tuple_size(pr)>;
-  auto pr_appended = tagged_tuple::append(
-      pr, tagged_tuple::make_member<C>(parameter_ref<Name, T>()));
+  auto pr = tag<expression_parts::parameters_ref>(tt);
+  using C = std::integral_constant<int, tuple_size(pr)>;
+  auto pr_appended = append(
+      pr, make_member<C>(parameter_ref<Name, T>()));
 
-  auto tt_with_parameters_ref = tagged_tuple::merge(
+  auto tt_with_parameters_ref = merge(
       std::move(tt),
-      tagged_tuple::make_ttuple(
-          tagged_tuple::make_member<expression_parts::parameters_ref>(
+      tagged_tuple{
+          make_member<expression_parts::parameters_ref>(
               std::move(pr_appended)),
-          tagged_tuple::make_member<expression_parts::type>(type_ref<T>())));
+          make_member<expression_parts::type>(type_ref<T>())});
   return tt_with_parameters_ref;
 }
 
@@ -425,34 +425,33 @@ auto process(const val_holder<T> &e, TT raw_t) {
   auto tt = add_tag_if_not_present<expression_parts::arguments>(
       add_tag_if_not_present<expression_parts::parameters_ref>(
           std::move(raw_t)));
-  auto pr = tagged_tuple::get<expression_parts::parameters_ref>(tt);
-  using SizePR = std::integral_constant<int, tagged_tuple::tuple_size(pr)>;
-  auto arg = tagged_tuple::get<expression_parts::arguments>(tt);
+  auto pr = get<expression_parts::parameters_ref>(tt);
+  using SizePR = std::integral_constant<int, tuple_size(pr)>;
+  auto arg = get<expression_parts::arguments>(tt);
   using SizeArguments =
-      std::integral_constant<int, tagged_tuple::tuple_size(arg)>;
-  auto pr_appended = tagged_tuple::append(
-      pr, tagged_tuple::make_member<SizePR>(type_ref<SizeArguments>()));
+      std::integral_constant<int, tuple_size(arg)>;
+  auto pr_appended = append(
+      pr, make_member<SizePR>(type_ref<SizeArguments>()));
 
-  auto tt_with_parameters_ref = tagged_tuple::merge(
-      tt, tagged_tuple::make_ttuple(
-              tagged_tuple::make_member<expression_parts::parameters_ref>(
-                  std::move(pr_appended))));
+  auto tt_with_parameters_ref = merge(
+      tt, tagged_tuple{
+              make_member<expression_parts::parameters_ref>(
+                  std::move(pr_appended))});
 
   auto arg_appended =
-      tagged_tuple::append(arg, tagged_tuple::make_member<SizeArguments>(e.e_));
+      append(arg, make_member<SizeArguments>(e.e_));
 
-  auto tt_with_arg_type = tagged_tuple::make_ttuple(
-      tagged_tuple::make_member<expression_parts::arguments>(
+  auto tt_with_arg_type = tagged_tuple{
+      make_member<expression_parts::arguments>(
           std::move(arg_appended)),
-      tagged_tuple::make_member<expression_parts::type>(type_ref<T>()));
+      make_member<expression_parts::type>(type_ref<T>())};
   auto ret =
-      tagged_tuple::merge(tt_with_parameters_ref, std::move(tt_with_arg_type));
+      merge(tt_with_parameters_ref, std::move(tt_with_arg_type));
   return ret;
 }
 
 template <typename Database, binary_ops bo, typename E1, typename E2, class TT>
 auto process(const binary_expression<bo, E1, E2> &e, TT tt) {
-  using tagged_tuple::get;
   auto tt_left = process<Database>(e.e1_, std::move(tt));
   using left_type =
       std::decay_t<decltype(get<expression_parts::type>(tt_left))>;
@@ -461,11 +460,11 @@ auto process(const binary_expression<bo, E1, E2> &e, TT tt) {
       std::decay_t<decltype(get<expression_parts::type>(tt_right))>;
   left_type *p = static_cast<right_type *>(nullptr);
   static_assert(std::is_same_v<left_type, right_type>);
-  return tagged_tuple::merge(
+  return merge(
       tt_right,
-      tagged_tuple::make_ttuple(
-          tagged_tuple::make_member<expression_parts::type>(
-              type_ref<binary_op_type<left_type, right_type, bo>>())));
+      tagged_tuple{
+          make_member<expression_parts::type>(
+              type_ref<binary_op_type<left_type, right_type, bo>>())});
 }
 
 template <typename Database, typename E, typename TT>
@@ -592,8 +591,8 @@ template <typename T1, typename T2>
 struct catter_imp;
 
 template <typename... M1, typename... M2>
-struct catter_imp<tagged_tuple::ttuple<M1...>, tagged_tuple::ttuple<M2...>> {
-  using type = tagged_tuple::ttuple<M1..., M2...>;
+struct catter_imp<tagged_tuple<M1...>, tagged_tuple<M2...>> {
+  using type = tagged_tuple<M1..., M2...>;
 };
 
 template <typename T1, typename T2>
@@ -614,14 +613,14 @@ template <typename Database, typename Table, typename TT>
 auto process(const table_ref<Table>, TT tt) {
   static_assert(detail::has_table<Database, Table>, "Missing table");
   auto tt2 = add_tag_if_not_present<referenced_tables>(std::move(tt));
-  if constexpr (!tagged_tuple::has_tag<
+  if constexpr (!has_tag<
                     Table, std::decay_t<decltype(
-                               tagged_tuple::get<referenced_tables>(tt2))>>) {
-    return tagged_tuple::merge(
+                               get<referenced_tables>(tt2))>>) {
+    return merge(
         std::move(tt2),
-        tagged_tuple::make_ttuple(tagged_tuple::make_member<referenced_tables>(
-            tagged_tuple::make_ttuple(
-                tagged_tuple::make_member<Table>(empty_type{})))));
+        tagged_tuple{make_member<referenced_tables>(
+            tagged_tuple{
+                make_member<Table>(empty_type{})})});
   } else
     return std::move(tt);
 }
@@ -633,19 +632,19 @@ auto process(const column_alias_ref<Alias, Column, Table> &, TT tt) {
   static_assert(detail::has_column<Database, Table, Column>, "Missing column");
   auto tt2 = add_tag_if_not_present<aliases>(std::move(tt));
   static_assert(
-      !tagged_tuple::has_tag<
-          Alias, std::decay_t<decltype(tagged_tuple::get<aliases>(tt2))>>,
+      !has_tag<
+          Alias, std::decay_t<decltype(get<aliases>(tt2))>>,
       "Aliases already defined");
-  return tagged_tuple::merge(
+  return merge(
       std::move(tt2),
-      tagged_tuple::make_ttuple(
-          tagged_tuple::make_member<aliases>(tagged_tuple::make_ttuple(
-              tagged_tuple::make_member<Alias>(column_ref<Table, Column>()))),
-          tagged_tuple::make_ttuple(
-              tagged_tuple::make_member<potential_selected_columns>(
-                  tagged_tuple::make_ttuple(tagged_tuple::make_member<Column>(
+      tagged_tuple{
+          make_member<aliases>(tagged_tuple{
+              make_member<Alias>(column_ref<Table, Column>())}),
+          tagged_tuple{
+              make_member<potential_selected_columns>(
+                  tagged_tuple{make_member<Column>(
                       type_ref<detail::table_column_type<Database, Table,
-                                                         Column>>()))))));
+                                                         Column>>())})}});
 }
 
 template <typename Database, typename Table, typename Column, typename TT>
@@ -661,20 +660,20 @@ auto process(const column_ref<Column, Table> &, TT tt) {
   }
   auto tt2 = add_tag_if_not_present<potential_selected_columns>(std::move(tt));
   static_assert(
-      !tagged_tuple::has_tag<
+      !has_tag<
           Table, std::decay_t<decltype(
-                     tagged_tuple::get<potential_selected_columns>(tt2))>>,
+                     get<potential_selected_columns>(tt2))>>,
       "Column already selected");
-  return tagged_tuple::merge(
+  return merge(
       std::move(tt2),
-      tagged_tuple::make_ttuple(
-          tagged_tuple::make_member<potential_selected_columns>(
-              tagged_tuple::make_ttuple(
-                  tagged_tuple::make_member<column_ref<Column, Table>>(
+      tagged_tuple{
+          make_member<potential_selected_columns>(
+              tagged_tuple{
+                  make_member<column_ref<Column, Table>>(
                       type_ref<detail::table_column_type<Database, Table,
-                                                         Column>>()))),
-          tagged_tuple::make_member<expression_parts::type>(
-              type_ref<detail::table_column_type<Database, Table, Column>>())));
+                                                         Column>>())}),
+          make_member<expression_parts::type>(
+              type_ref<detail::table_column_type<Database, Table, Column>>())});
 }
 
 template <typename Database, typename Table1, typename Table2,
@@ -713,7 +712,7 @@ auto join(table_ref<Table1> t1, table_ref<Table2> t2, Expression e) {
                 join_type::inner>{std::move(t1), std::move(t2), std::move(e)};
 }
 
-template <typename Database, typename TTuple = tagged_tuple::ttuple<>>
+template <typename Database, typename TTuple = tagged_tuple<>>
 struct query_builder {
   template <typename NewDatabase, typename NewTTuple>
   static auto make_query_builder(NewTTuple t) {
@@ -732,8 +731,8 @@ struct query_builder {
                   "All tables not found in database");
     return make_query_builder<Database>(
         std::move(t_) |
-        tagged_tuple::make_ttuple(tagged_tuple::make_member<from_tag>(
-            from_type<Table>{std::move(e)})));
+        tagged_tuple{make_member<from_tag>(
+            from_type<Table>{std::move(e)})});
   }
 
   template <typename Table1, typename Table2, typename Expression,
@@ -743,44 +742,44 @@ struct query_builder {
                    detail::has_table<Database, typename Table2::type>),
                   "All tables not found in database");
     return make_query_builder<Database>(
-        std::move(t_) | tagged_tuple::make_ttuple(
-                            tagged_tuple::make_member<from_tag>(std::move(j))));
+        std::move(t_) | tagged_tuple{
+                            make_member<from_tag>(std::move(j))});
   }
 
   template <typename... Columns>
   auto select(Columns...) && {
     return make_query_builder<Database>(
         std::move(t_) |
-        tagged_tuple::make_ttuple(
-            tagged_tuple::make_member<select_tag>(select_type<Columns...>{})));
+        tagged_tuple{
+            make_member<select_tag>(select_type<Columns...>{})});
   }
 
   template <typename Expression>
   auto where(Expression e) && {
     return make_query_builder<Database>(
         std::move(t_) |
-        tagged_tuple::make_ttuple(tagged_tuple::make_member<where_tag>(e)));
+        tagged_tuple{make_member<where_tag>(e)});
   }
 
   auto build() && {
-    if constexpr (tagged_tuple::has_tag<select_tag, TTuple>) {
-      auto tt_select_raw = process<Database>(tagged_tuple::get<select_tag>(t_),
-                                             tagged_tuple::make_ttuple());
-      auto tt_select = tagged_tuple::append(
+    if constexpr (has_tag<select_tag, TTuple>) {
+      auto tt_select_raw = process<Database>(get<select_tag>(t_),
+                                             tagged_tuple());
+      auto tt_select = append(
           tt_select_raw,
-          tagged_tuple::make_member<selected_columns>(
-              tagged_tuple::get<potential_selected_columns>(tt_select_raw)));
+          make_member<selected_columns>(
+              get<potential_selected_columns>(tt_select_raw)));
 
-      auto tt_from = process<Database>(tagged_tuple::get<from_tag>(t_),
+      auto tt_from = process<Database>(get<from_tag>(t_),
                                        std::move(tt_select));
 
-      if constexpr (tagged_tuple::has_tag<where_tag, TTuple>) {
-        auto tt_where = process<Database>(tagged_tuple::get<where_tag>(t_),
+      if constexpr (has_tag<where_tag, TTuple>) {
+        auto tt_where = process<Database>(get<where_tag>(t_),
                                           std::move(tt_from));
 
-        return tagged_tuple::merge(std::move(t_), std::move(tt_where));
+        return merge(std::move(t_), std::move(tt_where));
       } else {
-        return tagged_tuple::merge(std::move(t_), std::move(tt_select));
+        return merge(std::move(t_), std::move(tt_select));
       }
     }
   }
@@ -830,13 +829,13 @@ std::string to_statement(
 }
 
 template <typename... Members>
-std::string to_statement(tagged_tuple::ttuple<Members...> t) {
+std::string to_statement(tagged_tuple<Members...> t) {
   using T = decltype(t);
-  auto statement = to_statement(tagged_tuple::get<select_tag>(t)) +
-                   to_statement(tagged_tuple::get<from_tag>(t));
-  if constexpr (tagged_tuple::has_tag<where_tag, T>) {
+  auto statement = to_statement(get<select_tag>(t)) +
+                   to_statement(get<from_tag>(t));
+  if constexpr (has_tag<where_tag, T>) {
     statement = statement + "\nWHERE " +
-                expression_to_string(tagged_tuple::get<where_tag>(t));
+                expression_to_string(get<where_tag>(t));
   }
   return statement;
 }
@@ -857,13 +856,12 @@ std::string to_statement(from_type<Tables...>) {
 
 template <typename Database, typename TTuple>
 std::string to_statement(const query_builder<Database, TTuple> &t) {
-  using tagged_tuple::get;
   std::string ret;
-  if constexpr (tagged_tuple::has_tag<select_tag, TTuple>) {
+  if constexpr (has_tag<select_tag, TTuple>) {
     ret += to_statement(get<select_tag>(t.t_));
   }
 
-  if constexpr (tagged_tuple::has_tag<from_tag, TTuple>) {
+  if constexpr (has_tag<from_tag, TTuple>) {
     ret += to_statement(get<from_tag>(t.t_));
   }
   return ret;
@@ -890,19 +888,19 @@ template <typename SelectedColumns>
 struct row_type_helper;
 
 template <typename... Columns>
-struct row_type_helper<tagged_tuple::ttuple<Columns...>> {
-  using type = tagged_tuple::ttuple<tagged_tuple::member<
+struct row_type_helper<tagged_tuple<Columns...>> {
+  using type = tagged_tuple<member<
       member_tag_type_t<Columns>,
       result_type_t<remove_type_ref_t<member_value_type_t<Columns>>>>...>;
 };
 
 template <typename Query>
 using row_type_t = typename row_type_helper<
-    tagged_tuple::element_type_t<selected_columns, Query>>::type;
+    element_type_t<selected_columns, Query>>::type;
 
 template <typename Column, typename Table, typename Value>
 const Value &field_helper(
-    const tagged_tuple::member<column_ref<Column, Table>, Value> &m) {
+    const member<column_ref<Column, Table>, Value> &m) {
   return m.value;
 }
 
@@ -974,11 +972,11 @@ auto read_row(const TTuple &query, sqlite3_stmt *stmt) {
   using row_type = row_type_t<TTuple>;
   row_type row;
   int count = sqlite3_column_count(stmt);
-  if (count != tagged_tuple::tuple_size(row)) {
+  if (count != tuple_size(row)) {
     return row;
   }
   int index = 0;
-  tagged_tuple::for_each(row, [&](auto &m) mutable {
+  for_each(row, [&](auto &m) mutable {
     read_row_into(stmt, index, m.value);
     ++index;
   });
@@ -1040,17 +1038,17 @@ inline bool bind(sqlite3_stmt *stmt, int index, const std::string_view v) {
 
 template <typename Query>
 void bind_query(const Query &query, sqlite3_stmt *stmt) {
-  if constexpr (!tagged_tuple::has_tag<expression_parts::arguments, Query>) {
+  if constexpr (!has_tag<expression_parts::arguments, Query>) {
     return;
   } else {
-    auto &args = tagged_tuple::get<expression_parts::arguments>(query);
+    auto &args = get<expression_parts::arguments>(query);
 
     int count = sqlite3_bind_parameter_count(stmt);
-    if (count != tagged_tuple::tuple_size(args)) {
+    if (count != tuple_size(args)) {
       return;
     }
     int index = 1;
-    tagged_tuple::for_each(args, [&](auto &m) mutable {
+    for_each(args, [&](auto &m) mutable {
       bind(stmt, index, m.value);
       ++index;
     });
