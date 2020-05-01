@@ -83,6 +83,12 @@ struct tag_function_type {
   }
 };
 
+template<typename T>
+struct tuple_size_helper;
+
+template<typename... Members>
+struct tuple_size_helper<tagged_tuple<Members...>>:public std::integral_constant<int,sizeof...(Members)>{};
+
 }  // namespace skydown_tagged_tuple_internal
 
 template <typename Tag>
@@ -92,6 +98,11 @@ template <typename... Members>
 constexpr auto tuple_size(const tagged_tuple<Members...> &) {
   return sizeof...(Members);
 }
+
+
+template<typename T>
+inline constexpr auto tuple_size_v = skydown_tagged_tuple_internal::tuple_size_helper<std::decay_t<T>>::value;
+
 
 template <typename... Members, typename... OtherMembers>
 auto append(tagged_tuple<Members...> t, OtherMembers... m) {

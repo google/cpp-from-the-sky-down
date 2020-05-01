@@ -81,10 +81,10 @@ int main() {
                  column<orders, item>, column<price>)
           .from(
               table<orders>.join(table<customers>).on(column<customers, id> == column<customerid>))
-          .where(column<price> > 20.0 && column<customers, name> == get_name_from_user());
+          .where(column<price> > skydown::parameter<class Parm,double>() && column<customers, name> == get_name_from_user());
 
   auto sqldb = init_database();
-  for (auto &row : execute_query(query, sqldb)) {
+  for (auto &row : execute_query(query, sqldb, skydown::parameter<Parm,double>(20) )) {
     std::cout << field<customers, name>(row).value_or("<NULL>") << "\t"
               << field<orders, item>(row).value_or("<NULL>") << "\t"
               << field<price>(row).value_or(0.0) << "\n";
@@ -92,5 +92,6 @@ int main() {
   std::cout << "\nThe sql statement is:\n" << to_statement(query.t_) << "\n";
   std::cout << "\nThe parameters to the query are:\n";
   std::cout << skydown::get<skydown::expression_parts::arguments>(query.t_);
+  std::cout << query.t_;
   return 0;
 }
