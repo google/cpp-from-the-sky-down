@@ -1153,6 +1153,11 @@ struct string_to_type<compile_string<'s', 't', 'r', 'i', 'n', 'g'>> {
   using type = std::string_view;
 };
 
+template <>
+struct string_to_type<compile_string<'d', 'o', 'u', 'b', 'l', 'e'>> {
+  using type = double;
+};
+
 template <typename T>
 using string_to_type_t = typename string_to_type<T>::type;
 

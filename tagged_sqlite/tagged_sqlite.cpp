@@ -111,12 +111,17 @@ int main() {
 
       std::cout << t1;
       static constexpr std::string_view sql=
-          "SELECT <:id:int>, <:item:string?>  FROM orders ";
+          R"(
+SELECT  <:name:string>,  <:item:string?>, <:price:double>
+FROM orders JOIN customers ON customers.id = customerid
+
+)";
 
       using skydown::sqlite_experimental::fld;
   for (auto &row : skydown::sqlite_experimental::execute_query_string<sql>(sqldb )) {
-      class id; class item;
-    std::cout << fld<id>(row) << " ";
+      class id; class item;class name;
+    std::cout << fld<price>(row) << " ";
+    std::cout << fld<name>(row) << " ";
     std::cout << fld<item>(row).value() << "\n";
   }
   }
