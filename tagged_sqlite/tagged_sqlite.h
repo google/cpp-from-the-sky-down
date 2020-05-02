@@ -1125,7 +1125,7 @@ constexpr auto to_compile_string() {
   return to_compile_string_helper<sv>(std::make_index_sequence<svp.size()>());
 }
 
-template <auto& sv>
+template <auto &sv>
 using compile_string_sv = decltype(to_compile_string<sv>());
 
 template <bool make_optional, typename Tag, typename T>
@@ -1160,6 +1160,8 @@ using string_to_type_t = typename string_to_type<T>::type;
 
 constexpr std::string_view start_group = "<:";
 constexpr std::string_view end_group = ">";
+constexpr std::string_view p_start_group = "{:";
+constexpr std::string_view p_end_group = "}";
 
 template <const std::string_view &parm>
 constexpr auto get_type_spec_count(std::string_view start_group,
@@ -1254,6 +1256,17 @@ constexpr auto make_members() {
   return mms::make_members_ts();
 }
 
+template <const std::string_view &parm>
+constexpr auto make_parameters() {
+  constexpr auto sv = parm;
+  constexpr static auto ar =
+      parse_type_specs<parm, p_start_group, p_end_group>();
+  constexpr auto size = ar.size();
+  using sequence = std::make_index_sequence<size>;
+  using mms = make_members_struct<ar, sequence>;
+  return mms::make_members_ts();
+}
+
 // todo make constexpr
 inline std::string get_sql_string(std::string_view sv,
                                   std::string_view start_group,
@@ -1278,15 +1291,61 @@ inline std::string get_sql_string(std::string_view sv,
   return ret;
 }
 
-template <const std::string_view &parm>
-auto execute_query_string(sqlite3 *sqldb) {
+inline std::string get_sql_string_parms(std::string_view sv,
+                                  std::string_view start_group,
+                                  std::string_view end_group) {
+  std::string ret;
+  std::size_t prev_i = 0;
+  for (std::size_t i = sv.find(start_group); i != std::string_view::npos;) {
+    ret += std::string(sv.substr(prev_i, i - prev_i));
+    auto end = sv.find(end_group, i);
+
+    ret += " ";
+    auto ts_str =
+        sv.substr(i + start_group.size(), end - (i + start_group.size()) - 1);
+    auto ts = parse_type_spec(ts_str);
+    ret += "?";
+    ret += " ";
+    prev_i = end + end_group.size();
+    i = sv.find(start_group, i + 1);
+  }
+  ret += std::string(sv.substr(prev_i));
+
+  return ret;
+}
+
+
+
+template<typename PTuple, typename ATuple>
+void do_binding(
+    sqlite3_stmt* stmt, PTuple p_tuple, ATuple a_tuple) {
+  int index = 1;
+  skydown::for_each(p_tuple, [&](auto &m) mutable {
+    using m_t = std::decay_t<decltype(m)>;
+    using tag = typename m_t::tag_type;
+      m.value = std::move(get<tag>(a_tuple));
+     auto r = bind(stmt, index, m.value);
+     check_sqlite_return<bool>(r, true);
+    ++index;
+  });
+
+}
+
+template <const std::string_view &parm, typename... Args>
+auto execute_query_string(sqlite3 *sqldb, Args... args) {
   auto row = make_members<parm>();
+  tagged_tuple a_tuple{args...};
+  auto p_tuple = make_parameters<parm>();
+
   auto sv = parm;
   sqlite3_stmt *stmt;
-  auto query_string = get_sql_string(sv, "<:", ">");
+  auto query_string1 = get_sql_string(sv, "<:", ">");
+  auto query_string = get_sql_string_parms(query_string1, "{:", "}");
   auto rc = sqlite3_prepare_v2(sqldb, query_string.c_str(), query_string.size(),
                                &stmt, 0);
   check_sqlite_return(rc);
+  do_binding(stmt,p_tuple,a_tuple);
+
   return row_range<std::decay_t<decltype(row)>>(stmt);
 }
 
@@ -1319,6 +1378,12 @@ decltype(auto) fld(T &&t) {
     using tag = compile_string_sv<ar>;
     return skydown::get<tag>(std::forward<T>(t));
   }
+}
+
+template <typename Tag,  typename T>
+auto parm(T &&t) {
+  static constexpr auto type_str = short_type_name<Tag>;
+  return skydown::make_member<compile_string_sv<type_str>>(std::forward<T>(t));
 }
 
 template <const std::string_view &parm>
