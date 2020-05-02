@@ -1066,24 +1066,73 @@ auto select(Args &&... args) {
 }
 
 // Beginning of experimental option of parsing columns and parameters from the sql statement string_view.
-// <:column> <:as_name:Type> <:p:parameter:Type>
+// <:column:type> <:p:parameter:Type>
 // select <:id>, long_name as <:ls:s> from table where id = <:p:parm:i>
 #include <string_view>
 #include <utility>
 
+
+
+
 namespace sqlite_experimental {
+
+
 template <char... c>
-struct compile_string {};
+struct compile_string {
+};
 
 template <const std::string_view &sv, std::size_t... I>
 auto to_compile_string_helper(std::index_sequence<I...>) {
-  return compile_string<sv[I]...>{};
+    constexpr auto svp = sv;
+  return compile_string<svp[I]...>{};
+}
+
+template <const std::string_view &sv>
+constexpr auto to_compile_string(){
+    constexpr auto svp = sv;
+return to_compile_string_helper<sv>(std::make_index_sequence<svp.size()>());
 }
 
 template <const std::string_view &sv>
 using compile_string_sv = decltype(
-    to_compile_string_helper<sv>(std::make_index_sequence<sv.size()>()));
+    to_compile_string<sv>());
 
+
+template<bool make_optional, typename Tag, typename T >
+auto maybe_make_optional(member<Tag,T> m) {
+    if constexpr (make_optional) {
+        return member<Tag,std::optional<T>>{}
+    }
+    else {
+        return m;
+    }
+}
+
+template<const std::string_view& parm>
+auto make_member_sv() {
+
+    constexpr auto sv = parm;
+    constexpr auto colon = sv.find(":");
+    static_assert(colon != std::string_view::npos);
+    constexpr static auto name = sv.substr(0,colon);
+    using name_t = compile_string_sv<name>;
+
+
+    constexpr bool optional = sv[sv.size()-1]=='?'?true:false;
+    constexpr char last = sv.back();
+
+    if constexpr (last == 'i') {
+        return make_member<name_t>(std::int64_t{});
+        //return maybe_make_optional<optional>(make_member<name_t>(std::int64_t>{});
+    }
+    else if constexpr (sv.back() == 's') {
+
+        return maybe_make_optional<optional>(member<name_t,std::string_view>{{}});
+    }
+    else {
+        return 1;
+    }
+}
 }  // namespace sqlite_experimental
 
 }  // namespace skydown

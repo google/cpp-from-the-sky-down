@@ -93,5 +93,13 @@ int main() {
   std::cout << "\nThe parameters to the query are:\n";
   std::cout << skydown::get<skydown::expression_parts::arguments>(query.t_);
   std::cout << query.t_;
+
+  {
+      static constexpr std::string_view q1= "MyColumn:i";
+      auto m = skydown::sqlite_experimental::make_member_sv<q1>();
+      skydown::tagged_tuple t{m};
+      std::cout << t;
+
+  }
   return 0;
 }
