@@ -987,10 +987,8 @@ inline bool read_row_into(sqlite3_stmt *stmt, int index,
 template <typename RowType>
 auto read_row(sqlite3_stmt *stmt) {
   RowType row;
-  int count = sqlite3_column_count(stmt);
-  if (count != tuple_size(row)) {
-    return row;
-  }
+  std::size_t count = sqlite3_column_count(stmt);
+  check_sqlite_return(count, tuple_size(row));
   int index = 0;
   for_each(row, [&](auto &m) mutable {
     read_row_into(stmt, index, m.value);
@@ -1291,6 +1289,13 @@ auto execute_query_string(sqlite3 *sqldb) {
                                &stmt, 0);
   check_sqlite_return(rc);
   return row_range<std::decay_t<decltype(row)>>(stmt);
+}
+
+
+template<typename Tag, typename T>
+decltype(auto) fld(T&& t) {
+    static constexpr auto type_str = short_type_name<Tag>;
+  return skydown::get<compile_string_sv<type_str>>(std::forward<T>(t));
 }
 
 template <const std::string_view &parm>
