@@ -95,9 +95,11 @@ int main() {
   std::cout << query.t_;
 
   {
-      static constexpr std::string_view q1= "MyColumn:i";
-      auto m = skydown::sqlite_experimental::make_member_sv<q1>();
-      skydown::tagged_tuple t{m};
+      static constexpr std::string_view q1= "MyColumn:int?";
+      static constexpr std::string_view q2= "New:int";
+      auto m1 = skydown::sqlite_experimental::make_member_sv<q1>();
+      auto m2 = skydown::sqlite_experimental::make_member_sv<q2>();
+      skydown::tagged_tuple t{m1,m2};
       std::cout << t;
 
   }

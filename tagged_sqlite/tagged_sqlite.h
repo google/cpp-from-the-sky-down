@@ -1101,12 +1101,23 @@ using compile_string_sv = decltype(
 template<bool make_optional, typename Tag, typename T >
 auto maybe_make_optional(member<Tag,T> m) {
     if constexpr (make_optional) {
-        return member<Tag,std::optional<T>>{}
+        return member<Tag,std::optional<T>>{};
     }
     else {
         return m;
     }
 }
+
+template<typename T>
+struct string_to_type;
+
+template<>
+struct string_to_type<compile_string<'i', 'n', 't'>> {
+    using type = std::int64_t;
+};
+
+template<typename T>
+using string_to_type_t = typename string_to_type<T>::type;
 
 template<const std::string_view& parm>
 auto make_member_sv() {
@@ -1119,20 +1130,15 @@ auto make_member_sv() {
 
 
     constexpr bool optional = sv[sv.size()-1]=='?'?true:false;
-    constexpr char last = sv.back();
+    constexpr auto last_colon = sv.find_last_of(':');
+    static_assert(last_colon != std::string_view::npos);
+    constexpr auto size = sv.size();
+    constexpr auto new_size = size - (optional?2:1);
+    constexpr static std::string_view  type_str = sv.substr(last_colon + 1,new_size-last_colon);
+    using type_str_t = compile_string_sv<type_str>;
+    return maybe_make_optional<optional>(make_member<name_t>(string_to_type_t<type_str_t>{}));
+    }
 
-    if constexpr (last == 'i') {
-        return make_member<name_t>(std::int64_t{});
-        //return maybe_make_optional<optional>(make_member<name_t>(std::int64_t>{});
-    }
-    else if constexpr (sv.back() == 's') {
-
-        return maybe_make_optional<optional>(member<name_t,std::string_view>{{}});
-    }
-    else {
-        return 1;
-    }
-}
 }  // namespace sqlite_experimental
 
 }  // namespace skydown
