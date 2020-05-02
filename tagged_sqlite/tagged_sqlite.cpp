@@ -110,6 +110,20 @@ int main() {
       auto t1 = skydown::sqlite_experimental::make_members<type_specs>();
 
       std::cout << t1;
+      static constexpr std::string_view sql=
+          "SELECT <:id:int>, <:item:string?>  FROM orders ";
+      static constexpr std::string_view cid_str =
+          "id";
+      using cid = skydown::sqlite_experimental::compile_string_sv<cid_str>;
+      static constexpr std::string_view item_str =
+          "item";
+      using item = skydown::sqlite_experimental::compile_string_sv<item_str>;
+
+      using skydown::get;
+  for (auto &row : skydown::sqlite_experimental::execute_query_string<sql>(sqldb )) {
+    std::cout << get<cid>(row) << " ";
+    std::cout << get<item>(row).value() << "\n";
+  }
   }
   return 0;
 }

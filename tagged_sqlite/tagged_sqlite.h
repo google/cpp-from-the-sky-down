@@ -910,6 +910,19 @@ inline bool read_row_into(sqlite3_stmt *stmt, int index,
 }
 
 inline bool read_row_into(sqlite3_stmt *stmt, int index,
+                          std::int64_t &v) {
+  auto type = sqlite3_column_type(stmt, index);
+  if (type == SQLITE_INTEGER) {
+    v = sqlite3_column_int64(stmt, index);
+    return true;
+  } else if (type == SQLITE_NULL) {
+    return false;
+  } else {
+    return false;
+  }
+}
+
+inline bool read_row_into(sqlite3_stmt *stmt, int index,
                           std::optional<double> &v) {
   auto type = sqlite3_column_type(stmt, index);
   if (type == SQLITE_FLOAT) {
@@ -922,6 +935,20 @@ inline bool read_row_into(sqlite3_stmt *stmt, int index,
     return false;
   }
 }
+
+inline bool read_row_into(sqlite3_stmt *stmt, int index,
+                          double &v) {
+  auto type = sqlite3_column_type(stmt, index);
+  if (type == SQLITE_FLOAT) {
+    v = sqlite3_column_double(stmt, index);
+    return true;
+  } else if (type == SQLITE_NULL) {
+    return false;
+  } else {
+    return false;
+  }
+}
+
 inline bool read_row_into(sqlite3_stmt *stmt, int index,
                           std::optional<std::string_view> &v) {
   auto type = sqlite3_column_type(stmt, index);
@@ -935,6 +962,23 @@ inline bool read_row_into(sqlite3_stmt *stmt, int index,
   } else if (type == SQLITE_NULL) {
     v = std::nullopt;
     return true;
+  } else {
+    return false;
+  }
+}
+
+inline bool read_row_into(sqlite3_stmt *stmt, int index,
+                          std::string_view &v) {
+  auto type = sqlite3_column_type(stmt, index);
+  if (type == SQLITE_TEXT) {
+    const char *ptr =
+        reinterpret_cast<const char *>(sqlite3_column_text(stmt, index));
+    auto size = sqlite3_column_bytes(stmt, index);
+
+    v = std::string_view(ptr, ptr ? size : 0);
+    return true;
+  } else if (type == SQLITE_NULL) {
+    return false;
   } else {
     return false;
   }
@@ -1106,6 +1150,11 @@ struct string_to_type<compile_string<'i', 'n', 't'>> {
   using type = std::int64_t;
 };
 
+template <>
+struct string_to_type<compile_string<'s', 't', 'r', 'i', 'n', 'g'>> {
+  using type = std::string_view;
+};
+
 template <typename T>
 using string_to_type_t = typename string_to_type<T>::type;
 
@@ -1202,12 +1251,46 @@ template <const std::string_view &parm>
 constexpr auto make_members() {
   constexpr auto sv = parm;
   constexpr static auto ar = parse_type_specs<parm,start_group,end_group>();
-  constexpr static auto a0 = ar[0];
-  constexpr static auto a1 = ar[1];
   constexpr auto size = ar.size();
   using sequence = std::make_index_sequence<size>;
   using mms =make_members_struct<ar,sequence>; 
   return mms::make_members_ts();
+}
+
+
+// todo make constexpr
+inline std::string get_sql_string(std::string_view sv, std::string_view start_group,std::string_view end_group ) {
+  std::string ret;
+  std::size_t prev_i = 0;
+  for (std::size_t i = sv.find(start_group); i != std::string_view::npos;) {
+      ret+=std::string(sv.substr(prev_i, i - prev_i));
+      auto end = sv.find(end_group,i);
+
+      ret += " ";
+      auto ts_str = sv.substr(i + start_group.size(), end - (i + start_group.size()) - 1);
+      auto ts = parse_type_spec(ts_str);
+      ret+=std::string(ts.name);
+      ret += " ";
+      prev_i = end + end_group.size();
+    i = sv.find(start_group, i + 1);
+  }
+  ret += std::string(sv.substr(prev_i));
+
+  return ret;
+
+
+}
+
+template <const std::string_view& parm>
+auto execute_query_string(sqlite3 *sqldb) {
+  auto row = make_members<parm>();
+  auto sv = parm;
+  sqlite3_stmt *stmt;
+  auto query_string = get_sql_string(sv,"<:",">");
+  auto rc = sqlite3_prepare_v2(sqldb, query_string.c_str(), query_string.size(),
+                               &stmt, 0);
+  check_sqlite_return(rc);
+  return row_range<std::decay_t<decltype(row)>>(stmt);
 }
 
 template <const std::string_view &parm>
