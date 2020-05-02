@@ -1065,79 +1065,111 @@ auto select(Args &&... args) {
   return query_builder<DB>().select(std::forward<Args>(args)...);
 }
 
-// Beginning of experimental option of parsing columns and parameters from the sql statement string_view.
+// Beginning of experimental option of parsing columns and parameters from the
+// sql statement string_view.
 // <:column:type> <:p:parameter:Type>
 // select <:id>, long_name as <:ls:s> from table where id = <:p:parm:i>
 #include <string_view>
 #include <utility>
 
-
-
-
 namespace sqlite_experimental {
 
-
 template <char... c>
-struct compile_string {
-};
+struct compile_string {};
 
 template <const std::string_view &sv, std::size_t... I>
 auto to_compile_string_helper(std::index_sequence<I...>) {
-    constexpr auto svp = sv;
+  constexpr auto svp = sv;
   return compile_string<svp[I]...>{};
 }
 
 template <const std::string_view &sv>
-constexpr auto to_compile_string(){
-    constexpr auto svp = sv;
-return to_compile_string_helper<sv>(std::make_index_sequence<svp.size()>());
+constexpr auto to_compile_string() {
+  constexpr auto svp = sv;
+  return to_compile_string_helper<sv>(std::make_index_sequence<svp.size()>());
 }
 
 template <const std::string_view &sv>
-using compile_string_sv = decltype(
-    to_compile_string<sv>());
+using compile_string_sv = decltype(to_compile_string<sv>());
 
-
-template<bool make_optional, typename Tag, typename T >
-auto maybe_make_optional(member<Tag,T> m) {
-    if constexpr (make_optional) {
-        return member<Tag,std::optional<T>>{};
-    }
-    else {
-        return m;
-    }
+template <bool make_optional, typename Tag, typename T>
+auto maybe_make_optional(member<Tag, T> m) {
+  if constexpr (make_optional) {
+    return member<Tag, std::optional<T>>{};
+  } else {
+    return m;
+  }
 }
 
-template<typename T>
+template <typename T>
 struct string_to_type;
 
-template<>
+template <>
 struct string_to_type<compile_string<'i', 'n', 't'>> {
-    using type = std::int64_t;
+  using type = std::int64_t;
 };
 
-template<typename T>
+template <typename T>
 using string_to_type_t = typename string_to_type<T>::type;
 
-template<const std::string_view& parm>
+constexpr std::string_view start_group = "<:";
+constexpr std::string_view end_group = ">";
+
+template <const std::string_view &parm>
+constexpr auto get_type_spec_count(std::string_view start_group, std::string_view end_group) {
+  constexpr auto sv = parm;
+  std::size_t count = 0;
+  for (std::size_t i = sv.find(start_group); i != std::string_view::npos;) {
+    ++count;
+    i = sv.find(start_group, i + 1);
+  }
+
+  return count;
+}
+
+struct type_spec {
+  std::string_view name;
+  std::string_view type;
+  bool optional;
+};
+
+template <const std::string_view &parm>
+constexpr type_spec parse_type_spec() {
+  constexpr auto sv = parm;
+  auto colon = sv.find(":");
+  auto name = sv.substr(0, colon);
+
+  bool optional = sv[sv.size() - 1] == '?' ? true : false;
+  auto last_colon = sv.find_last_of(':');
+  auto size = sv.size();
+  auto new_size = size - (optional ? 2 : 1);
+  std::string_view type_str = sv.substr(last_colon + 1, new_size - last_colon);
+  return {name, type_str, optional};
+}
+
+template <const std::string_view &parm>
+constexpr auto parse_type_specs(std::string_view start_group, std::string_view end_group) {
+  constexpr auto sv = parm;
+  std
+  std::size_t count = 0;
+  for (std::size_t i = sv.find(start_group); i != std::string_view::npos;) {
+    ++count;
+    i = sv.find(start_group, i + 1);
+  }
+
+  return count;
+}
+
+template <const std::string_view &parm>
 auto make_member_sv() {
-
-    constexpr auto sv = parm;
-    constexpr auto colon = sv.find(":");
-    static_assert(colon != std::string_view::npos);
-    constexpr static auto name = sv.substr(0,colon);
-    using name_t = compile_string_sv<name>;
-
-
-    constexpr bool optional = sv[sv.size()-1]=='?'?true:false;
-    constexpr auto last_colon = sv.find_last_of(':');
-    static_assert(last_colon != std::string_view::npos);
-    constexpr auto size = sv.size();
-    constexpr auto new_size = size - (optional?2:1);
-    constexpr static std::string_view  type_str = sv.substr(last_colon + 1,new_size-last_colon);
-    using type_str_t = compile_string_sv<type_str>;
-    return maybe_make_optional<optional>(make_member<name_t>(string_to_type_t<type_str_t>{}));
-    }
+  constexpr auto ts = parse_type_spec<parm>();
+  constexpr static auto name = ts.name;
+  using name_t = compile_string_sv<name>;
+  constexpr static auto type = ts.type;
+  using type_str_t = compile_string_sv<type>;
+  return maybe_make_optional<ts.optional>(
+      make_member<name_t>(string_to_type_t<type_str_t>{}));
+}
 
 }  // namespace sqlite_experimental
 

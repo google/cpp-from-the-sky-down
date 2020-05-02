@@ -102,6 +102,11 @@ int main() {
       skydown::tagged_tuple t{m1,m2};
       std::cout << t;
 
+      static constexpr std::string_view type_specs= "<:MyColumn:int?> <:New:int>";
+      constexpr auto count =
+          skydown::sqlite_experimental::get_type_spec_count<type_specs>("<:",">");
+      std::cout << "count " << count << "\n";
+
   }
   return 0;
 }
