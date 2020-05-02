@@ -940,10 +940,9 @@ inline bool read_row_into(sqlite3_stmt *stmt, int index,
   }
 }
 
-template <typename TTuple>
-auto read_row(const TTuple &query, sqlite3_stmt *stmt) {
-  using row_type = row_type_t<TTuple>;
-  row_type row;
+template <typename RowType>
+auto read_row(sqlite3_stmt *stmt) {
+  RowType row;
   int count = sqlite3_column_count(stmt);
   if (count != tuple_size(row)) {
     return row;
@@ -956,15 +955,13 @@ auto read_row(const TTuple &query, sqlite3_stmt *stmt) {
   return row;
 }
 
-template <typename Query>
+template <typename RowType>
 struct row_range {
-  using row_type = row_type_t<Query>;
-  row_type row;
-  Query query;
+  RowType row;
   int last_result = 0;
   sqlite3_stmt *stmt;
 
-  row_range(Query query, sqlite3_stmt *stmt) : query(query), stmt(stmt) {}
+  row_range(sqlite3_stmt *stmt) : stmt(stmt) {}
 
   struct end_type {};
 
@@ -982,8 +979,8 @@ struct row_range {
 
     bool operator!=(end_type) { return p->last_result == SQLITE_ROW; }
 
-    row_type &operator*() {
-      p->row = read_row(p->query, p->stmt);
+    RowType &operator*() {
+      p->row = read_row<RowType>(p->stmt);
       return p->row;
     }
   };
@@ -1057,7 +1054,7 @@ auto execute_query(const Query &query, sqlite3 *sqldb, Parms... parms) {
                                &stmt, 0);
   check_sqlite_return(rc);
   bind_query(query.t_, stmt, parms...);
-  return row_range(query.t_, stmt);
+  return row_range<row_type_t<std::decay_t<decltype(query.t_)>>>(stmt);
 }
 
 template <typename DB, typename... Args>
@@ -1131,11 +1128,12 @@ struct type_spec {
   std::string_view name;
   std::string_view type;
   bool optional;
+  constexpr type_spec(std::string_view n, std::string_view t, bool o)
+      : name(n), type(t), optional(o) {}
+  constexpr type_spec() : name(), type(), optional(false) {}
 };
 
-template <const std::string_view &parm>
-constexpr type_spec parse_type_spec() {
-  constexpr auto sv = parm;
+constexpr type_spec parse_type_spec(std::string_view sv) {
   auto colon = sv.find(":");
   auto name = sv.substr(0, colon);
 
@@ -1147,22 +1145,75 @@ constexpr type_spec parse_type_spec() {
   return {name, type_str, optional};
 }
 
-template <const std::string_view &parm>
-constexpr auto parse_type_specs(std::string_view start_group, std::string_view end_group) {
+template <const std::string_view &parm,const std::string_view &start_parm,const std::string_view &end_parm>
+constexpr auto parse_type_specs() {
   constexpr auto sv = parm;
-  std
+  constexpr std::string_view start_group = start_parm; 
+  constexpr std::string_view end_group = end_parm;
+  constexpr auto size = get_type_spec_count<parm>(start_group,end_group);
+  std::array<type_spec,size> ar = {};
   std::size_t count = 0;
   for (std::size_t i = sv.find(start_group); i != std::string_view::npos;) {
+    auto end = sv.find(end_group,i);
+    auto start =
+        i + start_group.size();
+    ar[count] = parse_type_spec(sv.substr(start,end - start));
     ++count;
     i = sv.find(start_group, i + 1);
   }
 
-  return count;
+  return ar;
+}
+
+template <const auto &parm>
+constexpr auto make_member_ts() {
+  constexpr static auto ts = parm;
+  constexpr static auto name = ts.name;
+  constexpr static auto type = ts.type;
+  using name_t = compile_string_sv<name>;
+  using type_str_t = compile_string_sv<type>;
+  return maybe_make_optional<ts.optional>(
+      make_member<name_t>(string_to_type_t<type_str_t>{}));
+}
+
+template<const auto& parm, typename S>
+struct make_members_struct;
+
+template <const auto &parm, std::size_t... I>
+struct make_members_struct<parm, std::index_sequence<I...>> {
+  constexpr static auto ar = parm;
+  template<std::size_t i>
+  constexpr static auto helper(){
+      constexpr auto lar = ar;
+    constexpr static auto a = lar[i];
+    return make_member_ts<a>();
+      
+  }
+  
+  constexpr static auto make_members_ts() {
+  return tagged_tuple {helper<I>()...};
+}
+};
+
+
+
+
+template <const std::string_view &parm>
+constexpr auto make_members() {
+  constexpr auto sv = parm;
+  constexpr static auto ar = parse_type_specs<parm,start_group,end_group>();
+  constexpr static auto a0 = ar[0];
+  constexpr static auto a1 = ar[1];
+  constexpr auto size = ar.size();
+  using sequence = std::make_index_sequence<size>;
+  using mms =make_members_struct<ar,sequence>; 
+  return mms::make_members_ts();
 }
 
 template <const std::string_view &parm>
 auto make_member_sv() {
-  constexpr auto ts = parse_type_spec<parm>();
+  constexpr auto sv = parm;
+  constexpr auto ts = parse_type_spec(sv);
   constexpr static auto name = ts.name;
   using name_t = compile_string_sv<name>;
   constexpr static auto type = ts.type;

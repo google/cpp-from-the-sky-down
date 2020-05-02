@@ -107,6 +107,9 @@ int main() {
           skydown::sqlite_experimental::get_type_spec_count<type_specs>("<:",">");
       std::cout << "count " << count << "\n";
 
+      auto t1 = skydown::sqlite_experimental::make_members<type_specs>();
+
+      std::cout << t1;
   }
   return 0;
 }
