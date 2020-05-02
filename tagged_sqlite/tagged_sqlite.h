@@ -1065,4 +1065,25 @@ auto select(Args &&... args) {
   return query_builder<DB>().select(std::forward<Args>(args)...);
 }
 
+// Beginning of experimental option of parsing columns and parameters from the sql statement string_view.
+// <:column> <:as_name:Type> <:p:parameter:Type>
+// select <:id>, long_name as <:ls:s> from table where id = <:p:parm:i>
+#include <string_view>
+#include <utility>
+
+namespace sqlite_experimental {
+template <char... c>
+struct compile_string {};
+
+template <const std::string_view &sv, std::size_t... I>
+auto to_compile_string_helper(std::index_sequence<I...>) {
+  return compile_string<sv[I]...>{};
+}
+
+template <const std::string_view &sv>
+using compile_string_sv = decltype(
+    to_compile_string_helper<sv>(std::make_index_sequence<sv.size()>()));
+
+}  // namespace sqlite_experimental
+
 }  // namespace skydown
