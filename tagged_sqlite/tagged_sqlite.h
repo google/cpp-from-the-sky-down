@@ -909,8 +909,7 @@ inline bool read_row_into(sqlite3_stmt *stmt, int index,
   }
 }
 
-inline bool read_row_into(sqlite3_stmt *stmt, int index,
-                          std::int64_t &v) {
+inline bool read_row_into(sqlite3_stmt *stmt, int index, std::int64_t &v) {
   auto type = sqlite3_column_type(stmt, index);
   if (type == SQLITE_INTEGER) {
     v = sqlite3_column_int64(stmt, index);
@@ -936,8 +935,7 @@ inline bool read_row_into(sqlite3_stmt *stmt, int index,
   }
 }
 
-inline bool read_row_into(sqlite3_stmt *stmt, int index,
-                          double &v) {
+inline bool read_row_into(sqlite3_stmt *stmt, int index, double &v) {
   auto type = sqlite3_column_type(stmt, index);
   if (type == SQLITE_FLOAT) {
     v = sqlite3_column_double(stmt, index);
@@ -967,8 +965,7 @@ inline bool read_row_into(sqlite3_stmt *stmt, int index,
   }
 }
 
-inline bool read_row_into(sqlite3_stmt *stmt, int index,
-                          std::string_view &v) {
+inline bool read_row_into(sqlite3_stmt *stmt, int index, std::string_view &v) {
   auto type = sqlite3_column_type(stmt, index);
   if (type == SQLITE_TEXT) {
     const char *ptr =
@@ -1116,19 +1113,19 @@ namespace sqlite_experimental {
 template <char... c>
 struct compile_string {};
 
-template <const std::string_view &sv, std::size_t... I>
+template <auto &sv, std::size_t... I>
 auto to_compile_string_helper(std::index_sequence<I...>) {
   constexpr auto svp = sv;
   return compile_string<svp[I]...>{};
 }
 
-template <const std::string_view &sv>
+template <auto &sv>
 constexpr auto to_compile_string() {
   constexpr auto svp = sv;
   return to_compile_string_helper<sv>(std::make_index_sequence<svp.size()>());
 }
 
-template <const std::string_view &sv>
+template <auto& sv>
 using compile_string_sv = decltype(to_compile_string<sv>());
 
 template <bool make_optional, typename Tag, typename T>
@@ -1165,7 +1162,8 @@ constexpr std::string_view start_group = "<:";
 constexpr std::string_view end_group = ">";
 
 template <const std::string_view &parm>
-constexpr auto get_type_spec_count(std::string_view start_group, std::string_view end_group) {
+constexpr auto get_type_spec_count(std::string_view start_group,
+                                   std::string_view end_group) {
   constexpr auto sv = parm;
   std::size_t count = 0;
   for (std::size_t i = sv.find(start_group); i != std::string_view::npos;) {
@@ -1197,19 +1195,19 @@ constexpr type_spec parse_type_spec(std::string_view sv) {
   return {name, type_str, optional};
 }
 
-template <const std::string_view &parm,const std::string_view &start_parm,const std::string_view &end_parm>
+template <const std::string_view &parm, const std::string_view &start_parm,
+          const std::string_view &end_parm>
 constexpr auto parse_type_specs() {
   constexpr auto sv = parm;
-  constexpr std::string_view start_group = start_parm; 
+  constexpr std::string_view start_group = start_parm;
   constexpr std::string_view end_group = end_parm;
-  constexpr auto size = get_type_spec_count<parm>(start_group,end_group);
-  std::array<type_spec,size> ar = {};
+  constexpr auto size = get_type_spec_count<parm>(start_group, end_group);
+  std::array<type_spec, size> ar = {};
   std::size_t count = 0;
   for (std::size_t i = sv.find(start_group); i != std::string_view::npos;) {
-    auto end = sv.find(end_group,i);
-    auto start =
-        i + start_group.size();
-    ar[count] = parse_type_spec(sv.substr(start,end - start));
+    auto end = sv.find(end_group, i);
+    auto start = i + start_group.size();
+    ar[count] = parse_type_spec(sv.substr(start, end - start));
     ++count;
     i = sv.find(start_group, i + 1);
   }
@@ -1228,79 +1226,99 @@ constexpr auto make_member_ts() {
       make_member<name_t>(string_to_type_t<type_str_t>{}));
 }
 
-template<const auto& parm, typename S>
+template <const auto &parm, typename S>
 struct make_members_struct;
 
 template <const auto &parm, std::size_t... I>
 struct make_members_struct<parm, std::index_sequence<I...>> {
   constexpr static auto ar = parm;
-  template<std::size_t i>
-  constexpr static auto helper(){
-      constexpr auto lar = ar;
+  template <std::size_t i>
+  constexpr static auto helper() {
+    constexpr auto lar = ar;
     constexpr static auto a = lar[i];
     return make_member_ts<a>();
-      
   }
-  
+
   constexpr static auto make_members_ts() {
-  return tagged_tuple {helper<I>()...};
-}
+    return tagged_tuple{helper<I>()...};
+  }
 };
-
-
-
 
 template <const std::string_view &parm>
 constexpr auto make_members() {
   constexpr auto sv = parm;
-  constexpr static auto ar = parse_type_specs<parm,start_group,end_group>();
+  constexpr static auto ar = parse_type_specs<parm, start_group, end_group>();
   constexpr auto size = ar.size();
   using sequence = std::make_index_sequence<size>;
-  using mms =make_members_struct<ar,sequence>; 
+  using mms = make_members_struct<ar, sequence>;
   return mms::make_members_ts();
 }
 
-
 // todo make constexpr
-inline std::string get_sql_string(std::string_view sv, std::string_view start_group,std::string_view end_group ) {
+inline std::string get_sql_string(std::string_view sv,
+                                  std::string_view start_group,
+                                  std::string_view end_group) {
   std::string ret;
   std::size_t prev_i = 0;
   for (std::size_t i = sv.find(start_group); i != std::string_view::npos;) {
-      ret+=std::string(sv.substr(prev_i, i - prev_i));
-      auto end = sv.find(end_group,i);
+    ret += std::string(sv.substr(prev_i, i - prev_i));
+    auto end = sv.find(end_group, i);
 
-      ret += " ";
-      auto ts_str = sv.substr(i + start_group.size(), end - (i + start_group.size()) - 1);
-      auto ts = parse_type_spec(ts_str);
-      ret+=std::string(ts.name);
-      ret += " ";
-      prev_i = end + end_group.size();
+    ret += " ";
+    auto ts_str =
+        sv.substr(i + start_group.size(), end - (i + start_group.size()) - 1);
+    auto ts = parse_type_spec(ts_str);
+    ret += std::string(ts.name);
+    ret += " ";
+    prev_i = end + end_group.size();
     i = sv.find(start_group, i + 1);
   }
   ret += std::string(sv.substr(prev_i));
 
   return ret;
-
-
 }
 
-template <const std::string_view& parm>
+template <const std::string_view &parm>
 auto execute_query_string(sqlite3 *sqldb) {
   auto row = make_members<parm>();
   auto sv = parm;
   sqlite3_stmt *stmt;
-  auto query_string = get_sql_string(sv,"<:",">");
+  auto query_string = get_sql_string(sv, "<:", ">");
   auto rc = sqlite3_prepare_v2(sqldb, query_string.c_str(), query_string.size(),
                                &stmt, 0);
   check_sqlite_return(rc);
   return row_range<std::decay_t<decltype(row)>>(stmt);
 }
 
+template <typename Tag1, typename Tag2>
+constexpr auto concatenate_tags() {
+  constexpr auto type_str1 = short_type_name<Tag1>;
+  constexpr auto type_str2 = short_type_name<Tag2>;
+  std::array<char, type_str1.size() + type_str2.size() + 1> ar = {};
+  std::size_t i = 0;
+  for (auto c : type_str1) {
+    ar[i] = c;
+    ++i;
+  }
+  ar[i] = '.';
+  ++i;
+  for (auto c : type_str2) {
+    ar[i] = c;
+    ++i;
+  }
+  return ar;
+}
 
-template<typename Tag, typename T>
-decltype(auto) fld(T&& t) {
-    static constexpr auto type_str = short_type_name<Tag>;
-  return skydown::get<compile_string_sv<type_str>>(std::forward<T>(t));
+template <typename Tag1, typename Tag2 = void, typename T>
+decltype(auto) fld(T &&t) {
+  if constexpr (std::is_same_v<Tag2, void>) {
+    static constexpr auto type_str = short_type_name<Tag1>;
+    return skydown::get<compile_string_sv<type_str>>(std::forward<T>(t));
+  } else {
+    static constexpr auto ar = concatenate_tags<Tag1, Tag2>();
+    using tag = compile_string_sv<ar>;
+    return skydown::get<tag>(std::forward<T>(t));
+  }
 }
 
 template <const std::string_view &parm>
