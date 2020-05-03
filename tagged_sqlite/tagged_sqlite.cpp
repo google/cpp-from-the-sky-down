@@ -119,18 +119,46 @@ FROM orders JOIN customers ON customers.id = customerid where price > {:price:do
 
 )";
 
-    using skydown::sqlite_experimental::fld;
-    using skydown::sqlite_experimental::parm;
-    for (auto &row : skydown::sqlite_experimental::execute_query_string<sql>(
-             sqldb, parm<price>(200))) {
+    static constexpr std::string_view insert_sql = R"(
+INSERT INTO orders( item , customerid , price ) VALUES ({:item:string},{:customerid:int} ,{:price:double});
+)";
       class customers;
       class id;
       class item;
       class name;
-      std::cout << fld<price>(row) << " ";
+      class customerid;
+      class price;
+     using skydown::sqlite_experimental::fld;
+    using skydown::sqlite_experimental::parm;
+ 
+
+    auto insert_statement =
+        skydown::sqlite_experimental::prepare_query_string<insert_sql>(sqldb);
+    auto r = insert_statement.execute(parm<customerid>(1),parm<price>(2000),parm<item>("MacBook"));
+    assert(r);
+
+   auto prepared_statement =
+        skydown::sqlite_experimental::prepare_query_string<
+            sql>(sqldb);
+    auto rows =
+        prepared_statement.execute_rows(parm<price>(200));
+    assert(!rows.has_error());
+
+    for (auto &row : rows) {
+     std::cout << fld<price>(row) << " ";
       std::cout << fld<name>(row) << " ";
       std::cout << fld<item>(row).value() << "\n";
     }
+    auto rows2 =
+        prepared_statement.execute_rows(parm<price>(100));
+    assert(!rows2.has_error());
+    for (auto &row : rows2) {
+     std::cout << fld<price>(row) << " ";
+      std::cout << fld<name>(row) << " ";
+      std::cout << fld<item>(row).value() << "\n";
+    }
+ 
+ 
   }
   return 0;
 }

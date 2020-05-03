@@ -983,7 +983,7 @@ inline bool read_row_into(sqlite3_stmt *stmt, int index, std::string_view &v) {
 
 template <typename RowType>
 auto read_row(sqlite3_stmt *stmt) {
-  RowType row;
+  RowType row = {};
   std::size_t count = sqlite3_column_count(stmt);
   check_sqlite_return(count, tuple_size(row));
   int index = 0;
@@ -1000,7 +1000,9 @@ struct row_range {
   int last_result = 0;
   sqlite3_stmt *stmt;
 
-  row_range(sqlite3_stmt *stmt) : stmt(stmt) {}
+  row_range(sqlite3_stmt *stmt) : stmt(stmt) {
+    next();
+  }
 
   struct end_type {};
 
@@ -1024,8 +1026,11 @@ struct row_range {
     }
   };
 
+  bool has_error() const {
+    return last_result != SQLITE_ROW && last_result != SQLITE_DONE;
+  }
+
   row_iterator begin() {
-    next();
     return {this};
   }
 };
@@ -1292,8 +1297,8 @@ inline std::string get_sql_string(std::string_view sv,
 }
 
 inline std::string get_sql_string_parms(std::string_view sv,
-                                  std::string_view start_group,
-                                  std::string_view end_group) {
+                                        std::string_view start_group,
+                                        std::string_view end_group) {
   std::string ret;
   std::size_t prev_i = 0;
   for (std::size_t i = sv.find(start_group); i != std::string_view::npos;) {
@@ -1314,21 +1319,72 @@ inline std::string get_sql_string_parms(std::string_view sv,
   return ret;
 }
 
-
-
-template<typename PTuple, typename ATuple>
-void do_binding(
-    sqlite3_stmt* stmt, PTuple p_tuple, ATuple a_tuple) {
+template <typename PTuple, typename ATuple>
+void do_binding(sqlite3_stmt *stmt, PTuple p_tuple, ATuple a_tuple) {
   int index = 1;
   skydown::for_each(p_tuple, [&](auto &m) mutable {
     using m_t = std::decay_t<decltype(m)>;
     using tag = typename m_t::tag_type;
-      m.value = std::move(get<tag>(a_tuple));
-     auto r = bind(stmt, index, m.value);
-     check_sqlite_return<bool>(r, true);
+    m.value = std::move(get<tag>(a_tuple));
+    auto r = bind(stmt, index, m.value);
+    check_sqlite_return<bool>(r, true);
     ++index;
   });
+}
 
+struct stmt_closer {
+  void operator()(sqlite3_stmt *s) {
+    if (s) sqlite3_finalize(s);
+  }
+};
+
+using unique_stmt = std::unique_ptr<sqlite3_stmt, stmt_closer>;
+
+template <typename RowType, typename PTuple>
+struct prepared_statement {
+  unique_stmt stmt;
+  void reset_stmt() {
+    auto r = sqlite3_reset(stmt.get());
+    check_sqlite_return(r);
+    r = sqlite3_clear_bindings(stmt.get());
+    check_sqlite_return(r);
+ 
+  }
+  template <typename... Args>
+  row_range<RowType> execute_rows(Args &&... args) {
+    reset_stmt();
+
+    PTuple p_tuple = {};
+    tagged_tuple a_tuple{std::forward<Args>(args)...};
+    do_binding(stmt.get(), p_tuple, a_tuple);
+    return row_range<RowType>(stmt.get());
+  }
+  template <typename... Args>
+  bool execute(Args &&... args) {
+    reset_stmt();
+
+    PTuple p_tuple = {};
+    tagged_tuple a_tuple{std::forward<Args>(args)...};
+    do_binding(stmt.get(), p_tuple, a_tuple);
+    return sqlite3_step(stmt.get()) == SQLITE_DONE;
+  }
+
+};
+
+template <const std::string_view &parm>
+auto prepare_query_string(sqlite3 *sqldb) {
+  using row_type = decltype(make_members<parm>());
+
+  auto sv = parm;
+  sqlite3_stmt *stmt;
+  auto query_string1 = get_sql_string(sv, "<:", ">");
+  auto query_string = get_sql_string_parms(query_string1, "{:", "}");
+  auto rc = sqlite3_prepare_v2(sqldb, query_string.c_str(), query_string.size(),
+                               &stmt, 0);
+  check_sqlite_return(rc);
+
+  using p_tuple_type = decltype(make_parameters<parm>());
+  return prepared_statement<row_type, p_tuple_type>{unique_stmt(stmt)};
 }
 
 template <const std::string_view &parm, typename... Args>
@@ -1344,7 +1400,7 @@ auto execute_query_string(sqlite3 *sqldb, Args... args) {
   auto rc = sqlite3_prepare_v2(sqldb, query_string.c_str(), query_string.size(),
                                &stmt, 0);
   check_sqlite_return(rc);
-  do_binding(stmt,p_tuple,a_tuple);
+  do_binding(stmt, p_tuple, a_tuple);
 
   return row_range<std::decay_t<decltype(row)>>(stmt);
 }
@@ -1380,7 +1436,7 @@ decltype(auto) fld(T &&t) {
   }
 }
 
-template <typename Tag,  typename T>
+template <typename Tag, typename T>
 auto parm(T &&t) {
   static constexpr auto type_str = short_type_name<Tag>;
   return skydown::make_member<compile_string_sv<type_str>>(std::forward<T>(t));
