@@ -54,111 +54,47 @@ std::ostream &print_field(std::ostream &os, const Row &row) {
 inline std::string get_name_from_user() { return "John"; }
 
 int main() {
-  using skydown::column;
-  using skydown::define_column;
-  using skydown::define_database;
-  using skydown::define_table;
-  using skydown::execute_query;
-  using skydown::field;
-  using skydown::query_t;
-  using skydown::select;
-  using skydown::table;
-  using db = define_database<
-      define_table<class customers,  //
-                   define_column<class id, std::int64_t>,
-                   define_column<class name, std::string>>,
-      define_table<class orders,  //
-                   define_column<class id, std::int64_t>,
-                   define_column<class item, std::string>,
-                   define_column<class customerid, std::int64_t>,
-                   define_column<class price, double>>>;
-
-  query_t query =
-      select<db>(column<customers, id>, column<customerid>,
-                 column<customers, name>, column<orders, id>,
-                 column<orders, item>, column<price>)
-          .from(
-              table<orders>.join(table<customers>).on(column<customers, id> == column<customerid>))
-          .where(column<price> > skydown::parameter<class Parm, double>() &&
-                 column<customers, name> == get_name_from_user());
-
-  auto sqldb = init_database();
-  for (auto &row :
-       execute_query(query, sqldb, skydown::parameter<Parm, double>(20))) {
-    std::cout << field<customers, name>(row).value_or("<NULL>") << "\t"
-              << field<orders, item>(row).value_or("<NULL>") << "\t"
-              << field<price>(row).value_or(0.0) << "\n";
-  }
-  std::cout << "\nThe sql statement is:\n" << to_statement(query.t_) << "\n";
-  std::cout << "\nThe parameters to the query are:\n";
-  std::cout << skydown::get<skydown::expression_parts::arguments>(query.t_);
-  std::cout << query.t_;
-
-  {
-    static constexpr std::string_view q1 = "MyColumn:int?";
-    static constexpr std::string_view q2 = "New:int";
-    auto m1 = skydown::sqlite_experimental::make_member_sv<q1>();
-    auto m2 = skydown::sqlite_experimental::make_member_sv<q2>();
-    skydown::tagged_tuple t{m1, m2};
-    std::cout << t;
-
-    static constexpr std::string_view type_specs =
-        "<:MyColumn:int?> <:New:int>";
-    constexpr auto count =
-        skydown::sqlite_experimental::get_type_spec_count<type_specs>("<:",
-                                                                      ">");
-    std::cout << "count " << count << "\n";
-
-    auto t1 = skydown::sqlite_experimental::make_members<type_specs>();
-
-    std::cout << t1;
-    static constexpr std::string_view sql =
-        R"(
+  sqlite3 *sqldb = init_database();
+  static constexpr std::string_view select_sql =
+      R"(
 SELECT  <:name:string>,  <:item:string?>, <:price:double>
 FROM orders JOIN customers ON customers.id = customerid where price > {:price:double}
 
 )";
 
-    static constexpr std::string_view insert_sql = R"(
+  static constexpr std::string_view insert_sql = R"(
 INSERT INTO orders( item , customerid , price ) VALUES ({:item:string},{:customerid:int} ,{:price:double});
 )";
-      class customers;
-      class id;
-      class item;
-      class name;
-      class customerid;
-      class price;
-     using skydown::sqlite_experimental::fld;
-    using skydown::sqlite_experimental::parm;
- 
+  class customers;
+  class id;
+  class item;
+  class name;
+  class customerid;
+  class price;
+  using skydown::sqlite_experimental::fld;
+  using skydown::sqlite_experimental::parm;
 
-    auto insert_statement =
-        skydown::sqlite_experimental::prepare_query_string<insert_sql>(sqldb);
-    auto r = insert_statement.execute(parm<customerid>(1),parm<price>(2000),parm<item>("MacBook"));
-    assert(r);
+  auto insert_statement =
+      skydown::sqlite_experimental::prepare_query_string<insert_sql>(sqldb);
+  auto r = insert_statement.execute(parm<customerid>(1), parm<price>(2000),
+                                    parm<item>("MacBook"));
+  assert(r);
 
-   auto prepared_statement =
-        skydown::sqlite_experimental::prepare_query_string<
-            sql>(sqldb);
-    auto rows =
-        prepared_statement.execute_rows(parm<price>(200));
-    assert(!rows.has_error());
+  auto select_statement =
+      skydown::sqlite_experimental::prepare_query_string<select_sql>(sqldb);
+  auto rows = select_statement.execute_rows(parm<price>(200));
+  assert(!rows.has_error());
 
-    for (auto &row : rows) {
-     std::cout << fld<price>(row) << " ";
-      std::cout << fld<name>(row) << " ";
-      std::cout << fld<item>(row).value() << "\n";
-    }
-    auto rows2 =
-        prepared_statement.execute_rows(parm<price>(100));
-    assert(!rows2.has_error());
-    for (auto &row : rows2) {
-     std::cout << fld<price>(row) << " ";
-      std::cout << fld<name>(row) << " ";
-      std::cout << fld<item>(row).value() << "\n";
-    }
- 
- 
+  for (auto &row : rows) {
+    std::cout << fld<price>(row) << " ";
+    std::cout << fld<name>(row) << " ";
+    std::cout << fld<item>(row).value() << "\n";
   }
-  return 0;
+  auto rows2 = select_statement.execute_rows(parm<price>(100));
+  assert(!rows2.has_error());
+  for (auto &row : rows2) {
+    std::cout << fld<price>(row) << " ";
+    std::cout << fld<name>(row) << " ";
+    std::cout << fld<item>(row).value() << "\n";
+  }
 }
