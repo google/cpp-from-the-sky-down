@@ -441,6 +441,7 @@ inline std::string get_sql_string(std::string_view sv,
                                   std::string_view start_group,
                                   std::string_view end_group) {
   std::string ret;
+  ret.reserve(sv.size());
   std::size_t prev_i = 0;
   for (std::size_t i = sv.find(start_group); i != std::string_view::npos;) {
     ret += std::string(sv.substr(prev_i, i - prev_i));
