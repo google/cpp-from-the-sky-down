@@ -81,7 +81,7 @@ int main() {
       // to access a field that is not part of the select statement.
       std::cout << field<orders, id>(row) << " ";
       // The statement below would cause a compiler error since we did not
-      // select custoers.id.
+      // select customers.id.
       // std::cout << field<customers, id>(row) << " ";
       std::cout << field<price>(row) << " ";
       std::cout << field<name>(row) << " ";
