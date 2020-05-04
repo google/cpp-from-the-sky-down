@@ -9,34 +9,47 @@ sqlite3 *init_database() {
   sqlite3 *sqldb;
   sqlite3_open(":memory:", &sqldb);
 
-  auto const creation = R"(
-CREATE TABLE customers(id PRIMARY_KEY, name TEXT);
-CREATE TABLE orders(id PRIMARY_KEY, item TEXT, customerid INTEGER, price REAL);
+  class name;
+  class id;
+  class item;
+  class price;
+  class customerid;
+  using skydown::sqlite_experimental::bind;
+
+  constexpr static std::string_view create_customers = R"(
+CREATE TABLE customers(id INTEGER NOT NULL PRIMARY KEY, name TEXT);
 )";
 
-  auto const insertion = R"(
-INSERT INTO customers(id, name) VALUES(1, "John");
-INSERT INTO orders(id,  item , customerid , price ) VALUES (1,"Laptop",1,122.22), (2,"Phone",1,444.44);
+  constexpr static std::string_view create_orders = R"(
+CREATE TABLE orders(id INTEGER NOT NULL PRIMARY KEY, item TEXT, customerid INTEGER, price REAL);
 )";
 
-  int rc;
-  rc = sqlite3_exec(sqldb, creation, 0, 0, nullptr);
-  skydown::check_sqlite_return(rc);
+constexpr static std::string_view insert_customer
+  = R"(
+INSERT INTO customers(id, name) VALUES( {{?id:int}}, {{?name:string}});
+)";
 
-  rc = sqlite3_exec(sqldb, insertion, 0, 0, nullptr);
-  skydown::check_sqlite_return(rc);
+
+constexpr static std::string_view insert_order = R"(
+INSERT INTO orders(item , customerid , price ) 
+VALUES ({{?item:string}},{{?customerid:int}},{{?price:double}});
+)";
+
+  skydown::sqlite_experimental::prepare<create_customers>(sqldb).execute();
+  skydown::sqlite_experimental::prepare<create_orders>(sqldb).execute();
+  skydown::sqlite_experimental::prepare<insert_customer>(sqldb).execute(bind<id>(1),bind<name>("John"));
+
+  auto prepared_insert_orders =
+      skydown::sqlite_experimental::prepare<insert_order>(sqldb);
+  
+  prepared_insert_orders.execute(bind<item>("Phone"), bind<price>(1444.44), bind<customerid>(1));
+  prepared_insert_orders.execute(bind<item>("Laptop"), bind<price>(1300.44), bind<customerid>(1));
+  
+
 
   return sqldb;
 }
 
-template <typename... Fields>
-std::string field_names() {
-  auto s = (... + (std::string(simple_type_name::short_name<Fields>) + "."));
-  if (s.size() > 0) {
-    s.pop_back();
-  }
-  return s;
-}
 
 template <typename... Fields, typename Row>
 std::ostream &print_field(std::ostream &os, const Row &row) {
