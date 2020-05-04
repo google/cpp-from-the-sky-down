@@ -1,6 +1,16 @@
-﻿// tagged_sqlite.h : Include file for standard system include files,
-// or project specific include files.
-
+﻿// Copyright 2020 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 #pragma once
 #include <assert.h>
 #include <sqlite3.h>
@@ -10,13 +20,14 @@
 #include <iostream>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
-#include "..//simple_type_name/simple_type_name.h"
-#include "..//tagged_tuple/tagged_tuple.h"
-
 namespace skydown {
+
+namespace sqlite_experimental {
 
 template <typename T, typename... GoodValues>
 void check_sqlite_return(T r, GoodValues... good_values) {
@@ -124,7 +135,13 @@ template <typename RowType>
 auto read_row(sqlite3_stmt *stmt) {
   RowType row = {};
   std::size_t count = sqlite3_column_count(stmt);
-  check_sqlite_return(count, tuple_size(row));
+
+  auto size = tuple_size(row);
+  assert(size == count);
+  if (size != count) {
+    throw std::runtime_error(
+        "sqlite error: mismatch between read_row and sql columns");
+  }
   int index = 0;
   for_each(row, [&](auto &m) mutable {
     read_row_into(stmt, index, m.value);
@@ -183,19 +200,64 @@ inline bool bind_impl(sqlite3_stmt *stmt, int index, std::int64_t v) {
   return r == SQLITE_OK;
 }
 
-inline bool bind_impl(sqlite3_stmt *stmt, int index, const std::string_view v) {
-  auto r = sqlite3_bind_text(stmt, index, v.data(), v.size(), SQLITE_TRANSIENT);
+inline bool bind_impl(sqlite3_stmt *stmt, int index, std::string_view v) {
+  auto r = sqlite3_bind_text(stmt, index, v.data(), static_cast<int>(v.size()),
+                             SQLITE_TRANSIENT);
   return r == SQLITE_OK;
 }
 
-// Beginning of experimental option of parsing columns and parameters from the
-// sql statement string_view.
-// <:column:type> <:p:parameter:Type>
-// select <:id>, long_name as <:ls:s> from table where id = <:p:parm:i>
-#include <string_view>
-#include <utility>
+template <typename Tag, typename T>
+struct member {
+  T value;
+  using tag_type = Tag;
+  using value_type = T;
+};
 
-namespace sqlite_experimental {
+template <typename Tag, typename T>
+auto make_member(T t) {
+  return member<Tag, T>{std::move(t)};
+}
+
+template <typename... Members>
+struct tagged_tuple : Members... {};
+
+template <typename... Members>
+tagged_tuple(Members &&...) -> tagged_tuple<std::decay_t<Members>...>;
+
+template <typename... Members>
+constexpr auto tuple_size(const tagged_tuple<Members...> &) {
+  return sizeof...(Members);
+}
+
+template <typename... Members, typename F>
+void for_each(const tagged_tuple<Members...> &m, F f) {
+  (f(static_cast<const Members &>(m)), ...);
+}
+
+template <typename... Members, typename F>
+void for_each(tagged_tuple<Members...> &m, F f) {
+  (f(static_cast<Members &>(m)), ...);
+}
+
+template <typename Tag, typename T>
+decltype(auto) get(member<Tag, T> &m) {
+  return (m.value);
+}
+
+template <typename Tag, typename T>
+decltype(auto) get(const member<Tag, T> &m) {
+  return (m.value);
+}
+
+template <typename Tag, typename T>
+decltype(auto) get(member<Tag, T> &&m) {
+  return std::move(m.value);
+}
+
+template <typename Tag, typename T>
+decltype(auto) get(const member<Tag, T> &&m) {
+  return std::move(m.value);
+}
 
 template <char... c>
 struct compile_string {};
@@ -385,7 +447,7 @@ inline std::string get_sql_string(std::string_view sv,
 template <typename PTuple, typename ATuple>
 void do_binding(sqlite3_stmt *stmt, PTuple p_tuple, ATuple a_tuple) {
   int index = 1;
-  skydown::for_each(p_tuple, [&](auto &m) mutable {
+  skydown::sqlite_experimental::for_each(p_tuple, [&](auto &m) mutable {
     using m_t = std::decay_t<decltype(m)>;
     using tag = typename m_t::tag_type;
     m.value = std::move(get<tag>(a_tuple));
@@ -440,51 +502,57 @@ auto prepare(sqlite3 *sqldb) {
   auto sv = parm;
   sqlite3_stmt *stmt;
   auto query_string = get_sql_string(sv, start_group, end_group);
-  auto rc = sqlite3_prepare_v2(sqldb, query_string.c_str(), query_string.size(),
-                               &stmt, 0);
+  auto rc = sqlite3_prepare_v2(sqldb, query_string.c_str(),
+                               static_cast<int>(query_string.size()), &stmt, 0);
   check_sqlite_return(rc);
 
   using p_tuple_type = decltype(make_parameters<parm>());
   return prepared_statement<row_type, p_tuple_type>{unique_stmt(stmt)};
 }
 
-template <typename Tag1, typename Tag2>
+template <const std::string_view &tag1, const std::string_view &tag2>
 constexpr auto concatenate_tags() {
-  constexpr auto type_str1 = short_type_name<Tag1>;
-  constexpr auto type_str2 = short_type_name<Tag2>;
-  std::array<char, type_str1.size() + type_str2.size() + 1> ar = {};
+  constexpr auto tag_str1 = tag1;
+  constexpr auto tag_str2 = tag2;
+  std::array<char, tag_str1.size() + tag_str2.size() + 1> ar = {};
   std::size_t i = 0;
-  for (auto c : type_str1) {
+  for (auto c : tag_str1) {
     ar[i] = c;
     ++i;
   }
   ar[i] = '.';
   ++i;
-  for (auto c : type_str2) {
+  for (auto c : tag_str2) {
     ar[i] = c;
     ++i;
   }
   return ar;
 }
 
-template <typename Tag1, typename Tag2 = void, typename T>
+inline constexpr std::string_view no_tag = "";
+template <const std::string_view &tag1, const std::string_view &tag2 = no_tag,
+          typename T>
 decltype(auto) field(T &&t) {
-  if constexpr (std::is_same_v<Tag2, void>) {
-    static constexpr auto type_str = short_type_name<Tag1>;
-    return skydown::get<compile_string_sv<type_str>>(std::forward<T>(t));
+  constexpr auto str2 = tag2;
+  if constexpr (str2.empty()) {
+    return skydown::sqlite_experimental::get<compile_string_sv<tag1>>(
+        std::forward<T>(t));
   } else {
-    static constexpr auto ar = concatenate_tags<Tag1, Tag2>();
-    using tag = compile_string_sv<ar>;
-    return skydown::get<tag>(std::forward<T>(t));
+    static constexpr auto ar = concatenate_tags<tag1, tag2>();
+    return skydown::sqlite_experimental::get<compile_string_sv<ar>>(
+        std::forward<T>(t));
   }
 }
 
-template <typename Tag, typename T>
+template <const std::string_view &sv, typename T>
 auto bind(T &&t) {
-  static constexpr auto type_str = short_type_name<Tag>;
-  return skydown::make_member<compile_string_sv<type_str>>(std::forward<T>(t));
+  return make_member<compile_string_sv<sv>>(std::forward<T>(t));
 }
 
 }  // namespace sqlite_experimental
+
+using sqlite_experimental::bind;
+using sqlite_experimental::field;
+using sqlite_experimental::prepare;
 
 }  // namespace skydown

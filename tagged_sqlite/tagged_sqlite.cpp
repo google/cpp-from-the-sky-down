@@ -13,18 +13,15 @@ int main() {
 CREATE TABLE customers(id INTEGER NOT NULL PRIMARY KEY, name TEXT);
 )";
 
-  class customers;
-  class id;
-  class name;
+  static constexpr std::string_view customers("customers"), id("id"),
+      name("name");
 
   constexpr static std::string_view create_orders = R"(
 CREATE TABLE orders(id INTEGER NOT NULL PRIMARY KEY, item TEXT, customerid INTEGER, price REAL);
 )";
 
-  class orders;
-  class item;
-  class customerid;
-  class price;
+  static constexpr std::string_view orders("orders"), item("item"),
+      customerid("customerid"), price("price");
 
   constexpr static std::string_view insert_customer = R"(
 INSERT INTO customers(id, name) VALUES( {{?id:int}}, {{?name:string}});
@@ -35,23 +32,22 @@ INSERT INTO orders(item , customerid , price )
 VALUES ({{?item:string}},{{?customerid:int}},{{?price:double}});
 )";
 
-  using skydown::sqlite_experimental::bind;
+  using skydown::bind;
 
-  skydown::sqlite_experimental::prepare<create_customers>(sqldb).execute();
-  skydown::sqlite_experimental::prepare<create_orders>(sqldb).execute();
-  skydown::sqlite_experimental::prepare<insert_customer>(sqldb).execute(
+  skydown::prepare<create_customers>(sqldb).execute();
+  skydown::prepare<create_orders>(sqldb).execute();
+  skydown::prepare<insert_customer>(sqldb).execute(
       bind<id>(1), bind<name>("John"));
 
   auto prepared_insert_order =
-      skydown::sqlite_experimental::prepare<insert_order>(sqldb);
+      skydown::prepare<insert_order>(sqldb);
 
   prepared_insert_order.execute(bind<item>("Phone"), bind<price>(1444.44),
-                                 bind<customerid>(1));
+                                bind<customerid>(1));
   prepared_insert_order.execute(bind<item>("Laptop"), bind<price>(1300.44),
-                                 bind<customerid>(1));
+                                bind<customerid>(1));
   prepared_insert_order.execute(bind<customerid>(1), bind<price>(2000),
-                           bind<item>("MacBook"));
- 
+                                bind<item>("MacBook"));
 
   static constexpr std::string_view select_sql =
       R"(
@@ -60,11 +56,10 @@ FROM orders JOIN customers ON customers.id = customerid where price > {{?price:d
 
 )";
 
+  using skydown::field;
 
-  using skydown::sqlite_experimental::field;
-
- auto prepared_select =
-      skydown::sqlite_experimental::prepare<select_sql>(sqldb);
+  auto prepared_select =
+      skydown::prepare<select_sql>(sqldb);
 
   for (;;) {
     std::cout << "Enter min price.\n";
