@@ -5,32 +5,41 @@
 
 #include <exception>
 
+inline  constexpr std::string_view create_customers = R"(
+CREATE TABLE customers(id INTEGER NOT NULL PRIMARY KEY, name TEXT);
+)";
+
+  inline constexpr std::string_view customers("customers"), id("id"),
+      name("name");
+
+  inline constexpr std::string_view create_orders = R"(
+CREATE TABLE orders(id INTEGER NOT NULL PRIMARY KEY, item TEXT, customerid INTEGER, price REAL);
+)";
+
+  inline constexpr std::string_view orders("orders"), item("item"),
+      customerid("customerid"), price("price");
+
+  inline constexpr std::string_view insert_customer = R"(
+INSERT INTO customers(id, name) VALUES( {{?id:int}}, {{?name:string}});
+)";
+
+  inline constexpr std::string_view insert_order = R"(
+INSERT INTO orders(item , customerid , price ) 
+VALUES ({{?item:string}},{{?customerid:int}},{{?price:double}});
+)";
+
+  inline constexpr std::string_view select_sql =
+      R"(
+SELECT  {{orders.id:int}}, {{name:string}},  {{item:string?}}, {{price:double}}
+FROM orders JOIN customers ON customers.id = customerid where price > {{?price:double}}
+
+)";
+
+
 int main() {
   sqlite3 *sqldb;
   sqlite3_open(":memory:", &sqldb);
 
-  constexpr static std::string_view create_customers = R"(
-CREATE TABLE customers(id INTEGER NOT NULL PRIMARY KEY, name TEXT);
-)";
-
-  static constexpr std::string_view customers("customers"), id("id"),
-      name("name");
-
-  constexpr static std::string_view create_orders = R"(
-CREATE TABLE orders(id INTEGER NOT NULL PRIMARY KEY, item TEXT, customerid INTEGER, price REAL);
-)";
-
-  static constexpr std::string_view orders("orders"), item("item"),
-      customerid("customerid"), price("price");
-
-  constexpr static std::string_view insert_customer = R"(
-INSERT INTO customers(id, name) VALUES( {{?id:int}}, {{?name:string}});
-)";
-
-  constexpr static std::string_view insert_order = R"(
-INSERT INTO orders(item , customerid , price ) 
-VALUES ({{?item:string}},{{?customerid:int}},{{?price:double}});
-)";
 
   using skydown::bind;
 
@@ -49,12 +58,7 @@ VALUES ({{?item:string}},{{?customerid:int}},{{?price:double}});
   prepared_insert_order.execute(bind<customerid>(1), bind<price>(2000),
                                 bind<item>("MacBook"));
 
-  static constexpr std::string_view select_sql =
-      R"(
-SELECT  {{orders.id:int}}, {{name:string}},  {{item:string?}}, {{price:double}}
-FROM orders JOIN customers ON customers.id = customerid where price > {{?price:double}}
 
-)";
 
   using skydown::field;
 

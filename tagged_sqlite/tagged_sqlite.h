@@ -24,6 +24,7 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include <memory>
 
 namespace skydown {
 
@@ -367,15 +368,24 @@ constexpr auto parse_type_specs() {
   return ar;
 }
 
+template <const std::string_view &parm, bool is_parms>
+inline constexpr auto parse_type_specs_v = parse_type_specs<parm,is_parms>();
+
 template <const auto &parm>
-constexpr auto make_member_ts() {
+struct make_member_ts_helper {
   constexpr static auto ts = parm;
   constexpr static auto name = ts.name;
   constexpr static auto type = ts.type;
+  constexpr static auto optional = ts.optional;
   using name_t = compile_string_sv<name>;
   using type_str_t = compile_string_sv<type>;
-  return maybe_make_optional<ts.optional>(
-      make_member<name_t>(string_to_type_t<type_str_t>{}));
+};
+
+template <const auto &parm>
+constexpr auto make_member_ts() {
+  using helper = make_member_ts_helper<parm>;
+  return maybe_make_optional<helper::optional>(
+      make_member<typename helper::name_t>(string_to_type_t<typename helper::type_str_t>{}));
 }
 
 template <const auto &parm, typename S>
@@ -385,10 +395,14 @@ template <const auto &parm, std::size_t... I>
 struct make_members_struct<parm, std::index_sequence<I...>> {
   constexpr static auto ar = parm;
   template <std::size_t i>
-  constexpr static auto helper() {
-    constexpr auto lar = ar;
-    constexpr static auto a = lar[i];
-    return make_member_ts<a>();
+  struct helper_struct {
+    constexpr static std::decay_t<decltype(ar[i])> a = ar[i];
+  };
+
+  template <std::size_t i>
+  constexpr static auto helper(){
+ return make_member_ts<helper_struct<i>::a>();
+
   }
 
   constexpr static auto make_members_ts() {
@@ -397,19 +411,24 @@ struct make_members_struct<parm, std::index_sequence<I...>> {
 };
 
 template <const std::string_view &parm>
+struct make_members_helper {
+  constexpr static decltype(parse_type_specs<parm, false>()) ar =
+      parse_type_specs<parm, false>();
+};
+
+template <const std::string_view &parm>
 constexpr auto make_members() {
-  constexpr auto sv = parm;
-  constexpr static auto ar = parse_type_specs<parm, false>();
-  constexpr auto size = ar.size();
+    using helper = make_members_helper<parm>;
+  constexpr auto size = helper::ar.size();
   using sequence = std::make_index_sequence<size>;
-  using mms = make_members_struct<ar, sequence>;
+  using mms = make_members_struct<helper::ar, sequence>;
   return mms::make_members_ts();
 }
 
 template <const std::string_view &parm>
 constexpr auto make_parameters() {
   constexpr auto sv = parm;
-  constexpr static auto ar = parse_type_specs<parm, true>();
+  constexpr auto& ar = parse_type_specs_v<parm, true>;
   constexpr auto size = ar.size();
   using sequence = std::make_index_sequence<size>;
   using mms = make_members_struct<ar, sequence>;
