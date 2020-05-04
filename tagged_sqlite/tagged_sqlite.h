@@ -23,7 +23,7 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
-#include <vector>
+#include <exception>
 #include <memory>
 
 namespace skydown {
