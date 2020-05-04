@@ -57,44 +57,48 @@ int main() {
   sqlite3 *sqldb = init_database();
   static constexpr std::string_view select_sql =
       R"(
-SELECT  <:name:string>,  <:item:string?>, <:price:double>
-FROM orders JOIN customers ON customers.id = customerid where price > {:price:double}
+SELECT  {{orders.id:int}}, {{name:string}},  {{item:string?}}, {{price:double}}
+FROM orders JOIN customers ON customers.id = customerid where price > {{?price:double}}
 
 )";
 
   static constexpr std::string_view insert_sql = R"(
-INSERT INTO orders( item , customerid , price ) VALUES ({:item:string},{:customerid:int} ,{:price:double});
+INSERT INTO orders( item , customerid , price ) 
+VALUES ({{?item:string}},{{?customerid:int}} ,{{?price:double}});
 )";
   class customers;
+  class orders;
   class id;
   class item;
   class name;
   class customerid;
   class price;
-  using skydown::sqlite_experimental::fld;
-  using skydown::sqlite_experimental::parm;
+  using skydown::sqlite_experimental::bind;
+  using skydown::sqlite_experimental::field;
 
   auto insert_statement =
       skydown::sqlite_experimental::prepare_query_string<insert_sql>(sqldb);
-  auto r = insert_statement.execute(parm<customerid>(1), parm<price>(2000),
-                                    parm<item>("MacBook"));
+  auto r = insert_statement.execute(bind<customerid>(1), bind<price>(2000),
+                                    bind<item>("MacBook"));
   assert(r);
 
   auto select_statement =
       skydown::sqlite_experimental::prepare_query_string<select_sql>(sqldb);
-  auto rows = select_statement.execute_rows(parm<price>(200));
-  assert(!rows.has_error());
 
-  for (auto &row : rows) {
-    std::cout << fld<price>(row) << " ";
-    std::cout << fld<name>(row) << " ";
-    std::cout << fld<item>(row).value() << "\n";
+  for (;;) {
+    std::cout << "Enter min price.\n";
+    double min_price = 0;
+    std::cin >> min_price;
+
+    auto rows = select_statement.execute_rows(bind<price>(min_price));
+    assert(!rows.has_error());
+
+    for (auto &row : rows) {
+      std::cout << field<orders, id>(row) << " ";
+      std::cout << field<price>(row) << " ";
+      std::cout << field<name>(row) << " ";
+      std::cout << field<item>(row).value() << "\n";
+    }
   }
-  auto rows2 = select_statement.execute_rows(parm<price>(100));
-  assert(!rows2.has_error());
-  for (auto &row : rows2) {
-    std::cout << fld<price>(row) << " ";
-    std::cout << fld<name>(row) << " ";
-    std::cout << fld<item>(row).value() << "\n";
-  }
+
 }
