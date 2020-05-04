@@ -77,23 +77,18 @@ VALUES ({{?item:string}},{{?customerid:int}} ,{{?price:double}});
   using skydown::sqlite_experimental::field;
 
   auto insert_statement =
-      skydown::sqlite_experimental::prepare_query_string<insert_sql>(sqldb);
-  auto r = insert_statement.execute(bind<customerid>(1), bind<price>(2000),
+      skydown::sqlite_experimental::prepare<insert_sql>(sqldb);
+  insert_statement.execute(bind<customerid>(1), bind<price>(2000),
                                     bind<item>("MacBook"));
-  assert(r);
-
   auto select_statement =
-      skydown::sqlite_experimental::prepare_query_string<select_sql>(sqldb);
+      skydown::sqlite_experimental::prepare<select_sql>(sqldb);
 
   for (;;) {
     std::cout << "Enter min price.\n";
     double min_price = 0;
     std::cin >> min_price;
 
-    auto rows = select_statement.execute_rows(bind<price>(min_price));
-    assert(!rows.has_error());
-
-    for (auto &row : rows) {
+    for (auto &row : select_statement.execute_rows(bind<price>(min_price))) {
       std::cout << field<orders, id>(row) << " ";
       std::cout << field<price>(row) << " ";
       std::cout << field<name>(row) << " ";

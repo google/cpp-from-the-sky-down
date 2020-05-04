@@ -18,12 +18,19 @@
 
 namespace skydown {
 
-template <typename T>
-void check_sqlite_return(T r, T good = SQLITE_OK) {
-  assert(r == good);
-  if (r != good) {
-    std::cerr << "SQLITE ERROR " << r;
-    throw std::runtime_error("sqlite error");
+template <typename T, typename... GoodValues>
+void check_sqlite_return(T r, GoodValues... good_values) {
+  bool success = false;
+  if constexpr (sizeof...(good_values) == 0) {
+    success = (r == SQLITE_OK);
+  } else {
+    success = ((r == good_values) || ...);
+  }
+  if (!success) {
+    std::string err_msg = sqlite3_errstr(r);
+    assert(success);
+    std::cerr << "SQLITE ERROR " << r << " " << err_msg;
+    throw std::runtime_error("sqlite error: " + err_msg);
   }
 }
 
@@ -138,7 +145,10 @@ struct row_range {
 
   end_type end() { return {}; }
 
-  void next() { last_result = sqlite3_step(stmt); }
+  void next() {
+    last_result = sqlite3_step(stmt);
+    check_sqlite_return(last_result, SQLITE_DONE, SQLITE_ROW);
+  }
 
   struct row_iterator {
     row_range *p;
@@ -238,13 +248,13 @@ using string_to_type_t = typename string_to_type<T>::type;
 constexpr std::string_view start_group = "{{";
 constexpr std::string_view end_group = "}}";
 
-template <const std::string_view &parm,bool is_parms>
+template <const std::string_view &parm, bool is_parms>
 constexpr auto get_type_spec_count(std::string_view start_group,
                                    std::string_view end_group) {
   constexpr auto sv = parm;
   std::size_t count = 0;
   for (std::size_t i = sv.find(start_group); i != std::string_view::npos;) {
-      if (is_parms == (sv[i+start_group.size()] == '?')) {
+    if (is_parms == (sv[i + start_group.size()] == '?')) {
       ++count;
     }
     i = sv.find(start_group, i + 1);
@@ -274,17 +284,18 @@ constexpr type_spec parse_type_spec(std::string_view sv) {
   return {name, type_str, optional};
 }
 
-template <const std::string_view &parm,bool is_parms>
+template <const std::string_view &parm, bool is_parms>
 constexpr auto parse_type_specs() {
   constexpr auto sv = parm;
-  constexpr auto size = get_type_spec_count<parm,is_parms>(start_group, end_group);
+  constexpr auto size =
+      get_type_spec_count<parm, is_parms>(start_group, end_group);
   std::array<type_spec, size> ar = {};
   std::size_t count = 0;
   for (std::size_t i = sv.find(start_group); i != std::string_view::npos;) {
     auto end = sv.find(end_group, i);
     auto start = i + start_group.size();
     if (is_parms == (sv[start] == '?')) {
-      if (is_parms)++start;
+      if (is_parms) ++start;
       ar[count] = parse_type_spec(sv.substr(start, end - start));
       ++count;
     }
@@ -326,7 +337,7 @@ struct make_members_struct<parm, std::index_sequence<I...>> {
 template <const std::string_view &parm>
 constexpr auto make_members() {
   constexpr auto sv = parm;
-  constexpr static auto ar = parse_type_specs<parm,false>();
+  constexpr static auto ar = parse_type_specs<parm, false>();
   constexpr auto size = ar.size();
   using sequence = std::make_index_sequence<size>;
   using mms = make_members_struct<ar, sequence>;
@@ -336,8 +347,7 @@ constexpr auto make_members() {
 template <const std::string_view &parm>
 constexpr auto make_parameters() {
   constexpr auto sv = parm;
-  constexpr static auto ar =
-      parse_type_specs<parm,true>();
+  constexpr static auto ar = parse_type_specs<parm, true>();
   constexpr auto size = ar.size();
   using sequence = std::make_index_sequence<size>;
   using mms = make_members_struct<ar, sequence>;
@@ -359,7 +369,7 @@ inline std::string get_sql_string(std::string_view sv,
         sv.substr(i + start_group.size(), end - (i + start_group.size()) - 1);
     auto ts = parse_type_spec(ts_str);
     if (ts.name.front() != '?') {
-        ret += std::string(ts.name);
+      ret += std::string(ts.name);
     } else {
       ret += '?';
     }
@@ -412,18 +422,19 @@ struct prepared_statement {
     return row_range<RowType>(stmt.get());
   }
   template <typename... Args>
-  bool execute(Args &&... args) {
+  void execute(Args &&... args) {
     reset_stmt();
 
     PTuple p_tuple = {};
     tagged_tuple a_tuple{std::forward<Args>(args)...};
     do_binding(stmt.get(), p_tuple, a_tuple);
-    return sqlite3_step(stmt.get()) == SQLITE_DONE;
+    auto r = sqlite3_step(stmt.get());
+    check_sqlite_return(r, SQLITE_DONE);
   }
 };
 
 template <const std::string_view &parm>
-auto prepare_query_string(sqlite3 *sqldb) {
+auto prepare(sqlite3 *sqldb) {
   using row_type = decltype(make_members<parm>());
 
   auto sv = parm;
@@ -435,24 +446,6 @@ auto prepare_query_string(sqlite3 *sqldb) {
 
   using p_tuple_type = decltype(make_parameters<parm>());
   return prepared_statement<row_type, p_tuple_type>{unique_stmt(stmt)};
-}
-
-template <const std::string_view &parm, typename... Args>
-auto execute_query_string(sqlite3 *sqldb, Args... args) {
-  auto row = make_members<parm>();
-  tagged_tuple a_tuple{args...};
-  auto p_tuple = make_parameters<parm>();
-
-  auto sv = parm;
-  sqlite3_stmt *stmt;
-  auto query_string1 = get_sql_string(sv, "<:", ">");
-  auto query_string = get_sql_string_parms(query_string1, "{:", "}");
-  auto rc = sqlite3_prepare_v2(sqldb, query_string.c_str(), query_string.size(),
-                               &stmt, 0);
-  check_sqlite_return(rc);
-  do_binding(stmt, p_tuple, a_tuple);
-
-  return row_range<std::decay_t<decltype(row)>>(stmt);
 }
 
 template <typename Tag1, typename Tag2>
