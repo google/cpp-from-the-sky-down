@@ -371,6 +371,11 @@ constexpr auto parse_type_specs() {
 template <const std::string_view &parm, bool is_parms>
 inline constexpr auto parse_type_specs_v = parse_type_specs<parm,is_parms>();
 
+template <const auto &parm,std::size_t I>
+inline constexpr auto parse_type_specs_i_v = parm[I];
+
+
+
 template <const auto &parm>
 struct make_member_ts_helper {
   constexpr static auto ts = parm;
@@ -401,7 +406,8 @@ struct make_members_struct<parm, std::index_sequence<I...>> {
 
   template <std::size_t i>
   constexpr static auto helper(){
- return make_member_ts<helper_struct<i>::a>();
+      constexpr auto& ts =parse_type_specs_i_v<parm,i>; 
+ return make_member_ts<ts>();
 
   }
 
@@ -411,17 +417,12 @@ struct make_members_struct<parm, std::index_sequence<I...>> {
 };
 
 template <const std::string_view &parm>
-struct make_members_helper {
-  constexpr static decltype(parse_type_specs<parm, false>()) ar =
-      parse_type_specs<parm, false>();
-};
-
-template <const std::string_view &parm>
 constexpr auto make_members() {
-    using helper = make_members_helper<parm>;
-  constexpr auto size = helper::ar.size();
+    constexpr auto& ar =
+      parse_type_specs_v<parm, false>;
+  constexpr auto size = ar.size();
   using sequence = std::make_index_sequence<size>;
-  using mms = make_members_struct<helper::ar, sequence>;
+  using mms = make_members_struct<ar, sequence>;
   return mms::make_members_ts();
 }
 
