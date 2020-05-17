@@ -15,8 +15,9 @@
 #include "tagged_sqlite.h"
 
 // Queries
-using create_customers_t = skydown::prepared_statement<
-    "CREATE TABLE customers(id INTEGER NOT NULL PRIMARY KEY, name TEXT);">;
+using create_customers_t = skydown::prepared_statement<R"(
+CREATE TABLE customers(id INTEGER NOT NULL PRIMARY KEY, name TEXT);
+)">;
 
 using create_orders_t = skydown::prepared_statement<R"(
 CREATE TABLE orders(id INTEGER NOT NULL PRIMARY KEY, item TEXT, customerid INTEGER, price REAL);
