@@ -14,40 +14,32 @@
 
 #include "tagged_sqlite.h"
 
-inline constexpr std::string_view
+// Queries
+using create_customers_t = skydown::prepared_statement<
+    "CREATE TABLE customers(id INTEGER NOT NULL PRIMARY KEY, name TEXT);">;
 
-    // Queries
-    create_customers = R"(
-CREATE TABLE customers(id INTEGER NOT NULL PRIMARY KEY, name TEXT);
-)",
-    create_orders = R"(
+using create_orders_t = skydown::prepared_statement<R"(
 CREATE TABLE orders(id INTEGER NOT NULL PRIMARY KEY, item TEXT, customerid INTEGER, price REAL);
-)",
+)">;
 
-    // Annotate typed parameters via {{?tag:type}}. In the final sql these will
-    // be replaced with '?'.
-    insert_customer = R"(
+// Annotate typed parameters via {{?tag:type}}. In the final sql these will
+// be replaced with '?'.
+using insert_customer_t = skydown::prepared_statement<R"(
 INSERT INTO customers(id, name) VALUES( {{?id:int}}, {{?name:string}});
-)",
-    insert_order = R"(
+)">;
+
+using insert_order_t = skydown::prepared_statement<R"(
 INSERT INTO orders(item , customerid , price ) 
 VALUES ({{?item:string}},{{?customerid:int}},{{?price:double}});
-)",
+)">;
 
-    // Annotated selected columns via {{tag:type}} a '?' after type, means to
-    // use std::optional<type> instead of type. Also, annotate the one parameter
-    // price.
-    select_orders = R"(
+// Annotated selected columns via {{tag:type}} a '?' after type, means to
+// use std::optional<type> instead of type. Also, annotate the one parameter
+// price.
+using select_orders_t = skydown::prepared_statement<R"(
 SELECT  {{orders.id:int}}, {{name:string}},  {{item:string?}}, {{price:double}}
 FROM orders JOIN customers ON customers.id = customerid where price > {{?price:double}}
-)",
-
-    // Tags used in the queries (i.e. all the stuff wrapped in '{{ }}').
-    customers = "customers", id = "id", name = "name", orders = "orders",
-    item = "item", customerid = "customerid", price = "price";
-
-
-
+)">;
 
 int main() {
   sqlite3 *sqldb;
@@ -55,12 +47,11 @@ int main() {
 
   using skydown::bind;
 
-  skydown::prepare<create_customers>(sqldb).execute();
-  skydown::prepare<create_orders>(sqldb).execute();
-  skydown::prepare<insert_customer>(sqldb).execute(bind<"id">(1),
-                                                   bind<"name">("John"));
+  create_customers_t(sqldb).execute();
+  create_orders_t(sqldb).execute();
+  insert_customer_t(sqldb).execute(bind<"id">(1), bind<"name">("John"));
 
-  auto prepared_insert_order = skydown::prepare<insert_order>(sqldb);
+  auto prepared_insert_order = insert_order_t(sqldb);
 
   prepared_insert_order.execute(bind<"item">("Phone"), bind<"price">(1444.44),
                                 bind<"customerid">(1));
@@ -71,8 +62,7 @@ int main() {
 
   using skydown::field;
 
-  auto prepared_select_orders = skydown::prepare<select_orders>(sqldb);
-
+  auto prepared_select_orders = select_orders_t(sqldb);
 
   for (;;) {
     std::cout << "Enter min price.\n";

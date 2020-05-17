@@ -17,14 +17,14 @@
 
 #include <array>
 #include <cstdint>
+#include <exception>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
-#include <exception>
-#include <memory>
 
 namespace skydown {
 
@@ -260,23 +260,35 @@ decltype(auto) get(const member<Tag, T> &&m) {
   return std::move(m.value);
 }
 
-template <char... c>
+template <std::size_t N>
+struct fixed_string {
+  constexpr fixed_string(const char (&foo)[N + 1]) {
+    std::copy_n(foo, N + 1, data);
+  }
+  constexpr fixed_string(const fixed_string &) = default;
+  constexpr fixed_string(std::string_view s){
+
+    std::copy_n(s.data(), N, data);
+
+      
+      };
+  auto operator<=>(const fixed_string &) const = default;
+  char data[N + 1];
+  constexpr std::string_view sv() const {
+    return std::string_view(&data[0], N);
+  }
+  constexpr auto size() const { return N; }
+  constexpr auto operator[](std::size_t i) const { return data[i]; }
+};
+
+template <fixed_string fs>
 struct compile_string {};
 
-template <auto &sv, std::size_t... I>
-auto to_compile_string_helper(std::index_sequence<I...>) {
-  constexpr auto svp = sv;
-  return compile_string<svp[I]...>{};
-}
+template <std::size_t N>
+fixed_string(const char (&str)[N]) -> fixed_string<N - 1>;
 
-template <auto &sv>
-constexpr auto to_compile_string() {
-  constexpr auto svp = sv;
-  return to_compile_string_helper<sv>(std::make_index_sequence<svp.size()>());
-}
-
-template <auto &sv>
-using compile_string_sv = decltype(to_compile_string<sv>());
+template <std::size_t N>
+fixed_string(fixed_string<N>) -> fixed_string<N>;
 
 template <bool make_optional, typename Tag, typename T>
 auto maybe_make_optional(member<Tag, T> m) {
@@ -287,21 +299,21 @@ auto maybe_make_optional(member<Tag, T> m) {
   }
 }
 
-template <typename T>
+template <typename>
 struct string_to_type;
 
 template <>
-struct string_to_type<compile_string<'i', 'n', 't'>> {
+struct string_to_type<compile_string<"int">> {
   using type = std::int64_t;
 };
 
 template <>
-struct string_to_type<compile_string<'s', 't', 'r', 'i', 'n', 'g'>> {
+struct string_to_type<compile_string<"string">> {
   using type = std::string_view;
 };
 
 template <>
-struct string_to_type<compile_string<'d', 'o', 'u', 'b', 'l', 'e'>> {
+struct string_to_type<compile_string<"double">> {
   using type = double;
 };
 
@@ -311,10 +323,10 @@ using string_to_type_t = typename string_to_type<T>::type;
 constexpr std::string_view start_group = "{{";
 constexpr std::string_view end_group = "}}";
 
-template <const std::string_view &parm, bool is_parms>
+template <fixed_string parm, bool is_parms>
 constexpr auto get_type_spec_count(std::string_view start_group,
                                    std::string_view end_group) {
-  constexpr auto sv = parm;
+  constexpr auto sv = parm.sv();
   std::size_t count = 0;
   for (std::size_t i = sv.find(start_group); i != std::string_view::npos;) {
     if (is_parms == (sv[i + start_group.size()] == '?')) {
@@ -326,16 +338,32 @@ constexpr auto get_type_spec_count(std::string_view start_group,
   return count;
 }
 
-struct type_spec {
-  std::string_view name;
-  std::string_view type;
-  bool optional;
-  constexpr type_spec(std::string_view n, std::string_view t, bool o)
-      : name(n), type(t), optional(o) {}
-  constexpr type_spec() : name(), type(), optional(false) {}
+template <typename First, typename Second>
+struct pair {
+  First first;
+  Second second;
+
+  constexpr auto operator<=>(const pair &other) const = default;
 };
 
-constexpr type_spec parse_type_spec(std::string_view sv) {
+
+struct type_spec {
+  pair<int, int> name = {-1, -1};
+  pair<int, int> type = {-1, -1};
+  bool optional;
+  constexpr auto operator<=>(const type_spec &other) const = default;
+};
+
+template <std::size_t N>
+struct type_specs {
+  auto operator<=>(const type_specs &) const = default;
+  type_spec data[N];
+  static constexpr std::size_t size() { return N; }
+  constexpr auto& operator[](std::size_t i) const { return data[i]; }
+  constexpr auto& operator[](std::size_t i) { return data[i]; }
+};
+
+constexpr type_spec parse_type_spec(std::size_t base,std::string_view sv) {
   auto colon = sv.find(":");
   auto name = sv.substr(0, colon);
 
@@ -343,23 +371,25 @@ constexpr type_spec parse_type_spec(std::string_view sv) {
   auto last_colon = sv.find_last_of(':');
   auto size = sv.size();
   auto new_size = size - (optional ? 2 : 1);
-  std::string_view type_str = sv.substr(last_colon + 1, new_size - last_colon);
-  return {name, type_str, optional};
+  std::string_view type = sv.substr(last_colon + 1, new_size - last_colon);
+  return type_spec{.name = {base, name.size()},
+                   .type = {base + last_colon + 1, type.size()},
+                   .optional = optional};
 }
 
-template <const std::string_view &parm, bool is_parms>
+template <fixed_string parm, bool is_parms>
 constexpr auto parse_type_specs() {
-  constexpr auto sv = parm;
+  constexpr auto sv = parm.sv();
   constexpr auto size =
       get_type_spec_count<parm, is_parms>(start_group, end_group);
-  std::array<type_spec, size> ar = {};
+  type_specs<size> ar = {};
   std::size_t count = 0;
   for (std::size_t i = sv.find(start_group); i != std::string_view::npos;) {
     auto end = sv.find(end_group, i);
     auto start = i + start_group.size();
     if (is_parms == (sv[start] == '?')) {
       if (is_parms) ++start;
-      ar[count] = parse_type_spec(sv.substr(start, end - start));
+      ar[count] = parse_type_spec(start,sv.substr(start, end - start));
       ++count;
     }
     i = sv.find(start_group, i + 1);
@@ -368,72 +398,37 @@ constexpr auto parse_type_specs() {
   return ar;
 }
 
-template <const std::string_view &parm, bool is_parms>
-inline constexpr auto parse_type_specs_v = parse_type_specs<parm,is_parms>();
-
-template <const auto &parm,std::size_t I>
-inline constexpr auto parse_type_specs_i_v = parm[I];
-
-
-
-template <const auto &parm>
-struct make_member_ts_helper {
-  constexpr static auto ts = parm;
-  constexpr static auto name = ts.name;
-  constexpr static auto type = ts.type;
-  constexpr static auto optional = ts.optional;
-  using name_t = compile_string_sv<name>;
-  using type_str_t = compile_string_sv<type>;
-};
-
-template <const auto &parm>
+template <fixed_string fs, type_spec ts>
 constexpr auto make_member_ts() {
-  using helper = make_member_ts_helper<parm>;
-  return maybe_make_optional<helper::optional>(
-      make_member<typename helper::name_t>(string_to_type_t<typename helper::type_str_t>{}));
+  constexpr auto sv = fs.sv();
+  static_assert(sv.size() != 0, "string view conversion");
+  static_assert(ts.name.second != 0);
+  constexpr fixed_string<ts.name.second> name{
+      sv.substr(ts.name.first, ts.name.second)};
+  constexpr fixed_string<ts.type.second> type =
+      sv.substr(ts.type.first, ts.type.second);
+  return maybe_make_optional<ts.optional>(make_member<compile_string<name>>(
+      string_to_type_t<compile_string<type>>{}));
 }
 
-template <const auto &parm, typename S>
-struct make_members_struct;
+template <fixed_string parm, type_specs ts, std::size_t... I>
+constexpr auto make_members_helper(std::index_sequence<I...>) {
+  return tagged_tuple{make_member_ts<parm, ts[I]>()...};
+}
 
-template <const auto &parm, std::size_t... I>
-struct make_members_struct<parm, std::index_sequence<I...>> {
-  constexpr static auto ar = parm;
-  template <std::size_t i>
-  struct helper_struct {
-    constexpr static std::decay_t<decltype(ar[i])> a = ar[i];
-  };
-
-  template <std::size_t i>
-  constexpr static auto helper(){
-      constexpr auto& ts =parse_type_specs_i_v<parm,i>; 
- return make_member_ts<ts>();
-
-  }
-
-  constexpr static auto make_members_ts() {
-    return tagged_tuple{helper<I>()...};
-  }
-};
-
-template <const std::string_view &parm>
+template <fixed_string parm>
 constexpr auto make_members() {
-    constexpr auto& ar =
-      parse_type_specs_v<parm, false>;
-  constexpr auto size = ar.size();
-  using sequence = std::make_index_sequence<size>;
-  using mms = make_members_struct<ar, sequence>;
-  return mms::make_members_ts();
+  constexpr auto ts = parse_type_specs<parm, false>();
+
+  if constexpr (ts.size()) static_assert(ts[ts.size() - 1].name.second != -1,"make members afiled");
+  return make_members_helper<parm, ts>(std::make_index_sequence<ts.size()>());
 }
 
-template <const std::string_view &parm>
+template <fixed_string parm>
 constexpr auto make_parameters() {
-  constexpr auto sv = parm;
-  constexpr auto& ar = parse_type_specs_v<parm, true>;
-  constexpr auto size = ar.size();
-  using sequence = std::make_index_sequence<size>;
-  using mms = make_members_struct<ar, sequence>;
-  return mms::make_members_ts();
+  constexpr auto ts = parse_type_specs<parm, true>();
+  if constexpr (ts.size()) static_assert(ts[ts.size() - 1].name.second != -1);
+  return make_members_helper<parm, ts>(std::make_index_sequence<ts.size()>());
 }
 
 // todo make constexpr
@@ -450,9 +445,10 @@ inline std::string get_sql_string(std::string_view sv,
     ret += " ";
     auto ts_str =
         sv.substr(i + start_group.size(), end - (i + start_group.size()) - 1);
-    auto ts = parse_type_spec(ts_str);
-    if (ts.name.front() != '?') {
-      ret += std::string(ts.name);
+    auto ts = parse_type_spec(i + start_group.size(),ts_str);
+    auto name = sv.substr(ts.name.first, ts.name.second);
+    if (name.front() != '?') {
+      ret += std::string(name);
     } else {
       ret += '?';
     }
@@ -486,14 +482,29 @@ struct stmt_closer {
 
 using unique_stmt = std::unique_ptr<sqlite3_stmt, stmt_closer>;
 
-template <typename RowType, typename PTuple>
-struct prepared_statement {
-  unique_stmt stmt;
+template <fixed_string Query>
+class prepared_statement {
+  using RowType = decltype(make_members<Query>());
+  using PTuple = decltype(make_parameters<Query>());
+
+  unique_stmt stmt_;
   void reset_stmt() {
-    auto r = sqlite3_reset(stmt.get());
+    auto r = sqlite3_reset(stmt_.get());
     check_sqlite_return(r);
-    r = sqlite3_clear_bindings(stmt.get());
+    r = sqlite3_clear_bindings(stmt_.get());
     check_sqlite_return(r);
+  }
+
+ public:
+  prepared_statement(sqlite3 *sqldb) {
+    auto sv = Query.sv();
+    sqlite3_stmt *stmt;
+    auto query_string = get_sql_string(sv, start_group, end_group);
+    auto rc =
+        sqlite3_prepare_v2(sqldb, query_string.c_str(),
+                           static_cast<int>(query_string.size()), &stmt, 0);
+    check_sqlite_return(rc);
+    stmt_.reset(stmt);
   }
   template <typename... Args>
   row_range<RowType> execute_rows(Args &&... args) {
@@ -501,8 +512,8 @@ struct prepared_statement {
 
     PTuple p_tuple = {};
     tagged_tuple a_tuple{std::forward<Args>(args)...};
-    do_binding(stmt.get(), p_tuple, a_tuple);
-    return row_range<RowType>(stmt.get());
+    do_binding(stmt_.get(), p_tuple, a_tuple);
+    return row_range<RowType>(stmt_.get());
   }
   template <typename... Args>
   void execute(Args &&... args) {
@@ -510,93 +521,28 @@ struct prepared_statement {
 
     PTuple p_tuple = {};
     tagged_tuple a_tuple{std::forward<Args>(args)...};
-    do_binding(stmt.get(), p_tuple, a_tuple);
-    auto r = sqlite3_step(stmt.get());
+    do_binding(stmt_.get(), p_tuple, a_tuple);
+    auto r = sqlite3_step(stmt_.get());
     check_sqlite_return(r, SQLITE_DONE);
   }
 };
 
-template <const std::string_view &parm>
-auto prepare(sqlite3 *sqldb) {
-  using row_type = decltype(make_members<parm>());
-
-  auto sv = parm;
-  sqlite3_stmt *stmt;
-  auto query_string = get_sql_string(sv, start_group, end_group);
-  auto rc = sqlite3_prepare_v2(sqldb, query_string.c_str(),
-                               static_cast<int>(query_string.size()), &stmt, 0);
-  check_sqlite_return(rc);
-
-  using p_tuple_type = decltype(make_parameters<parm>());
-  return prepared_statement<row_type, p_tuple_type>{unique_stmt(stmt)};
-}
-
-template <const std::string_view &tag1, const std::string_view &tag2>
-constexpr auto concatenate_tags() {
-  constexpr auto tag_str1 = tag1;
-  constexpr auto tag_str2 = tag2;
-  std::array<char, tag_str1.size() + tag_str2.size() + 1> ar = {};
-  std::size_t i = 0;
-  for (auto c : tag_str1) {
-    ar[i] = c;
-    ++i;
-  }
-  ar[i] = '.';
-  ++i;
-  for (auto c : tag_str2) {
-    ar[i] = c;
-    ++i;
-  }
-  return ar;
-}
-
-
-template<auto Data,typename Sequence>
-struct fixed_string_to_compile_string_helper;
-
-template<auto Data,std::size_t... I>
-struct fixed_string_to_compile_string_helper<Data,std::index_sequence<I...>>{
-    using type = compile_string<Data[I]...>;
-
-};
-template<auto Data>
-using fixed_string_to_compile_string_helper_t = typename fixed_string_to_compile_string_helper<Data,std::make_index_sequence<Data.size()>>::type;
-
-template <std::size_t N>
-struct fixed_string
-{
-constexpr fixed_string(const char (&foo)[N+1])
-{ std::copy_n(foo, N+1, data); }
-auto operator<=>(const fixed_string &)const = default;
-char data[N+1];
-constexpr std::string_view sv() const{return std::string_view(&data,N);}
-constexpr auto size() const{return N;}
-constexpr auto operator[](std::size_t i) const{return data[i];}
-
-};
-template <std::size_t N>
-fixed_string(const char (&str)[N])->fixed_string<N-1>;
-
-
 template <fixed_string S, typename T>
 decltype(auto) field(T &&t) {
-    using cs = fixed_string_to_compile_string_helper_t<S>;
-    return skydown::sqlite_experimental::get<cs>(std::forward<T>(t));
+  return skydown::sqlite_experimental::get<
+      compile_string<fixed_string<S.size()>(S)>>(std::forward<T>(t));
 }
 
 template <fixed_string S, typename T>
 auto bind(T &&t) {
-    using cs = fixed_string_to_compile_string_helper_t<S>;
-  return make_member<cs>(std::forward<T>(t));
+  return make_member<compile_string<fixed_string<S.size()>(S)>>(
+      std::forward<T>(t));
 }
-
-
-
 
 }  // namespace sqlite_experimental
 
 using sqlite_experimental::bind;
 using sqlite_experimental::field;
-using sqlite_experimental::prepare;
+using sqlite_experimental::prepared_statement;
 
 }  // namespace skydown
