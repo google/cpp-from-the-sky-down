@@ -52,18 +52,18 @@ int main() {
   create_orders_t(sqldb).execute();
   insert_customer_t(sqldb).execute(bind<"id">(1), bind<"name">("John"));
 
-  auto prepared_insert_order = insert_order_t(sqldb);
+  insert_order_t insert_order{sqldb};
 
-  prepared_insert_order.execute(bind<"item">("Phone"), bind<"price">(1444.44),
+  insert_order.execute(bind<"item">("Phone"), bind<"price">(1444.44),
                                 bind<"customerid">(1));
-  prepared_insert_order.execute(bind<"item">("Laptop"), bind<"price">(1300.44),
+  insert_order.execute(bind<"item">("Laptop"), bind<"price">(1300.44),
                                 bind<"customerid">(1));
-  prepared_insert_order.execute(bind<"customerid">(1), bind<"price">(2000),
+  insert_order.execute(bind<"customerid">(1), bind<"price">(2000),
                                 bind<"item">("MacBook"));
 
   using skydown::field;
 
-  auto prepared_select_orders = select_orders_t(sqldb);
+  select_orders_t select_orders{sqldb};
 
   for (;;) {
     std::cout << "Enter min price.\n";
@@ -71,7 +71,7 @@ int main() {
     std::cin >> min_price;
 
     for (auto &row :
-         prepared_select_orders.execute_rows(bind<"price">(min_price))) {
+         select_orders.execute_rows(bind<"price">(min_price))) {
       // Access the fields using `field`. We will get a compiler error if we try
       // to access a field that is not part of the select statement.
       std::cout << field<"orders.id">(row) << " ";
