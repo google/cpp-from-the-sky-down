@@ -30,19 +30,23 @@ fixed_string(fixed_string<N>) -> fixed_string<N>;
 template <typename T>
 constexpr auto default_init = []() { return T{}; };
 
-struct dummy_conversion{};
+struct dummy_conversion {};
 
 template <typename Tag, typename T, auto Init = default_init<T>>
 struct member_impl {
   T value = Init();
-  member_impl(dummy_conversion):value(Init()){}
+  member_impl(dummy_conversion) : value(Init()) {
+    if constexpr (std::is_same_v<decltype(Init()), void>)
+      Tag("Missing required parameter");
+  }
   member_impl(T value) : value(std::move(value)) {}
   member_impl(const member_impl&) = default;
   member_impl& operator=(const member_impl&) = default;
   member_impl(member_impl&&) = default;
   member_impl& operator=(member_impl&&) = default;
   template <typename OtherT, auto OtherInit>
-  member_impl(const member_impl<Tag, OtherT, OtherInit>& other) : value(other.value){};
+  member_impl(const member_impl<Tag, OtherT, OtherInit>& other)
+      : value(other.value){};
   template <typename OtherT, auto OtherInit>
   member_impl(member_impl<Tag, OtherT, OtherInit>&& other)
       : value(std::move(other.value)){};
@@ -69,8 +73,21 @@ struct tuple_tag {
   }
 };
 
-template<fixed_string fs,typename T, auto Init = default_init<T>>
-using member = member_impl<tuple_tag<fixed_string<fs.size()>(fs)>, T,Init>;
+struct auto_;
+
+template<typename T, auto Init>
+struct t_or_auto{
+    using type = T;
+};
+
+template<auto Init>
+struct t_or_auto<auto_,Init>{
+    using type = decltype(Init());
+};
+
+
+template <fixed_string fs, typename T, auto Init = default_init<T>>
+using member = member_impl<tuple_tag<fixed_string<fs.size()>(fs)>, typename t_or_auto<T,Init>::type, Init>;
 
 template <typename Tag, typename T>
 auto make_member_impl(T t) {
@@ -79,7 +96,7 @@ auto make_member_impl(T t) {
 
 template <typename... Members>
 struct parameters : Members... {
-operator dummy_conversion(){return {};}
+  operator dummy_conversion() { return {}; }
 };
 
 template <typename... Members>
@@ -95,8 +112,8 @@ template <typename... Members>
 struct tagged_struct : tagged_struct_base<Members...> {
   using super = tagged_struct_base<Members...>;
   template <typename... Args>
-  tagged_struct(Args&&... args):super(parameters{std::forward<Args>(args)...}){}
-
+  tagged_struct(Args&&... args)
+      : super(parameters{std::forward<Args>(args)...}) {}
 };
 
 template <typename... Members>
@@ -121,8 +138,6 @@ template <typename Tag, typename T, auto Init>
 decltype(auto) get_impl(const member_impl<Tag, T, Init>&& m) {
   return std::move(m.value);
 }
-
-
 
 template <fixed_string fs, typename S>
 decltype(auto) get(S&& s) {
