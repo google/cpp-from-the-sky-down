@@ -266,14 +266,11 @@ struct fixed_string {
     std::copy_n(foo, N + 1, data);
   }
   constexpr fixed_string(const fixed_string &) = default;
-  constexpr fixed_string(std::string_view s){
-
+  constexpr fixed_string(std::string_view s) {
     std::copy_n(s.data(), N, data);
-
-      
-      };
+  };
   auto operator<=>(const fixed_string &) const = default;
-  char data[N + 1];
+  char data[N + 1] = {};
   constexpr std::string_view sv() const {
     return std::string_view(&data[0], N);
   }
@@ -323,13 +320,13 @@ using string_to_type_t = typename string_to_type<T>::type;
 constexpr std::string_view start_group = "{{";
 constexpr std::string_view end_group = "}}";
 
-template <fixed_string parm, bool is_parms>
+template <fixed_string query_string, bool is_parameter>
 constexpr auto get_type_spec_count(std::string_view start_group,
                                    std::string_view end_group) {
-  constexpr auto sv = parm.sv();
+  constexpr auto sv = query_string.sv();
   std::size_t count = 0;
   for (std::size_t i = sv.find(start_group); i != std::string_view::npos;) {
-    if (is_parms == (sv[i + start_group.size()] == '?')) {
+    if (is_parameter == (sv[i + start_group.size()] == '?')) {
       ++count;
     }
     i = sv.find(start_group, i + 1);
@@ -342,14 +339,12 @@ template <typename First, typename Second>
 struct pair {
   First first;
   Second second;
-
   constexpr auto operator<=>(const pair &other) const = default;
 };
 
-
 struct type_spec {
-  pair<int, int> name = {-1, -1};
-  pair<int, int> type = {-1, -1};
+  pair<std::size_t, std::size_t> name = {0,0};
+  pair<std::size_t, std::size_t> type = {0,0};
   bool optional;
   constexpr auto operator<=>(const type_spec &other) const = default;
 };
@@ -359,11 +354,11 @@ struct type_specs {
   auto operator<=>(const type_specs &) const = default;
   type_spec data[N];
   static constexpr std::size_t size() { return N; }
-  constexpr auto& operator[](std::size_t i) const { return data[i]; }
-  constexpr auto& operator[](std::size_t i) { return data[i]; }
+  constexpr auto &operator[](std::size_t i) const { return data[i]; }
+  constexpr auto &operator[](std::size_t i) { return data[i]; }
 };
 
-constexpr type_spec parse_type_spec(std::size_t base,std::string_view sv) {
+constexpr type_spec parse_type_spec(std::size_t base, std::string_view sv) {
   auto colon = sv.find(":");
   auto name = sv.substr(0, colon);
 
@@ -377,19 +372,19 @@ constexpr type_spec parse_type_spec(std::size_t base,std::string_view sv) {
                    .optional = optional};
 }
 
-template <fixed_string parm, bool is_parms>
+template <fixed_string query_string, bool is_parameter>
 constexpr auto parse_type_specs() {
-  constexpr auto sv = parm.sv();
+  constexpr auto sv = query_string.sv();
   constexpr auto size =
-      get_type_spec_count<parm, is_parms>(start_group, end_group);
+      get_type_spec_count<query_string, is_parameter>(start_group, end_group);
   type_specs<size> ar = {};
   std::size_t count = 0;
   for (std::size_t i = sv.find(start_group); i != std::string_view::npos;) {
     auto end = sv.find(end_group, i);
     auto start = i + start_group.size();
-    if (is_parms == (sv[start] == '?')) {
-      if (is_parms) ++start;
-      ar[count] = parse_type_spec(start,sv.substr(start, end - start));
+    if (is_parameter == (sv[start] == '?')) {
+      if (is_parameter) ++start;
+      ar[count] = parse_type_spec(start, sv.substr(start, end - start));
       ++count;
     }
     i = sv.find(start_group, i + 1);
@@ -398,11 +393,9 @@ constexpr auto parse_type_specs() {
   return ar;
 }
 
-template <fixed_string fs, type_spec ts>
+template <fixed_string query_string, type_spec ts>
 constexpr auto make_member_ts() {
-  constexpr auto sv = fs.sv();
-  static_assert(sv.size() != 0, "string view conversion");
-  static_assert(ts.name.second != 0);
+  constexpr auto sv = query_string.sv();
   constexpr fixed_string<ts.name.second> name{
       sv.substr(ts.name.first, ts.name.second)};
   constexpr fixed_string<ts.type.second> type =
@@ -411,24 +404,21 @@ constexpr auto make_member_ts() {
       string_to_type_t<compile_string<type>>{}));
 }
 
-template <fixed_string parm, type_specs ts, std::size_t... I>
+template <fixed_string query_string, type_specs ts, std::size_t... I>
 constexpr auto make_members_helper(std::index_sequence<I...>) {
-  return tagged_tuple{make_member_ts<parm, ts[I]>()...};
+  return tagged_tuple{make_member_ts<query_string, ts[I]>()...};
 }
 
-template <fixed_string parm>
+template <fixed_string query_string>
 constexpr auto make_members() {
-  constexpr auto ts = parse_type_specs<parm, false>();
-
-  if constexpr (ts.size()) static_assert(ts[ts.size() - 1].name.second != -1,"make members afiled");
-  return make_members_helper<parm, ts>(std::make_index_sequence<ts.size()>());
+  constexpr auto ts = parse_type_specs<query_string, false>();
+  return make_members_helper<query_string, ts>(std::make_index_sequence<ts.size()>());
 }
 
-template <fixed_string parm>
+template <fixed_string query_string>
 constexpr auto make_parameters() {
-  constexpr auto ts = parse_type_specs<parm, true>();
-  if constexpr (ts.size()) static_assert(ts[ts.size() - 1].name.second != -1);
-  return make_members_helper<parm, ts>(std::make_index_sequence<ts.size()>());
+  constexpr auto ts = parse_type_specs<query_string, true>();
+  return make_members_helper<query_string, ts>(std::make_index_sequence<ts.size()>());
 }
 
 // todo make constexpr
@@ -445,7 +435,7 @@ inline std::string get_sql_string(std::string_view sv,
     ret += " ";
     auto ts_str =
         sv.substr(i + start_group.size(), end - (i + start_group.size()) - 1);
-    auto ts = parse_type_spec(i + start_group.size(),ts_str);
+    auto ts = parse_type_spec(i + start_group.size(), ts_str);
     auto name = sv.substr(ts.name.first, ts.name.second);
     if (name.front() != '?') {
       ret += std::string(name);

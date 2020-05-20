@@ -70,9 +70,6 @@ int main() {
       // Access the fields using `field`. We will get a compiler error if we try
       // to access a field that is not part of the select statement.
       std::cout << field<"orders.id">(row) << " ";
-      // The statement below would cause a compiler error since we did not
-      // select customers.id.
-      // std::cout << field<customers, id>(row) << " ";
       std::cout << field<"price">(row) << " ";
       std::cout << field<"name">(row) << " ";
       std::cout << field<"item">(row).value() << "\n";
