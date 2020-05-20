@@ -320,18 +320,44 @@ using string_to_type_t = typename string_to_type<T>::type;
 constexpr std::string_view start_group = "{{";
 constexpr std::string_view end_group = "}}";
 
-template <fixed_string query_string, bool is_parameter>
+constexpr std::string_view delimiters = ", ();";
+constexpr std::string_view quotes = "\"\'";
+
+template <fixed_string query_string, bool is_parameter, bool all = false>
 constexpr auto get_type_spec_count(std::string_view start_group,
                                    std::string_view end_group) {
   constexpr auto sv = query_string.sv();
   std::size_t count = 0;
-  for (std::size_t i = sv.find(start_group); i != std::string_view::npos;) {
-    if (is_parameter == (sv[i + start_group.size()] == '?')) {
-      ++count;
-    }
-    i = sv.find(start_group, i + 1);
-  }
+  std::size_t start = 0;
+  std::size_t end = 0;
+  (void)end;
+  bool in_quote_single = false;
+  bool in_quote_double = false;
 
+  for (std::size_t i = 0; i < sv.size(); ++i) {
+    char c = sv[i];
+    if (c == '\'' && !in_quote_double) {
+      in_quote_single = !in_quote_single;
+      continue;
+    }
+    if (c == '\"' && !in_quote_single) {
+      in_quote_double = !in_quote_double;
+      continue;
+    }
+    if (in_quote_double || in_quote_single) continue;
+    if (delimiters.find(c) != delimiters.npos) {
+      start = i + 1;
+      continue;
+    }
+    if (c == ':') {
+      i = sv.find_first_of(delimiters, i);
+      if (i == sv.npos) throw("unable to find end of tag");
+      (void)end;
+      if (all || (sv[start] == '?') == is_parameter) {
+        ++count;
+      }
+    }
+  }
   return count;
 }
 
@@ -343,8 +369,8 @@ struct pair {
 };
 
 struct type_spec {
-  pair<std::size_t, std::size_t> name = {0,0};
-  pair<std::size_t, std::size_t> type = {0,0};
+  pair<std::size_t, std::size_t> name = {0, 0};
+  pair<std::size_t, std::size_t> type = {0, 0};
   bool optional;
   constexpr auto operator<=>(const type_spec &other) const = default;
 };
@@ -372,24 +398,46 @@ constexpr type_spec parse_type_spec(std::size_t base, std::string_view sv) {
                    .optional = optional};
 }
 
-template <fixed_string query_string, bool is_parameter>
+template <fixed_string query_string, bool is_parameter, bool all = false>
 constexpr auto parse_type_specs() {
   constexpr auto sv = query_string.sv();
   constexpr auto size =
-      get_type_spec_count<query_string, is_parameter>(start_group, end_group);
+      get_type_spec_count<query_string, is_parameter,all>(start_group, end_group);
   type_specs<size> ar = {};
   std::size_t count = 0;
-  for (std::size_t i = sv.find(start_group); i != std::string_view::npos;) {
-    auto end = sv.find(end_group, i);
-    auto start = i + start_group.size();
-    if (is_parameter == (sv[start] == '?')) {
-      if (is_parameter) ++start;
-      ar[count] = parse_type_spec(start, sv.substr(start, end - start));
-      ++count;
-    }
-    i = sv.find(start_group, i + 1);
-  }
+  std::size_t start = 0;
+  std::size_t end = 0;
+  bool in_quote_single = false;
+  bool in_quote_double = false;
 
+  for (std::size_t i = 0; i < sv.size(); ++i) {
+    char c = sv[i];
+    if (c == '\'' && !in_quote_double) {
+      in_quote_single = !in_quote_single;
+      continue;
+    }
+    if (c == '\"' && !in_quote_single) {
+      in_quote_double = !in_quote_double;
+      continue;
+    }
+    if (in_quote_double || in_quote_single) continue;
+    if (delimiters.find(c) != delimiters.npos) {
+      start = i + 1;
+      continue;
+    }
+    if (c == ':') {
+      i = sv.find_first_of(delimiters, i);
+      if (i == sv.npos) throw("unable to find end of tag");
+      end = i;
+      (void)end;
+      if (all || (sv[start] == '?') == is_parameter) {
+        if (!all && is_parameter) ++start;
+        ar[count] = parse_type_spec(start, sv.substr(start, end - start));
+        ++count;
+      }
+      start = i+1;
+    }
+  }
   return ar;
 }
 
@@ -412,40 +460,37 @@ constexpr auto make_members_helper(std::index_sequence<I...>) {
 template <fixed_string query_string>
 constexpr auto make_members() {
   constexpr auto ts = parse_type_specs<query_string, false>();
-  return make_members_helper<query_string, ts>(std::make_index_sequence<ts.size()>());
+  return make_members_helper<query_string, ts>(
+      std::make_index_sequence<ts.size()>());
 }
 
 template <fixed_string query_string>
 constexpr auto make_parameters() {
   constexpr auto ts = parse_type_specs<query_string, true>();
-  return make_members_helper<query_string, ts>(std::make_index_sequence<ts.size()>());
+  return make_members_helper<query_string, ts>(
+      std::make_index_sequence<ts.size()>());
 }
 
 // todo make constexpr
-inline std::string get_sql_string(std::string_view sv,
-                                  std::string_view start_group,
-                                  std::string_view end_group) {
+template <std::size_t N>
+inline std::string get_sql_string(std::string_view sv, type_specs<N> specs) {
   std::string ret;
   ret.reserve(sv.size());
   std::size_t prev_i = 0;
-  for (std::size_t i = sv.find(start_group); i != std::string_view::npos;) {
-    ret += std::string(sv.substr(prev_i, i - prev_i));
-    auto end = sv.find(end_group, i);
-
-    ret += " ";
-    auto ts_str =
-        sv.substr(i + start_group.size(), end - (i + start_group.size()) - 1);
-    auto ts = parse_type_spec(i + start_group.size(), ts_str);
-    auto name = sv.substr(ts.name.first, ts.name.second);
-    if (name.front() != '?') {
-      ret += std::string(name);
-    } else {
+  for (type_spec &ts : specs.data) {
+    ret += std::string(sv.substr(prev_i, ts.name.first - prev_i));
+    std::string_view name = sv.substr(ts.name.first,ts.name.second);
+    std::string_view type = sv.substr(ts.type.first,ts.type.second);
+    if (sv[ts.name.first] == '?') {
       ret += '?';
+    } else {
+      ret += std::string(sv.substr(ts.name.first, ts.name.second));
     }
     ret += " ";
-    prev_i = end + end_group.size();
-    i = sv.find(start_group, i + 1);
+    prev_i = ts.type.first + ts.type.second;
+    if(ts.optional) ++prev_i;
   }
+
   ret += std::string(sv.substr(prev_i));
 
   return ret;
@@ -489,7 +534,8 @@ class prepared_statement {
   prepared_statement(sqlite3 *sqldb) {
     auto sv = Query.sv();
     sqlite3_stmt *stmt;
-    auto query_string = get_sql_string(sv, start_group, end_group);
+    auto specs = parse_type_specs<Query,true,true>();
+    auto query_string = get_sql_string(sv, specs);
     auto rc =
         sqlite3_prepare_v2(sqldb, query_string.c_str(),
                            static_cast<int>(query_string.size()), &stmt, 0);

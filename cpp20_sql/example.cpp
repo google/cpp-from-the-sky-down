@@ -30,8 +30,8 @@ int main() {
       .execute();
 
   skydown::prepared_statement<
-      "INSERT INTO customers(id, name) VALUES( {{?id:int}}, "
-      "{{?name:string}});"  //
+      "INSERT INTO customers(id, name) VALUES( ?id:int, "
+      "?name:string);"  //
       >
       insert_customer{sqldb};
 
@@ -40,7 +40,7 @@ int main() {
 
   skydown::prepared_statement<
       "INSERT INTO orders(item , customerid , price ) "
-      "VALUES ({{?item:string}},{{?customerid:int}},{{?price:double}});"  //
+      "VALUES (?item:string,?customerid:int , ?price:double );"  //
       >
       insert_order{sqldb};
 
@@ -54,10 +54,10 @@ int main() {
   using skydown::field;
 
   skydown::prepared_statement<
-      "SELECT  {{orders.id:int}}, {{name:string}},  {{item:string?}}, "
-      "{{price:double}} "
+      "SELECT  orders.id:int, name:string,  item:string?, "
+      "price:double "
       "FROM orders JOIN customers ON customers.id = customerid where price > "
-      "{{?price:double}};"  //
+      "?price:double;"  //
       >
       select_orders{sqldb};
 
