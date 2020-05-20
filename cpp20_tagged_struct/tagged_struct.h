@@ -28,24 +28,31 @@ template <std::size_t N>
 fixed_string(fixed_string<N>) -> fixed_string<N>;
 
 template <typename T>
-constexpr auto default_init = []() { T{}; };
+constexpr auto default_init = []() { return T{}; };
 
-template <typename Tag, typename T, auto Init = +default_init<T>>
-struct member {
+struct dummy_conversion{};
+
+template <typename Tag, typename T, auto Init = default_init<T>>
+struct member_impl {
   T value = Init();
-  member(const member&) = default;
-  member& operator=(const member&) = default;
-  member(member&&) = default;
-  member& operator=(member&&) = default;
+  member_impl(dummy_conversion):value(Init()){}
+  member_impl(T value) : value(std::move(value)) {}
+  member_impl(const member_impl&) = default;
+  member_impl& operator=(const member_impl&) = default;
+  member_impl(member_impl&&) = default;
+  member_impl& operator=(member_impl&&) = default;
   template <typename OtherT, auto OtherInit>
-  member(const member<Tag, OtherT, OtherInit>& other) : value(other.value){};
-  member(member<Tag, OtherT, OtherInit>&& other)
+  member_impl(const member_impl<Tag, OtherT, OtherInit>& other) : value(other.value){};
+  template <typename OtherT, auto OtherInit>
+  member_impl(member_impl<Tag, OtherT, OtherInit>&& other)
       : value(std::move(other.value)){};
-  member& operator=(const member<Tag, OtherT, OtherInit>& other) {
+  template <typename OtherT, auto OtherInit>
+  member_impl& operator=(const member_impl<Tag, OtherT, OtherInit>& other) {
     value = other.value;
     return *this;
   }
-  member& operator=(member<Tag, OtherT, OtherInit>&& other) {
+  template <typename OtherT, auto OtherInit>
+  member_impl& operator=(member_impl<Tag, OtherT, OtherInit>&& other) {
     value = std::move(other.value);
     return *this;
   };
@@ -53,46 +60,69 @@ struct member {
   using tag_type = Tag;
   using value_type = T;
 };
-
-template <typename Tag, typename T>
-auto make_member(T t) {
-  return member<Tag, T>{std::move(t)};
-}
-
-template <typename... Members>
-struct tagged_struct : Members... {};
-
-template <typename... Members>
-tagged_struct(Members&&...) -> tagged_struct<std::decay_t<Members>...>;
-
-template <typename Tag, typename T, auto Init>
-decltype(auto) get_impl(member<Tag, T, Init>& m) {
-  return (m.value);
-}
-
-template <typename Tag, typename T, auto Init>
-decltype(auto) get_impl(const member<Tag, T, Init>& m) {
-  return (m.value);
-}
-
-template <typename Tag, typename T, auto Init>
-decltype(auto) get_impl(member<Tag, T, Init>&& m) {
-  return std::move(m.value);
-}
-
-template <typename Tag, typename T, auto Init>
-decltype(auto) get_impl(const member<Tag, T, Init>&& m) {
-  return std::move(m.value);
-}
-
 template <fixed_string fs>
 struct tuple_tag {
   static constexpr decltype(fs) value = fs;
   template <typename T>
   auto operator=(T t) {
-    return member<tuple_tag<fixed_string<fs.size()>(fs)>, T>{std::move(t)};
+    return member_impl<tuple_tag<fixed_string<fs.size()>(fs)>, T>{std::move(t)};
   }
 };
+
+template<fixed_string fs,typename T, auto Init = default_init<T>>
+using member = member_impl<tuple_tag<fixed_string<fs.size()>(fs)>, T,Init>;
+
+template <typename Tag, typename T>
+auto make_member_impl(T t) {
+  return member_impl<Tag, T>{std::move(t)};
+}
+
+template <typename... Members>
+struct parameters : Members... {
+operator dummy_conversion(){return {};}
+};
+
+template <typename... Members>
+parameters(Members&&...) -> parameters<std::decay_t<Members>...>;
+
+template <typename... Members>
+struct tagged_struct_base : Members... {
+  template <typename... Args>
+  tagged_struct_base(parameters<Args...> p) : Members{p}... {}
+};
+
+template <typename... Members>
+struct tagged_struct : tagged_struct_base<Members...> {
+  using super = tagged_struct_base<Members...>;
+  template <typename... Args>
+  tagged_struct(Args&&... args):super(parameters{std::forward<Args>(args)...}){}
+
+};
+
+template <typename... Members>
+tagged_struct(Members&&...) -> tagged_struct<std::decay_t<Members>...>;
+
+template <typename Tag, typename T, auto Init>
+decltype(auto) get_impl(member_impl<Tag, T, Init>& m) {
+  return (m.value);
+}
+
+template <typename Tag, typename T, auto Init>
+decltype(auto) get_impl(const member_impl<Tag, T, Init>& m) {
+  return (m.value);
+}
+
+template <typename Tag, typename T, auto Init>
+decltype(auto) get_impl(member_impl<Tag, T, Init>&& m) {
+  return std::move(m.value);
+}
+
+template <typename Tag, typename T, auto Init>
+decltype(auto) get_impl(const member_impl<Tag, T, Init>&& m) {
+  return std::move(m.value);
+}
+
+
 
 template <fixed_string fs, typename S>
 decltype(auto) get(S&& s) {
