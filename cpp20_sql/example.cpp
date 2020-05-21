@@ -15,34 +15,36 @@
 #include "tagged_sqlite.h"
 
 int main() {
+  using namespace skydown::literals;
   sqlite3 *sqldb;
   sqlite3_open(":memory:", &sqldb);
 
   skydown::prepared_statement<
-      "CREATE TABLE customers(id INTEGER NOT NULL PRIMARY KEY, name TEXT);"  //
+      "CREATE TABLE customers("
+      "id INTEGER NOT NULL PRIMARY KEY, "
+      "name TEXT"
+      ");"  //
       >{sqldb}
       .execute();
 
   skydown::prepared_statement<
-      "CREATE TABLE orders(id INTEGER NOT NULL PRIMARY KEY, item TEXT, "
-      "customerid INTEGER, price REAL);"  //
+      "CREATE TABLE orders("
+      "id INTEGER NOT NULL PRIMARY KEY,"
+      "item TEXT, "
+      "customerid INTEGER, price REAL"
+      ");"  //
       >{sqldb}
       .execute();
 
   skydown::prepared_statement<
-      "INSERT INTO customers(id, name) VALUES( ?id:int, "
-      "?name:string);"  //
-      >
-      insert_customer{sqldb};
-
-  using namespace skydown::literals;
-  using skydown::bind;
-
-  insert_customer.execute("id"_param = 1, "name"_param = "John");
+      "INSERT INTO customers(id, name) "
+      "VALUES(?id:int, ?name:string);"  //
+      >{sqldb}
+      .execute("id"_param = 1, "name"_param = "John");
 
   skydown::prepared_statement<
       "INSERT INTO orders(item , customerid , price ) "
-      "VALUES (?item:string,?customerid:int , ?price:double );"  //
+      "VALUES (?item:string, ?customerid:int, ?price:double );"  //
       >
       insert_order{sqldb};
 
@@ -54,11 +56,9 @@ int main() {
                        "item"_param = "MacBook");
 
   skydown::prepared_statement<
-      "SELECT  orders.id:int, name:string,  item:string?, "
-      "price:double "
-      "FROM orders JOIN customers ON customers.id = customerid where price > "
-      "?min_price:double;"  //
-      >
+      "SELECT orders.id:int, name:string, item:string?, price:double "
+      "FROM orders JOIN customers ON customers.id = customerid "
+      "WHERE price > ?min_price:double;">
       select_orders{sqldb};
 
   for (;;) {
