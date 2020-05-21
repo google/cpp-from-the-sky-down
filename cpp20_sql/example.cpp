@@ -35,8 +35,10 @@ int main() {
       >
       insert_customer{sqldb};
 
+  using namespace skydown::literals;
   using skydown::bind;
-  insert_customer.execute(bind<"id">(1), bind<"name">("John"));
+
+  insert_customer.execute("id"_param = 1, "name"_param = "John");
 
   skydown::prepared_statement<
       "INSERT INTO orders(item , customerid , price ) "
@@ -44,20 +46,18 @@ int main() {
       >
       insert_order{sqldb};
 
-  insert_order.execute(bind<"item">("Phone"), bind<"price">(1444.44),
-                       bind<"customerid">(1));
-  insert_order.execute(bind<"item">("Laptop"), bind<"price">(1300.44),
-                       bind<"customerid">(1));
-  insert_order.execute(bind<"customerid">(1), bind<"price">(2000),
-                       bind<"item">("MacBook"));
-
-  using skydown::field;
+  insert_order.execute("item"_param = "Phone", "price"_param = 1444.44,
+                       "customerid"_param = 1);
+  insert_order.execute("item"_param = "Laptop", "price"_param = 1300.44,
+                       "customerid"_param = 1);
+  insert_order.execute("customerid"_param = 1, "price"_param = 2000,
+                       "item"_param = "MacBook");
 
   skydown::prepared_statement<
       "SELECT  orders.id:int, name:string,  item:string?, "
       "price:double "
       "FROM orders JOIN customers ON customers.id = customerid where price > "
-      "?price:double;"  //
+      "?min_price:double;"  //
       >
       select_orders{sqldb};
 
@@ -66,13 +66,13 @@ int main() {
     double min_price = 0;
     std::cin >> min_price;
 
-    for (auto &row : select_orders.execute_rows(bind<"price">(min_price))) {
+    for (auto &row : select_orders.execute_rows("min_price"_param = min_price)) {
       // Access the fields using `field`. We will get a compiler error if we try
       // to access a field that is not part of the select statement.
-      std::cout << field<"orders.id">(row) << " ";
-      std::cout << field<"price">(row) << " ";
-      std::cout << field<"name">(row) << " ";
-      std::cout << field<"item">(row).value() << "\n";
+      std::cout << row["orders.id"_col] << " ";
+      std::cout << row["price"_col] << " ";
+      std::cout << row["name"_col] << " ";
+      std::cout << row["item"_col].value() << "\n";
     }
   }
 }

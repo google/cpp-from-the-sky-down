@@ -219,27 +219,6 @@ auto make_member(T t) {
   return member<Tag, T>{std::move(t)};
 }
 
-template <typename... Members>
-struct tagged_tuple : Members... {};
-
-template <typename... Members>
-tagged_tuple(Members &&...) -> tagged_tuple<std::decay_t<Members>...>;
-
-template <typename... Members>
-constexpr auto tuple_size(const tagged_tuple<Members...> &) {
-  return sizeof...(Members);
-}
-
-template <typename... Members, typename F>
-void for_each(const tagged_tuple<Members...> &m, F f) {
-  (f(static_cast<const Members &>(m)), ...);
-}
-
-template <typename... Members, typename F>
-void for_each(tagged_tuple<Members...> &m, F f) {
-  (f(static_cast<Members &>(m)), ...);
-}
-
 template <typename Tag, typename T>
 decltype(auto) get(member<Tag, T> &m) {
   return (m.value);
@@ -258,6 +237,44 @@ decltype(auto) get(member<Tag, T> &&m) {
 template <typename Tag, typename T>
 decltype(auto) get(const member<Tag, T> &&m) {
   return std::move(m.value);
+}
+
+template <typename... Members>
+struct tagged_tuple : Members... {
+  template <typename Tag>
+  decltype(auto) operator[](Tag) & {
+    return get<Tag>(*this);
+  }
+  template <typename Tag>
+  decltype(auto) operator[](Tag) const & {
+    return get<Tag>(*this);
+  }
+  template <typename Tag>
+  decltype(auto) operator[](Tag) && {
+    return get<Tag>(std::move(*this));
+  }
+  template <typename Tag>
+  decltype(auto) operator[](Tag) const && {
+    return get<Tag>(std::move(*this));
+  }
+};
+
+template <typename... Members>
+tagged_tuple(Members &&...) -> tagged_tuple<std::decay_t<Members>...>;
+
+template <typename... Members>
+constexpr auto tuple_size(const tagged_tuple<Members...> &) {
+  return sizeof...(Members);
+}
+
+template <typename... Members, typename F>
+void for_each(const tagged_tuple<Members...> &m, F f) {
+  (f(static_cast<const Members &>(m)), ...);
+}
+
+template <typename... Members, typename F>
+void for_each(tagged_tuple<Members...> &m, F f) {
+  (f(static_cast<Members &>(m)), ...);
 }
 
 template <std::size_t N>
@@ -401,8 +418,8 @@ constexpr type_spec parse_type_spec(std::size_t base, std::string_view sv) {
 template <fixed_string query_string, bool is_parameter, bool all = false>
 constexpr auto parse_type_specs() {
   constexpr auto sv = query_string.sv();
-  constexpr auto size =
-      get_type_spec_count<query_string, is_parameter,all>(start_group, end_group);
+  constexpr auto size = get_type_spec_count<query_string, is_parameter, all>(
+      start_group, end_group);
   type_specs<size> ar = {};
   std::size_t count = 0;
   std::size_t start = 0;
@@ -435,7 +452,7 @@ constexpr auto parse_type_specs() {
         ar[count] = parse_type_spec(start, sv.substr(start, end - start));
         ++count;
       }
-      start = i+1;
+      start = i + 1;
     }
   }
   return ar;
@@ -479,8 +496,10 @@ inline std::string get_sql_string(std::string_view sv, type_specs<N> specs) {
   std::size_t prev_i = 0;
   for (type_spec &ts : specs.data) {
     ret += std::string(sv.substr(prev_i, ts.name.first - prev_i));
-    std::string_view name = sv.substr(ts.name.first,ts.name.second);
-    std::string_view type = sv.substr(ts.type.first,ts.type.second);
+    [[maybe_unused]] std::string_view name =
+        sv.substr(ts.name.first, ts.name.second);
+    [[maybe_unused]] std::string_view type =
+        sv.substr(ts.type.first, ts.type.second);
     if (sv[ts.name.first] == '?') {
       ret += '?';
     } else {
@@ -488,7 +507,7 @@ inline std::string get_sql_string(std::string_view sv, type_specs<N> specs) {
     }
     ret += " ";
     prev_i = ts.type.first + ts.type.second;
-    if(ts.optional) ++prev_i;
+    if (ts.optional) ++prev_i;
   }
 
   ret += std::string(sv.substr(prev_i));
@@ -534,7 +553,7 @@ class prepared_statement {
   prepared_statement(sqlite3 *sqldb) {
     auto sv = Query.sv();
     sqlite3_stmt *stmt;
-    auto specs = parse_type_specs<Query,true,true>();
+    auto specs = parse_type_specs<Query, true, true>();
     auto query_string = get_sql_string(sv, specs);
     auto rc =
         sqlite3_prepare_v2(sqldb, query_string.c_str(),
@@ -575,10 +594,34 @@ auto bind(T &&t) {
       std::forward<T>(t));
 }
 
+template <typename Tag>
+struct param_helper {
+  template <typename T>
+  auto operator=(T t) {
+    return make_member<Tag, T>(std::move(t));
+  }
+};
+
 }  // namespace sqlite_experimental
 
 using sqlite_experimental::bind;
 using sqlite_experimental::field;
 using sqlite_experimental::prepared_statement;
+
+namespace literals {
+
+template <sqlite_experimental::fixed_string fs>
+auto operator""_col() {
+  return sqlite_experimental::compile_string<
+      sqlite_experimental::fixed_string<fs.size()>(fs)>();
+}
+
+template <sqlite_experimental::fixed_string fs>
+auto operator""_param() {
+  return sqlite_experimental::param_helper<sqlite_experimental::compile_string<
+      sqlite_experimental::fixed_string<fs.size()>(fs)>>();
+}
+
+}  // namespace literals
 
 }  // namespace skydown
