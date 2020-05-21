@@ -66,9 +66,11 @@ int main() {
     double min_price = 0;
     std::cin >> min_price;
 
-    for (auto &row : select_orders.execute_rows("min_price"_param = min_price)) {
-      // Access the fields using `field`. We will get a compiler error if we try
-      // to access a field that is not part of the select statement.
+    for (auto &row :
+         select_orders.execute_rows("min_price"_param = min_price)) {
+      // Access the fields using by indexing the row with the column (`_col`).
+      // We will get a compiler error if we try to access a column that is not
+      // part of the select statement.
       std::cout << row["orders.id"_col] << " ";
       std::cout << row["price"_col] << " ";
       std::cout << row["name"_col] << " ";
