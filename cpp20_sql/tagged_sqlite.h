@@ -143,6 +143,7 @@ struct row_range {
     }
 
     bool operator!=(end_type) { return p->last_result == SQLITE_ROW; }
+    bool operator==(end_type) { return p->last_result != SQLITE_ROW; }
 
     RowType &operator*() {
       p->row = read_row<RowType>(p->stmt);
@@ -256,6 +257,39 @@ void for_each(const tagged_tuple<Members...> &m, F f) {
 template <typename... Members, typename F>
 void for_each(tagged_tuple<Members...> &m, F f) {
   (f(static_cast<Members &>(m)), ...);
+}
+
+auto to_concrete(const std::string_view &v) { return std::string(v); }
+auto to_concrete(std::int64_t i) { return i; }
+auto to_concrete(double d) { return d; }
+template <typename T>
+auto to_concrete(const std::optional<T> &o)
+    -> std::optional<decltype(to_concrete(std::declval<T>()))> {
+  if (!o) {
+    return std::nullopt;
+  } else {
+    return to_concrete(*o);
+  }
+}
+
+template <typename T>
+auto to_concrete(std::optional<T> &&o)
+    -> std::optional<decltype(to_concrete(std::declval<T>()))> {
+  if (!o) {
+    return std::nullopt;
+  } else {
+    return to_concrete(std::move(*o));
+  }
+}
+
+template <typename... Tags, typename... Ts>
+auto to_concrete(const tagged_tuple<member<Tags, Ts>...> &t) {
+  return tagged_tuple { make_member<Tags>(to_concrete(get<Tags>(t)))... };
+}
+
+template <typename... Tags, typename... Ts>
+auto to_concrete(tagged_tuple<member<Tags, Ts>...> &&t) {
+  return tagged_tuple { make_member<Tags>(to_concrete(get<Tags>(std::move(t))))... };
 }
 
 template <std::size_t N>
@@ -563,6 +597,16 @@ class prepared_statement {
     do_binding(stmt_.get(), p_tuple, a_tuple);
     return row_range<RowType>(stmt_.get());
   }
+template <typename... Args>
+  std::optional<decltype(to_concrete(std::declval<RowType>()))> execute_single_row(Args &&... args) {
+      auto rng = execute_rows(std::forward<Args>(args)...);
+      auto begin = rng.begin();
+      if(begin != rng.end()){
+          return to_concrete(*begin);
+      } else{
+          return std::nullopt;
+      }
+  }
   template <typename... Args>
   void execute(Args &&... args) {
     reset_stmt();
@@ -600,6 +644,7 @@ struct param_helper {
 using sqlite_experimental::bind;
 using sqlite_experimental::field;
 using sqlite_experimental::prepared_statement;
+using sqlite_experimental::to_concrete;
 
 namespace literals {
 

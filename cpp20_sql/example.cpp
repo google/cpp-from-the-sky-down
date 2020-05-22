@@ -39,26 +39,41 @@ int main() {
       .execute();
 
   skydown::prepared_statement<
-      "INSERT INTO customers(id, name) "
-      "VALUES(?id:int, ?name:string);"  //
+      "INSERT INTO customers(name) "
+      "VALUES(?name:string);"  //
       >{sqldb}
-      .execute("id"_param = 1, "name"_param = "John");
+      .execute("name"_param = "John");
+
+ auto customer_id_or = skydown::prepared_statement<
+      "select id:int from customers "
+      "where name = ?name:string;"  //
+      >
+      {sqldb}.execute_single_row("name"_param = "John");;
+
+  if(!customer_id_or){
+    std::cerr << "Unable to find customer name\n";
+    return 1;
+  }
+  auto customer_id = customer_id_or.value()["id"_col];
 
   skydown::prepared_statement<
       "INSERT INTO orders(item , customerid , price, discount_code ) "
-      "VALUES (?item:string, ?customerid:int, ?price:double, ?discount_code:string? );"  //
+      "VALUES (?item:string, ?customerid:int, ?price:double, "
+      "?discount_code:string? );"  //
       >
       insert_order{sqldb};
 
   insert_order.execute("item"_param = "Phone", "price"_param = 1444.44,
-                       "customerid"_param = 1);
+                       "customerid"_param = customer_id);
   insert_order.execute("item"_param = "Laptop", "price"_param = 1300.44,
-                       "customerid"_param = 1);
-  insert_order.execute("customerid"_param = 1, "price"_param = 2000,
-                       "item"_param = "MacBook", "discount_code"_param = "BIGSALE");
+                       "customerid"_param = customer_id);
+  insert_order.execute("customerid"_param = customer_id, "price"_param = 2000,
+                       "item"_param = "MacBook",
+                       "discount_code"_param = "BIGSALE");
 
   skydown::prepared_statement<
-      "SELECT orders.id:int, name:string, item:string, price:double, discount_code:string? "
+      "SELECT orders.id:int, name:string, item:string, price:double, "
+      "discount_code:string? "
       "FROM orders JOIN customers ON customers.id = customerid "
       "WHERE price > ?min_price:double;">
       select_orders{sqldb};
