@@ -40,13 +40,13 @@ int main() {
 
   skydown::prepared_statement<
       "INSERT INTO customers(name) "
-      "VALUES(?name:string);"  //
+      "VALUES(?name:text);"  //
       >{sqldb}
       .execute("name"_param = "John");
 
  auto customer_id_or = skydown::prepared_statement<
-      "select id:int from customers "
-      "where name = ?name:string;"  //
+      "select id:integer from customers "
+      "where name = ?name:text;"  //
       >
       {sqldb}.execute_single_row("name"_param = "John");;
 
@@ -58,8 +58,8 @@ int main() {
 
   skydown::prepared_statement<
       "INSERT INTO orders(item , customerid , price, discount_code ) "
-      "VALUES (?item:string, ?customerid:int, ?price:double, "
-      "?discount_code:string? );"  //
+      "VALUES (?item:text, ?customerid:integer, ?price:real, "
+      "?discount_code:text? );"  //
       >
       insert_order{sqldb};
 
@@ -72,10 +72,10 @@ int main() {
                        "discount_code"_param = "BIGSALE");
 
   skydown::prepared_statement<
-      "SELECT orders.id:int, name:string, item:string, price:double, "
-      "discount_code:string? "
+      "SELECT orders.id:integer, name:text, item:text, price:real, "
+      "discount_code:text? "
       "FROM orders JOIN customers ON customers.id = customerid "
-      "WHERE price > ?min_price:double;">
+      "WHERE price > ?min_price:real;">
       select_orders{sqldb};
 
   for (;;) {

@@ -332,17 +332,17 @@ template <typename>
 struct string_to_type;
 
 template <>
-struct string_to_type<compile_string<"int">> {
+struct string_to_type<compile_string<"integer">> {
   using type = std::int64_t;
 };
 
 template <>
-struct string_to_type<compile_string<"string">> {
+struct string_to_type<compile_string<"text">> {
   using type = std::string_view;
 };
 
 template <>
-struct string_to_type<compile_string<"double">> {
+struct string_to_type<compile_string<"real">> {
   using type = double;
 };
 
