@@ -22,7 +22,7 @@ int main() {
   skydown::prepared_statement<
       "CREATE TABLE customers("
       "id INTEGER NOT NULL PRIMARY KEY, "
-      "name TEXT"
+      "name TEXT NOT NULL"
       ");"  //
       >{sqldb}
       .execute();
@@ -30,8 +30,10 @@ int main() {
   skydown::prepared_statement<
       "CREATE TABLE orders("
       "id INTEGER NOT NULL PRIMARY KEY,"
-      "item TEXT, "
-      "customerid INTEGER, price REAL"
+      "item TEXT NOT NULL, "
+      "customerid INTEGER NOT NULL,"
+      "price REAL NOT NULL, "
+      "discount_code TEXT "
       ");"  //
       >{sqldb}
       .execute();
@@ -43,8 +45,8 @@ int main() {
       .execute("id"_param = 1, "name"_param = "John");
 
   skydown::prepared_statement<
-      "INSERT INTO orders(item , customerid , price ) "
-      "VALUES (?item:string, ?customerid:int, ?price:double );"  //
+      "INSERT INTO orders(item , customerid , price, discount_code ) "
+      "VALUES (?item:string, ?customerid:int, ?price:double, ?discount_code:string? );"  //
       >
       insert_order{sqldb};
 
@@ -53,10 +55,10 @@ int main() {
   insert_order.execute("item"_param = "Laptop", "price"_param = 1300.44,
                        "customerid"_param = 1);
   insert_order.execute("customerid"_param = 1, "price"_param = 2000,
-                       "item"_param = "MacBook");
+                       "item"_param = "MacBook", "discount_code"_param = "BIGSALE");
 
   skydown::prepared_statement<
-      "SELECT orders.id:int, name:string, item:string?, price:double "
+      "SELECT orders.id:int, name:string, item:string, price:double, discount_code:string? "
       "FROM orders JOIN customers ON customers.id = customerid "
       "WHERE price > ?min_price:double;">
       select_orders{sqldb};
@@ -74,7 +76,8 @@ int main() {
       std::cout << row["orders.id"_col] << " ";
       std::cout << row["price"_col] << " ";
       std::cout << row["name"_col] << " ";
-      std::cout << row["item"_col].value() << "\n";
+      std::cout << row["item"_col] << " ";
+      std::cout << row["discount_code"_col].value_or("<NO CODE>") << "\n";
     }
   }
 }

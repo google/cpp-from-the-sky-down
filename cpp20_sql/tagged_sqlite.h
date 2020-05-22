@@ -46,20 +46,6 @@ void check_sqlite_return(T r, GoodValues... good_values) {
   }
 }
 
-inline bool read_row_into(sqlite3_stmt *stmt, int index,
-                          std::optional<std::int64_t> &v) {
-  auto type = sqlite3_column_type(stmt, index);
-  if (type == SQLITE_INTEGER) {
-    v = sqlite3_column_int64(stmt, index);
-    return true;
-  } else if (type == SQLITE_NULL) {
-    v = std::nullopt;
-    return true;
-  } else {
-    return false;
-  }
-}
-
 inline bool read_row_into(sqlite3_stmt *stmt, int index, std::int64_t &v) {
   auto type = sqlite3_column_type(stmt, index);
   if (type == SQLITE_INTEGER) {
@@ -72,20 +58,6 @@ inline bool read_row_into(sqlite3_stmt *stmt, int index, std::int64_t &v) {
   }
 }
 
-inline bool read_row_into(sqlite3_stmt *stmt, int index,
-                          std::optional<double> &v) {
-  auto type = sqlite3_column_type(stmt, index);
-  if (type == SQLITE_FLOAT) {
-    v = sqlite3_column_double(stmt, index);
-    return true;
-  } else if (type == SQLITE_NULL) {
-    v = std::nullopt;
-    return true;
-  } else {
-    return false;
-  }
-}
-
 inline bool read_row_into(sqlite3_stmt *stmt, int index, double &v) {
   auto type = sqlite3_column_type(stmt, index);
   if (type == SQLITE_FLOAT) {
@@ -93,24 +65,6 @@ inline bool read_row_into(sqlite3_stmt *stmt, int index, double &v) {
     return true;
   } else if (type == SQLITE_NULL) {
     return false;
-  } else {
-    return false;
-  }
-}
-
-inline bool read_row_into(sqlite3_stmt *stmt, int index,
-                          std::optional<std::string_view> &v) {
-  auto type = sqlite3_column_type(stmt, index);
-  if (type == SQLITE_TEXT) {
-    const char *ptr =
-        reinterpret_cast<const char *>(sqlite3_column_text(stmt, index));
-    auto size = sqlite3_column_bytes(stmt, index);
-
-    v = std::string_view(ptr, ptr ? size : 0);
-    return true;
-  } else if (type == SQLITE_NULL) {
-    v = std::nullopt;
-    return true;
   } else {
     return false;
   }
@@ -129,6 +83,18 @@ inline bool read_row_into(sqlite3_stmt *stmt, int index, std::string_view &v) {
     return false;
   } else {
     return false;
+  }
+}
+
+template <typename T>
+inline bool read_row_into(sqlite3_stmt *stmt, int index, std::optional<T> &v) {
+  auto type = sqlite3_column_type(stmt, index);
+  if (type == SQLITE_NULL) {
+    v = std::nullopt;
+    return true;
+  } else {
+    v.emplace();
+    return read_row_into(stmt, index, *v);
   }
 }
 
@@ -207,6 +173,16 @@ inline bool bind_impl(sqlite3_stmt *stmt, int index, std::string_view v) {
   return r == SQLITE_OK;
 }
 
+template <typename T>
+bool bind_impl(sqlite3_stmt *stmt, int index, const std::optional<T> &v) {
+  if (v.has_value()) {
+    return bind_impl(stmt, index, *v);
+  } else {
+    auto r = sqlite3_bind_null(stmt, index);
+    return r == SQLITE_OK;
+  }
+}
+
 template <typename Tag, typename T>
 struct member {
   T value;
@@ -218,6 +194,11 @@ template <typename Tag, typename T>
 auto make_member(T t) {
   return member<Tag, T>{std::move(t)};
 }
+
+template <typename Tag, typename T>
+std::true_type has_tag(const member<Tag, T> &);
+template <typename Tag>
+std::false_type has_tag(...);
 
 template <typename Tag, typename T>
 decltype(auto) get(member<Tag, T> &m) {
@@ -515,13 +496,25 @@ inline std::string get_sql_string(std::string_view sv, type_specs<N> specs) {
   return ret;
 }
 
+template <typename T>
+std::true_type is_optional(const std::optional<T> &);
+
+std::false_type is_optional(...);
+
 template <typename PTuple, typename ATuple>
 void do_binding(sqlite3_stmt *stmt, PTuple p_tuple, ATuple a_tuple) {
   int index = 1;
   skydown::sqlite_experimental::for_each(p_tuple, [&](auto &m) mutable {
     using m_t = std::decay_t<decltype(m)>;
     using tag = typename m_t::tag_type;
-    m.value = std::move(get<tag>(a_tuple));
+    m.value = [&]() -> m_t::value_type {
+      if constexpr (decltype(is_optional(m.value))::value &&
+                    !decltype(has_tag<tag>(a_tuple))::value) {
+        return std::nullopt;
+      } else {
+        return std::move(get<tag>(a_tuple));
+      }
+    }();
     auto r = bind_impl(stmt, index, m.value);
     check_sqlite_return<bool>(r, true);
     ++index;
