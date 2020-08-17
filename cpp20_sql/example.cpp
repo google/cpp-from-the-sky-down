@@ -15,7 +15,9 @@
 #include "tagged_sqlite.h"
 
 int main() {
-  using namespace skydown::literals;
+    using skydown::bind;
+    using skydown::field;
+
   sqlite3 *sqldb;
   sqlite3_open(":memory:", &sqldb);
 
@@ -42,19 +44,19 @@ int main() {
       "INSERT INTO customers(name) "
       "VALUES(?name:text);"  //
       >{sqldb}
-      .execute("name"_param = "John");
+      .execute(bind<"name">("John"));
 
  auto customer_id_or = skydown::prepared_statement<
       "select id:integer from customers "
       "where name = ?name:text;"  //
       >
-      {sqldb}.execute_single_row("name"_param = "John");;
+      {sqldb}.execute_single_row(bind<"name">("John"));;
 
   if(!customer_id_or){
     std::cerr << "Unable to find customer name\n";
     return 1;
   }
-  auto customer_id = customer_id_or.value()["id"_col];
+  auto customer_id = field<"id">(customer_id_or.value());
 
   skydown::prepared_statement<
       "INSERT INTO orders(item , customerid , price, discount_code ) "
@@ -63,13 +65,13 @@ int main() {
       >
       insert_order{sqldb};
 
-  insert_order.execute("item"_param = "Phone", "price"_param = 1444.44,
-                       "customerid"_param = customer_id);
-  insert_order.execute("item"_param = "Laptop", "price"_param = 1300.44,
-                       "customerid"_param = customer_id);
-  insert_order.execute("customerid"_param = customer_id, "price"_param = 2000,
-                       "item"_param = "MacBook",
-                       "discount_code"_param = "BIGSALE");
+  insert_order.execute(bind<"item">("Phone"), bind<"price">(1444.44),
+                       bind<"customerid">(customer_id));
+  insert_order.execute(bind<"item">("Laptop"), bind<"price">(1300.44),
+                       bind<"customerid">(customer_id));
+  insert_order.execute(bind<"customerid">(customer_id), bind<"price">(2000),
+                       bind<"item">("MacBook"),
+                       skydown::bind<"discount_code">("BIGSALE"));
 
   skydown::prepared_statement<
       "SELECT orders.id:integer, name:text, item:text, price:real, "
@@ -84,15 +86,16 @@ int main() {
     std::cin >> min_price;
 
     for (auto &row :
-         select_orders.execute_rows("min_price"_param = min_price)) {
+         select_orders.execute_rows(bind<"min_price">(min_price))) {
       // Access the fields using by indexing the row with the column (`_col`).
       // We will get a compiler error if we try to access a column that is not
       // part of the select statement.
-      std::cout << row["orders.id"_col] << " ";
-      std::cout << row["price"_col] << " ";
-      std::cout << row["name"_col] << " ";
-      std::cout << row["item"_col] << " ";
-      std::cout << row["discount_code"_col].value_or("<NO CODE>") << "\n";
+      std::cout << field<"orders.id">(row) << " ";
+      std::cout << field<"price">(row) << " ";
+      std::cout << field<"name">(row) << " ";
+      std::cout << field<"item">(row) << " ";
+      std::cout << skydown::field<"item">(row) << " ";
+      std::cout << field<"discount_code">(row).value_or("<NO CODE>") << "\n";
     }
   }
 }

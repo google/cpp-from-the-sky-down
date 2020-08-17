@@ -284,12 +284,13 @@ auto to_concrete(std::optional<T> &&o)
 
 template <typename... Tags, typename... Ts>
 auto to_concrete(const tagged_tuple<member<Tags, Ts>...> &t) {
-  return tagged_tuple { make_member<Tags>(to_concrete(get<Tags>(t)))... };
+  return tagged_tuple{make_member<Tags>(to_concrete(get<Tags>(t)))...};
 }
 
 template <typename... Tags, typename... Ts>
 auto to_concrete(tagged_tuple<member<Tags, Ts>...> &&t) {
-  return tagged_tuple { make_member<Tags>(to_concrete(get<Tags>(std::move(t))))... };
+  return tagged_tuple{
+      make_member<Tags>(to_concrete(get<Tags>(std::move(t))))...};
 }
 
 template <std::size_t N>
@@ -416,6 +417,12 @@ struct type_specs {
   constexpr auto &operator[](std::size_t i) { return data[i]; }
 };
 
+template <>
+struct type_specs<0> {
+  auto operator<=>(const type_specs &) const = default;
+  static constexpr std::size_t size() { return 0; }
+};
+
 constexpr type_spec parse_type_spec(std::size_t base, std::string_view sv) {
   auto colon = sv.find(":");
   auto name = sv.substr(0, colon);
@@ -435,42 +442,45 @@ constexpr auto parse_type_specs() {
   constexpr auto sv = query_string.sv();
   constexpr auto size = get_type_spec_count<query_string, is_parameter, all>(
       start_group, end_group);
-  type_specs<size> ar = {};
-  std::size_t count = 0;
-  std::size_t start = 0;
-  std::size_t end = 0;
-  bool in_quote_single = false;
-  bool in_quote_double = false;
+  type_specs<size> ar{};
+  if constexpr (size == 0) {
+    return ar;
+  } else {
+    std::size_t count = 0;
+    std::size_t start = 0;
+    std::size_t end = 0;
+    bool in_quote_single = false;
+    bool in_quote_double = false;
 
-  for (std::size_t i = 0; i < sv.size(); ++i) {
-    char c = sv[i];
-    if (c == '\'' && !in_quote_double) {
-      in_quote_single = !in_quote_single;
-      continue;
-    }
-    if (c == '\"' && !in_quote_single) {
-      in_quote_double = !in_quote_double;
-      continue;
-    }
-    if (in_quote_double || in_quote_single) continue;
-    if (delimiters.find(c) != delimiters.npos) {
-      start = i + 1;
-      continue;
-    }
-    if (c == ':') {
-      i = sv.find_first_of(delimiters, i);
-      if (i == sv.npos) throw("unable to find end of tag");
-      end = i;
-      (void)end;
-      if (all || (sv[start] == '?') == is_parameter) {
-        if (!all && is_parameter) ++start;
-        ar[count] = parse_type_spec(start, sv.substr(start, end - start));
-        ++count;
+    for (std::size_t i = 0; i < sv.size(); ++i) {
+      char c = sv[i];
+      if (c == '\'' && !in_quote_double) {
+        in_quote_single = !in_quote_single;
+        continue;
       }
-      start = i + 1;
+      if (c == '\"' && !in_quote_single) {
+        in_quote_double = !in_quote_double;
+        continue;
+      }
+      if (in_quote_double || in_quote_single) continue;
+      if (delimiters.find(c) != delimiters.npos) {
+        start = i + 1;
+        continue;
+      }
+      if (c == ':') {
+        i = sv.find_first_of(delimiters, i);
+        //  if (i == sv.npos) throw("unable to find end of tag");
+        end = i;
+        if (all || (sv[start] == '?') == is_parameter) {
+          if (!all && is_parameter) ++start;
+          ar[count] = parse_type_spec(start, sv.substr(start, end - start));
+          ++count;
+        }
+        start = i + 1;
+      }
     }
+    return ar;
   }
-  return ar;
 }
 
 template <fixed_string query_string, type_spec ts>
@@ -492,8 +502,12 @@ constexpr auto make_members_helper(std::index_sequence<I...>) {
 template <fixed_string query_string>
 constexpr auto make_members() {
   constexpr auto ts = parse_type_specs<query_string, false>();
-  return make_members_helper<query_string, ts>(
-      std::make_index_sequence<ts.size()>());
+  if constexpr (ts.size() == 0) {
+    return tagged_tuple<>{};
+  } else {
+    return make_members_helper<query_string, ts>(
+        std::make_index_sequence<ts.size()>());
+  }
 }
 
 template <fixed_string query_string>
@@ -506,28 +520,32 @@ constexpr auto make_parameters() {
 // todo make constexpr
 template <std::size_t N>
 inline std::string get_sql_string(std::string_view sv, type_specs<N> specs) {
-  std::string ret;
-  ret.reserve(sv.size());
-  std::size_t prev_i = 0;
-  for (type_spec &ts : specs.data) {
-    ret += std::string(sv.substr(prev_i, ts.name.first - prev_i));
-    [[maybe_unused]] std::string_view name =
-        sv.substr(ts.name.first, ts.name.second);
-    [[maybe_unused]] std::string_view type =
-        sv.substr(ts.type.first, ts.type.second);
-    if (sv[ts.name.first] == '?') {
-      ret += '?';
-    } else {
-      ret += std::string(sv.substr(ts.name.first, ts.name.second));
+  if constexpr (N == 0)
+    return std::string(sv);
+  else {
+    std::string ret;
+    ret.reserve(sv.size());
+    std::size_t prev_i = 0;
+    for (type_spec &ts : specs.data) {
+      ret += std::string(sv.substr(prev_i, ts.name.first - prev_i));
+      [[maybe_unused]] std::string_view name =
+          sv.substr(ts.name.first, ts.name.second);
+      [[maybe_unused]] std::string_view type =
+          sv.substr(ts.type.first, ts.type.second);
+      if (sv[ts.name.first] == '?') {
+        ret += '?';
+      } else {
+        ret += std::string(sv.substr(ts.name.first, ts.name.second));
+      }
+      ret += " ";
+      prev_i = ts.type.first + ts.type.second;
+      if (ts.optional) ++prev_i;
     }
-    ret += " ";
-    prev_i = ts.type.first + ts.type.second;
-    if (ts.optional) ++prev_i;
+
+    ret += std::string(sv.substr(prev_i));
+
+    return ret;
   }
-
-  ret += std::string(sv.substr(prev_i));
-
-  return ret;
 }
 
 template <typename T>
@@ -541,7 +559,7 @@ void do_binding(sqlite3_stmt *stmt, PTuple p_tuple, ATuple a_tuple) {
   skydown::sqlite_experimental::for_each(p_tuple, [&](auto &m) mutable {
     using m_t = std::decay_t<decltype(m)>;
     using tag = typename m_t::tag_type;
-    m.value = [&]() -> m_t::value_type {
+    m.value = [&]() -> typename m_t::value_type {
       if constexpr (decltype(is_optional(m.value))::value &&
                     !decltype(has_tag<tag>(a_tuple))::value) {
         return std::nullopt;
@@ -597,15 +615,16 @@ class prepared_statement {
     do_binding(stmt_.get(), p_tuple, a_tuple);
     return row_range<RowType>(stmt_.get());
   }
-template <typename... Args>
-  std::optional<decltype(to_concrete(std::declval<RowType>()))> execute_single_row(Args &&... args) {
-      auto rng = execute_rows(std::forward<Args>(args)...);
-      auto begin = rng.begin();
-      if(begin != rng.end()){
-          return to_concrete(*begin);
-      } else{
-          return std::nullopt;
-      }
+  template <typename... Args>
+  std::optional<decltype(to_concrete(std::declval<RowType>()))>
+  execute_single_row(Args &&... args) {
+    auto rng = execute_rows(std::forward<Args>(args)...);
+    auto begin = rng.begin();
+    if (begin != rng.end()) {
+      return to_concrete(*begin);
+    } else {
+      return std::nullopt;
+    }
   }
   template <typename... Args>
   void execute(Args &&... args) {
@@ -645,21 +664,5 @@ using sqlite_experimental::bind;
 using sqlite_experimental::field;
 using sqlite_experimental::prepared_statement;
 using sqlite_experimental::to_concrete;
-
-namespace literals {
-
-template <sqlite_experimental::fixed_string fs>
-auto operator""_col() {
-  return sqlite_experimental::compile_string<
-      sqlite_experimental::fixed_string<fs.size()>(fs)>();
-}
-
-template <sqlite_experimental::fixed_string fs>
-auto operator""_param() {
-  return sqlite_experimental::param_helper<sqlite_experimental::compile_string<
-      sqlite_experimental::fixed_string<fs.size()>(fs)>>();
-}
-
-}  // namespace literals
 
 }  // namespace skydown
