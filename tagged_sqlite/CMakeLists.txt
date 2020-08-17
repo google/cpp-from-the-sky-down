@@ -8,10 +8,12 @@ project(tagged_sqlite)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(SQLite3 REQUIRED)
+find_package(Threads REQUIRED)
+
 
 # Add source to this project's executable.
 add_executable (example "example.cpp" "tagged_sqlite.h")
-target_link_libraries(example SQLite::SQLite3)
+target_link_libraries(example SQLite::SQLite3 Threads::Threads ${CMAKE_DL_LIBS})
 
 
 # TODO: Add tests and instal l targets if needed.
