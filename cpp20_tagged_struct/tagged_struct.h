@@ -8,7 +8,7 @@ struct fixed_string {
   constexpr fixed_string(const char (&foo)[N + 1]) {
     std::copy_n(foo, N + 1, data);
   }
-  constexpr fixed_string(const fixed_string&) = default;
+//  constexpr fixed_string(const fixed_string<N>&) = default;
   constexpr fixed_string(std::string_view s) {
     std::copy_n(s.data(), N, data);
   };
@@ -17,7 +17,7 @@ struct fixed_string {
   constexpr std::string_view sv() const {
     return std::string_view(&data[0], N);
   }
-  constexpr auto size() const { return N; }
+  constexpr std::size_t size() const { return N; }
   constexpr auto operator[](std::size_t i) const { return data[i]; }
 };
 
@@ -68,26 +68,26 @@ template <fixed_string fs>
 struct tuple_tag {
   static constexpr decltype(fs) value = fs;
   template <typename T>
-  auto operator=(T t) {
-    return member_impl<tuple_tag<fixed_string<fs.size()>(fs)>, T>{std::move(t)};
+  auto operator=(T t) const {
+    return member_impl<tuple_tag<fs>, T>{std::move(t)};
   }
 };
 
 struct auto_;
 
-template<typename T, auto Init>
-struct t_or_auto{
-    using type = T;
+template <typename T, auto Init>
+struct t_or_auto {
+  using type = T;
 };
 
-template<auto Init>
-struct t_or_auto<auto_,Init>{
-    using type = decltype(Init());
+template <auto Init>
+struct t_or_auto<auto_, Init> {
+  using type = decltype(Init());
 };
-
 
 template <fixed_string fs, typename T, auto Init = default_init<T>>
-using member = member_impl<tuple_tag<fixed_string<fs.size()>(fs)>, typename t_or_auto<T,Init>::type, Init>;
+using member =
+    member_impl<tuple_tag<fixed_string<fs.size()>(fs)>, typename t_or_auto<T, Init>::type, Init>;
 
 template <typename Tag, typename T>
 auto make_member_impl(T t) {
@@ -149,9 +149,5 @@ decltype(auto) operator->*(S&& s, Tag) {
   return get_impl<Tag>(std::forward<S>(s));
 }
 
-namespace literals {
 template <fixed_string fs>
-auto operator""_tag() {
-  return tuple_tag<fixed_string<fs.size()>(fs)>();
-}
-};  // namespace literals
+inline constexpr auto tag = tuple_tag<fixed_string<fs.size()>(fs)>{};

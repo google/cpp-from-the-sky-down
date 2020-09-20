@@ -6,16 +6,17 @@
 
 
 int main() {
-  using namespace literals;
 
 
   tagged_struct<member<"hello", auto_, []{return 5;}>, member<"world", std::string>> ts{
-      "hello"_tag = 1};
+      tag<"hello"> = 1};
 
   using T = decltype(ts);
-  T t2{"world"_tag = std::string("JRB")};
+  T t2{tag<"world"> = std::string("JRB")};
 
-  std::cout << ts->*"hello"_tag << "\n";
-  std::cout << t2->*"hello"_tag << "\n";
-  std::cout << t2->*"world"_tag << "\n";
+  auto hello = tag<"hello">;
+  std::cout << ts->*tag<"hello"> << "\n";
+  std::cout << t2->*tag<"hello"> << "\n";
+  std::cout << t2->*hello << "\n";
+  std::cout << t2->*tag<"world"> << "\n";
 }
