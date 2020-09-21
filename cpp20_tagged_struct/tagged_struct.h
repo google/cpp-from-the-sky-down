@@ -34,21 +34,28 @@ struct dummy_conversion {};
 
 template <typename Tag, typename T, auto Init = default_init<T>>
 struct member_impl {
-  T value = Init();
-  member_impl(dummy_conversion) : value(Init()) {
-    if constexpr (std::is_same_v<decltype(Init()), void>)
-      Tag("Missing required parameter");
+  T value;
+  template<typename Self>
+  member_impl(Self& self, dummy_conversion) 
+      requires requires{{Init()}->std::convertible_to<T>;}
+      : value(Init()) {
+  }
+
+  template<typename Self>
+  member_impl(Self& self, dummy_conversion) 
+      requires requires{{Init(self)}->std::convertible_to<T>;}
+      : value(Init(self)) {
   }
   member_impl(T value) : value(std::move(value)) {}
   member_impl(const member_impl&) = default;
   member_impl& operator=(const member_impl&) = default;
   member_impl(member_impl&&) = default;
   member_impl& operator=(member_impl&&) = default;
-  template <typename OtherT, auto OtherInit>
-  member_impl(const member_impl<Tag, OtherT, OtherInit>& other)
+  template <typename Self,typename OtherT, auto OtherInit>
+  member_impl(Self& self, const member_impl<Tag, OtherT, OtherInit>& other)
       : value(other.value){};
-  template <typename OtherT, auto OtherInit>
-  member_impl(member_impl<Tag, OtherT, OtherInit>&& other)
+  template <typename Self, typename OtherT, auto OtherInit>
+  member_impl(Self& self, member_impl<Tag, OtherT, OtherInit>&& other)
       : value(std::move(other.value)){};
   template <typename OtherT, auto OtherInit>
   member_impl& operator=(const member_impl<Tag, OtherT, OtherInit>& other) {
@@ -104,8 +111,8 @@ parameters(Members&&...) -> parameters<std::decay_t<Members>...>;
 
 template <typename... Members>
 struct tagged_struct_base : Members... {
-  template <typename... Args>
-  tagged_struct_base(parameters<Args...> p) : Members{p}... {}
+  template <typename Self, typename... Args>
+  tagged_struct_base(Self& self, parameters<Args...> p) : Members{self,p}... {}
 };
 
 template <typename... Members>
@@ -113,7 +120,7 @@ struct tagged_struct : tagged_struct_base<Members...> {
   using super = tagged_struct_base<Members...>;
   template <typename... Args>
   tagged_struct(Args&&... args)
-      : super(parameters{std::forward<Args>(args)...}) {}
+      : super(*this,parameters{std::forward<Args>(args)...}) {}
 };
 
 template <typename... Members>
