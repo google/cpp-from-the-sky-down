@@ -1,10 +1,10 @@
 #pragma once
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <string_view>
 #include <tuple>
 #include <utility>
-#include <array>
 
 template <std::size_t N>
 struct fixed_string {
@@ -34,9 +34,9 @@ constexpr auto member_tag() {
   return Member::fs.sv();
 }
 
-template<typename T>
-struct type_to_type{
-    using type = T;
+template <typename T>
+struct type_to_type {
+  using type = T;
 };
 
 template <typename... Members>
@@ -46,7 +46,7 @@ template <typename S, typename M>
 struct chop_to_helper;
 
 template <typename... Members, typename M>
-struct chop_to_helper<tagged_struct<Members...>,M> {
+struct chop_to_helper<tagged_struct<Members...>, M> {
   template <auto fs>
   static constexpr std::size_t find_index() {
     std::array<std::string_view, sizeof...(Members)> ar{
@@ -59,16 +59,17 @@ struct chop_to_helper<tagged_struct<Members...>,M> {
   static constexpr std::size_t index = find_index<M::fs>();
   decltype(std::make_index_sequence<index>()) sequence;
   using member_tuple = std::tuple<Members...>;
-  template<std::size_t... I>
-  static constexpr auto chop(std::index_sequence<I...>){
-      return type_to_type<tagged_struct<std::tuple_element_t<I,member_tuple>...>>{};
+  template <std::size_t... I>
+  static constexpr auto chop(std::index_sequence<I...>) {
+    return type_to_type<
+        tagged_struct<std::tuple_element_t<I, member_tuple>...>>{};
   }
 
   using type = typename decltype(chop(sequence))::type;
 };
 
-template<typename S, typename M>
-using chopped = typename chop_to_helper<S,M>::type;
+template <typename S, typename M>
+using chopped = typename chop_to_helper<S, M>::type;
 
 template <typename T>
 constexpr auto default_init = []() { return T{}; };
@@ -85,6 +86,17 @@ struct member_impl {
   }
       : value(Init()) {
   }
+
+  template <typename Self>
+  member_impl(Self& self, dummy_conversion) requires requires {
+    { Init() }
+    ->std::same_as<void>;
+  }
+  {
+      static_assert(!std::is_same_v<decltype(Init()),void>,"Missing required argument.");
+  }
+
+
 
       template <typename Self>
       member_impl(Self& self, dummy_conversion) requires requires {
@@ -160,10 +172,11 @@ struct member {
 
 template <typename Self, typename Member>
 struct member_to_impl {
-  using type = member_impl<
-      tuple_tag<fixed_string<Member::fs.size()>(Member::fs)>,
-      typename t_or_auto<chopped<Self,Member>, typename Member::type, Member::init>::type,
-      Member::init>;
+  using type =
+      member_impl<tuple_tag<fixed_string<Member::fs.size()>(Member::fs)>,
+                  typename t_or_auto<chopped<Self, Member>,
+                                     typename Member::type, Member::init>::type,
+                  Member::init>;
 };
 
 template <typename Self, typename Member>
