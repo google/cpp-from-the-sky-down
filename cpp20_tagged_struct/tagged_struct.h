@@ -11,7 +11,6 @@ struct fixed_string {
   constexpr fixed_string(const char (&foo)[N + 1]) {
     std::copy_n(foo, N + 1, data);
   }
-  //  constexpr fixed_string(const fixed_string<N>&) = default;
   constexpr fixed_string(std::string_view s) {
     std::copy_n(s.data(), N, data);
   };
@@ -227,10 +226,5 @@ decltype(auto) get(S&& s) {
   return get_impl<tuple_tag<fixed_string<fs.size()>(fs)>>(std::forward<S>(s));
 }
 
-template <typename S, typename Tag>
-decltype(auto) operator->*(S&& s, Tag) {
-  return get_impl<Tag>(std::forward<S>(s));
-}
-
 template <fixed_string fs>
-inline constexpr auto tag = tuple_tag<fixed_string<fs.size()>(fs)>{};
+inline constexpr auto arg = tuple_tag<fixed_string<fs.size()>(fs)>{};
