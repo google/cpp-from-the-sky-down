@@ -154,6 +154,14 @@ struct t_or_auto<Self, auto_, Init> {
   using type = decltype(Init());
 };
 
+template <typename Self,typename T, auto Init>
+requires requires {
+  {Init(std::declval<Self&>())} -> std::convertible_to<T>;
+}
+struct t_or_auto<Self, T, Init> {
+  using type = decltype(Init(std::declval<Self&>()));
+};
+
 template <typename Self, auto Init>
 requires requires {
   {Init(std::declval<Self&>())};
@@ -161,6 +169,7 @@ requires requires {
 struct t_or_auto<Self, auto_, Init> {
   using type = decltype(Init(std::declval<Self&>()));
 };
+
 
 template <fixed_string Fs, typename T, auto Init = default_init<T>>
 struct member {
