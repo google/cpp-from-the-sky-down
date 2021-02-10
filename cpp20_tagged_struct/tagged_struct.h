@@ -6,6 +6,10 @@
 #include <tuple>
 #include <utility>
 
+namespace ftsd {
+
+    namespace internal_tagged_struct{
+
 template <std::size_t N>
 struct fixed_string {
   constexpr fixed_string(const char (&foo)[N + 1]) {
@@ -87,16 +91,15 @@ struct member_impl {
       : value(Init()) {
   }
 
-  template <typename Self>
-  member_impl(Self& self, dummy_conversion) requires requires {
-    { Init() }
-    ->std::same_as<void>;
-  }
-  {
-      static_assert(!std::is_same_v<decltype(Init()),void>,"Missing required argument.");
-  }
-
-
+      template <typename Self>
+      member_impl(Self& self, dummy_conversion) requires requires {
+        { Init() }
+        ->std::same_as<void>;
+      }
+      {
+        static_assert(!std::is_same_v<decltype(Init()), void>,
+                      "Missing required argument.");
+      }
 
       template <typename Self>
       member_impl(Self& self, dummy_conversion) requires requires {
@@ -135,7 +138,7 @@ struct tuple_tag {
   static constexpr decltype(fs) value = fs;
   template <typename T>
   auto operator=(T t) const {
-    return member_impl<tuple_tag<fs>, T>{std::move(t)};
+    return member_impl<tuple_tag<fixed_string<fs.size()>(fs)>, T>{std::move(t)};
   }
 };
 
@@ -154,9 +157,10 @@ struct t_or_auto<Self, auto_, Init> {
   using type = decltype(Init());
 };
 
-template <typename Self,typename T, auto Init>
+template <typename Self, typename T, auto Init>
 requires requires {
-  {Init(std::declval<Self&>())} -> std::convertible_to<T>;
+  { Init(std::declval<Self&>()) }
+  ->std::convertible_to<T>;
 }
 struct t_or_auto<Self, T, Init> {
   using type = decltype(Init(std::declval<Self&>()));
@@ -169,7 +173,6 @@ requires requires {
 struct t_or_auto<Self, auto_, Init> {
   using type = decltype(Init(std::declval<Self&>()));
 };
-
 
 template <fixed_string Fs, typename T, auto Init = default_init<T>>
 struct member {
@@ -211,18 +214,6 @@ struct tagged_struct_base : member_to_impl_t<Self, Members>... {
       : member_to_impl_t<Self, Members>{self, p}... {}
 };
 
-template <typename... Members>
-struct tagged_struct
-    : tagged_struct_base<tagged_struct<Members...>, Members...> {
-  using super = tagged_struct_base<tagged_struct, Members...>;
-  template <typename... Args>
-  tagged_struct(Args&&... args)
-      : super(*this, parameters{std::forward<Args>(args)...}) {}
-};
-
-template <typename... Members>
-tagged_struct(Members&&...) -> tagged_struct<std::decay_t<Members>...>;
-
 template <typename Tag, typename T, auto Init>
 decltype(auto) get_impl(member_impl<Tag, T, Init>& m) {
   return (m.value);
@@ -248,5 +239,53 @@ decltype(auto) get(S&& s) {
   return get_impl<tuple_tag<fixed_string<fs.size()>(fs)>>(std::forward<S>(s));
 }
 
+template <typename... Members>
+struct tagged_struct
+    : tagged_struct_base<tagged_struct<Members...>, Members...> {
+  using super = tagged_struct_base<tagged_struct, Members...>;
+  template <typename... Args>
+  tagged_struct(Args&&... args)
+      : super(*this, parameters{std::forward<Args>(args)...}) {}
+
+  template <auto fs>
+  auto& operator[](tuple_tag<fs>) {
+    return get<fs>(*this);
+  }
+};
+
+
+template<typename T>
+struct member_impl_to_member;
+
+template<auto fs, typename T, auto init>
+struct member_impl_to_member<member_impl<tuple_tag<fs>,T,init>>{
+    using type = member<fs,T,init>;
+};
+
+template<typename T>
+using member_impl_to_member_t = typename member_impl_to_member<T>::type;
+
+template <typename... Members>
+tagged_struct(Members&&...) -> tagged_struct<member_impl_to_member_t<std::decay_t<Members>>...>;
+
+
+
 template <fixed_string fs>
-inline constexpr auto arg = tuple_tag<fixed_string<fs.size()>(fs)>{};
+inline constexpr auto tag = tuple_tag<fixed_string<fs.size()>(fs)>{};
+
+}
+
+using internal_tagged_struct::get;
+using internal_tagged_struct::tagged_struct;
+using internal_tagged_struct::tag;
+using internal_tagged_struct::member;
+using internal_tagged_struct::auto_;
+
+namespace literals {
+template <internal_tagged_struct::fixed_string fs>  // placeholder type for deduction
+constexpr auto operator""_tag() {
+  return tag<fs>;
+}
+}  // namespace literals
+
+}  // namespace ftsd
