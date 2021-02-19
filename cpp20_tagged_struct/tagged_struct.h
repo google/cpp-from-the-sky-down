@@ -140,6 +140,10 @@ struct tuple_tag {
   auto operator=(T t) const {
     return member_impl<tuple_tag<fixed_string<fs.size()>(fs)>, T>{std::move(t)};
   }
+  template<typename T>
+  decltype(auto) operator()(T&& t)const{
+      return get<fs>(std::forward<T>(t));
+  }
 };
 
 struct auto_;
