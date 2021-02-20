@@ -81,5 +81,27 @@ TEST(TaggedStruct, NamedArguments) {
   func({"d"_tag = 1, "a"_tag = 5});
 }
 
+TEST(TaggedStruct, RelopsPredicate){
+
+  using namespace tag_relops;
+  using namespace literals;
+  tagged_struct ctad{tag<"a"> = 15, tag<"b"> = std::string("Hello ctad")};
+  auto predicate = tag<"a"> == 15;
+  EXPECT_TRUE(predicate(ctad));
+  EXPECT_FALSE(("a"_tag != 15)(ctad));
+  EXPECT_TRUE(("b"_tag == "Hello ctad")(ctad));
+  EXPECT_FALSE(("a"_tag < 15)(ctad));
+  EXPECT_FALSE(("a"_tag > 15)(ctad));
+  EXPECT_TRUE(("a"_tag <= 15)(ctad));
+  EXPECT_TRUE(("a"_tag >= 15)(ctad));
+ 
+  EXPECT_FALSE((15 < "a"_tag)(ctad));
+  EXPECT_FALSE((15 > "a"_tag)(ctad));
+  EXPECT_TRUE((15 <= "a"_tag)(ctad));
+  EXPECT_TRUE((15 >= "a"_tag)(ctad));
+  EXPECT_TRUE((15 == "a"_tag)(ctad));
+  EXPECT_FALSE((15 != "a"_tag)(ctad));
+}
+
 }  // namespace
 }  // namespace ftsd

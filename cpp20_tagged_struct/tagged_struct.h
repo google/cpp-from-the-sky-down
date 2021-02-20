@@ -8,7 +8,7 @@
 
 namespace ftsd {
 
-    namespace internal_tagged_struct{
+namespace internal_tagged_struct {
 
 template <std::size_t N>
 struct fixed_string {
@@ -106,8 +106,7 @@ struct member_impl {
         { Init(self) }
         ->std::convertible_to<T>;
       }
-      : value(Init(self)) {
-  }
+      : value(Init(self)) {}
       member_impl(T value) : value(std::move(value)) {}
       member_impl(const member_impl&) = default;
       member_impl& operator=(const member_impl&) = default;
@@ -130,6 +129,8 @@ struct member_impl {
         return *this;
       };
 
+      auto operator<=>(const member_impl&) const = default;
+
       using tag_type = Tag;
       using value_type = T;
 };
@@ -140,9 +141,9 @@ struct tuple_tag {
   auto operator=(T t) const {
     return member_impl<tuple_tag<fixed_string<fs.size()>(fs)>, T>{std::move(t)};
   }
-  template<typename T>
-  decltype(auto) operator()(T&& t)const{
-      return get<fs>(std::forward<T>(t));
+  template <typename T>
+  decltype(auto) operator()(T&& t) const {
+    return get<fs>(std::forward<T>(t));
   }
 };
 
@@ -216,6 +217,8 @@ struct tagged_struct_base : member_to_impl_t<Self, Members>... {
   template <typename... Args>
   tagged_struct_base(Self& self, parameters<Args...> p)
       : member_to_impl_t<Self, Members>{self, p}... {}
+
+  auto operator<=>(const tagged_struct_base&) const = default;
 };
 
 template <typename Tag, typename T, auto Init>
@@ -257,36 +260,199 @@ struct tagged_struct
   }
 };
 
-
-template<typename T>
+template <typename T>
 struct member_impl_to_member;
 
-template<auto fs, typename T, auto init>
-struct member_impl_to_member<member_impl<tuple_tag<fs>,T,init>>{
-    using type = member<fs,T,init>;
+template <auto fs, typename T, auto init>
+struct member_impl_to_member<member_impl<tuple_tag<fs>, T, init>> {
+  using type = member<fs, T, init>;
 };
 
-template<typename T>
+template <typename T>
 using member_impl_to_member_t = typename member_impl_to_member<T>::type;
 
 template <typename... Members>
-tagged_struct(Members&&...) -> tagged_struct<member_impl_to_member_t<std::decay_t<Members>>...>;
-
-
+tagged_struct(Members&&...)
+    -> tagged_struct<member_impl_to_member_t<std::decay_t<Members>>...>;
 
 template <fixed_string fs>
 inline constexpr auto tag = tuple_tag<fixed_string<fs.size()>(fs)>{};
 
+enum class tag_comparison { eq, ne, lt, gt, le, ge };
+
+template <typename TagOrValue1, typename TagOrValue2, tag_comparison comparison>
+struct tag_comparator_predicate {
+  template <typename Value, typename TS>
+  static const auto& get_value_for_comparison(const Value& value, const TS&) {
+    return value;
+  }
+
+  template <auto fs, typename TS>
+  static const auto& get_value_for_comparison(const tuple_tag<fs>& tag,
+                                              const TS& ts) {
+    return tag(ts);
+  }
+  TagOrValue1 tag_or_value1;
+  TagOrValue2 tag_or_value2;
+  template <typename TS>
+  bool operator()(const TS& ts) const {
+    const auto& a = get_value_for_comparison(tag_or_value1, ts);
+    const auto& b = get_value_for_comparison(tag_or_value2, ts);
+    if constexpr (comparison == tag_comparison::eq) {
+      return a == b;
+    }
+    if constexpr (comparison == tag_comparison::ne) {
+      return a != b;
+    }
+    if constexpr (comparison == tag_comparison::lt) {
+      return a < b;
+    }
+    if constexpr (comparison == tag_comparison::gt) {
+      return a > b;
+    }
+    if constexpr (comparison == tag_comparison::le) {
+      return a <= b;
+    }
+    if constexpr (comparison == tag_comparison::ge) {
+      return a >= b;
+    }
+  }
+};
+
+template <tag_comparison comparison, typename T1, typename T2>
+auto make_tag_comparator_predicate(T1 a, T2 b) {
+  return tag_comparator_predicate<T1, T2, comparison>{std::move(a),
+                                                      std::move(b)};
 }
 
-using internal_tagged_struct::get;
-using internal_tagged_struct::tagged_struct;
-using internal_tagged_struct::tag;
-using internal_tagged_struct::member;
+namespace tag_relops {
+
+// Compare two tags
+template <auto fs1, auto fs2>
+auto operator==(internal_tagged_struct::tuple_tag<fs1> a,
+                internal_tagged_struct::tuple_tag<fs2> b) {
+  return make_tag_comparator_predicate<tag_comparison::eq>(a, b);
+}
+
+template <auto fs1, auto fs2>
+auto operator!=(internal_tagged_struct::tuple_tag<fs1> a,
+                internal_tagged_struct::tuple_tag<fs2> b) {
+  return make_tag_comparator_predicate<tag_comparison::ne>(a, b);
+}
+
+template <auto fs1, auto fs2>
+auto operator<=(internal_tagged_struct::tuple_tag<fs1> a,
+                internal_tagged_struct::tuple_tag<fs2> b) {
+  return make_tag_comparator_predicate<tag_comparison::le>(a, b);
+}
+
+template <auto fs1, auto fs2>
+auto operator>=(internal_tagged_struct::tuple_tag<fs1> a,
+                internal_tagged_struct::tuple_tag<fs2> b) {
+  return make_tag_comparator_predicate<tag_comparison::ge>(a, b);
+}
+
+template <auto fs1, auto fs2>
+auto operator<(internal_tagged_struct::tuple_tag<fs1> a,
+               internal_tagged_struct::tuple_tag<fs2> b) {
+  return make_tag_comparator_predicate<tag_comparison::lt>(a, b);
+}
+
+template <auto fs1, auto fs2>
+auto operator>(internal_tagged_struct::tuple_tag<fs1> a,
+               internal_tagged_struct::tuple_tag<fs2> b) {
+  return make_tag_comparator_predicate<tag_comparison::gt>(a, b);
+}
+
+// Compare Value and tag
+template <typename V, auto fs2>
+auto operator==(V a, internal_tagged_struct::tuple_tag<fs2> b) {
+  return make_tag_comparator_predicate<tag_comparison::eq>(std::move(a),
+                                                           std::move(b));
+}
+
+template <typename V, auto fs2>
+auto operator!=(V a, internal_tagged_struct::tuple_tag<fs2> b) {
+  return make_tag_comparator_predicate<tag_comparison::ne>(std::move(a),
+                                                           std::move(b));
+}
+
+template <typename V, auto fs2>
+auto operator<=(V a, internal_tagged_struct::tuple_tag<fs2> b) {
+  return make_tag_comparator_predicate<tag_comparison::le>(std::move(a),
+                                                           std::move(b));
+}
+
+template <typename V, auto fs2>
+auto operator>=(V a, internal_tagged_struct::tuple_tag<fs2> b) {
+  return make_tag_comparator_predicate<tag_comparison::ge>(std::move(a),
+                                                           std::move(b));
+}
+
+template <typename V, auto fs2>
+auto operator<(V a, internal_tagged_struct::tuple_tag<fs2> b) {
+  return make_tag_comparator_predicate<tag_comparison::lt>(std::move(a),
+                                                           std::move(b));
+}
+
+template <typename V, auto fs2>
+auto operator>(V a, internal_tagged_struct::tuple_tag<fs2> b) {
+  return make_tag_comparator_predicate<tag_comparison::gt>(std::move(a),
+                                                           std::move(b));
+}
+
+// Compare tag and value
+template <typename V, auto fs>
+auto operator==(internal_tagged_struct::tuple_tag<fs> a, V b) {
+  return make_tag_comparator_predicate<tag_comparison::eq>(std::move(a),
+                                                           std::move(b));
+}
+
+template <typename V, auto fs>
+auto operator!=(internal_tagged_struct::tuple_tag<fs> a, V b) {
+  return make_tag_comparator_predicate<tag_comparison::ne>(std::move(a),
+                                                           std::move(b));
+}
+
+template <typename V, auto fs>
+auto operator<=(internal_tagged_struct::tuple_tag<fs> a, V b) {
+  return make_tag_comparator_predicate<tag_comparison::le>(std::move(a),
+                                                           std::move(b));
+}
+
+template <typename V, auto fs>
+auto operator>=(internal_tagged_struct::tuple_tag<fs> a, V b) {
+  return make_tag_comparator_predicate<tag_comparison::ge>(std::move(a),
+                                                           std::move(b));
+}
+
+template <typename V, auto fs>
+auto operator<(internal_tagged_struct::tuple_tag<fs> a, V b) {
+  return make_tag_comparator_predicate<tag_comparison::lt>(std::move(a),
+                                                           std::move(b));
+}
+
+template <typename V, auto fs>
+auto operator>(internal_tagged_struct::tuple_tag<fs> a, V b) {
+  return make_tag_comparator_predicate<tag_comparison::gt>(std::move(a),
+                                                           std::move(b));
+}
+
+}  // namespace tag_relops
+
+}  // namespace internal_tagged_struct
+
 using internal_tagged_struct::auto_;
+using internal_tagged_struct::get;
+using internal_tagged_struct::member;
+using internal_tagged_struct::tag;
+using internal_tagged_struct::tagged_struct;
+
+namespace tag_relops = internal_tagged_struct::tag_relops;
 
 namespace literals {
-template <internal_tagged_struct::fixed_string fs>  // placeholder type for deduction
+template <
+    internal_tagged_struct::fixed_string fs>  // placeholder type for deduction
 constexpr auto operator""_tag() {
   return tag<fs>;
 }
