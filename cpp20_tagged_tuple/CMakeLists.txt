@@ -12,8 +12,8 @@ find_package(Threads REQUIRED)
 
 
 # Add source to this project's executable.
-add_executable (tagged_struct_test "tagged_struct_test.cpp" "tagged_struct.h")
-target_link_libraries(tagged_struct_test PRIVATE GTest::gtest GTest::gtest_main)
+add_executable (tagged_tuple_test "tagged_tuple_test.cpp" "tagged_tuple.h")
+target_link_libraries(tagged_tuple_test PRIVATE GTest::gtest GTest::gtest_main)
 
 
 # TODO: Add tests and instal l targets if needed.

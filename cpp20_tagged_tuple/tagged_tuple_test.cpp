@@ -1,5 +1,5 @@
 
-#include "tagged_struct.h"
+#include "tagged_tuple.h"
 
 #include <gtest/gtest.h>
 
@@ -7,7 +7,7 @@ namespace ftsd {
 namespace {
 
 TEST(TaggedStruct, Construction) {
-  tagged_struct<member<"hello", auto_, [] { return 5; }>,
+  tagged_tuple<member<"hello", auto_, [] { return 5; }>,
                 member<"world", std::string, [] { return "world"; }>,
                 member<"test", auto_,
                        [](auto& t) {
@@ -25,7 +25,7 @@ TEST(TaggedStruct, Construction) {
 TEST(TaggedStruct, ConstructionUdl) {
   using namespace ftsd::literals;
 
-  tagged_struct<member<"hello", auto_, [] { return 5; }>,
+  tagged_tuple<member<"hello", auto_, [] { return 5; }>,
                 member<"world", std::string,
                        [](auto& self) { return get<"hello">(self); }>,
                 member<"test", auto_,
@@ -41,21 +41,21 @@ TEST(TaggedStruct, ConstructionUdl) {
 
 TEST(TaggedStruct, Ctad) {
   using namespace literals;
-  tagged_struct ctad{tag<"a"> = 15, "b"_tag = std::string("Hello ctad")};
+  tagged_tuple ctad{tag<"a"> = 15, "b"_tag = std::string("Hello ctad")};
   EXPECT_EQ(get<"a">(ctad), 15);
   EXPECT_EQ(get<"b">(ctad), "Hello ctad");
 }
 
 TEST(TaggedStruct, ConstAccess) {
   using namespace literals;
-  const tagged_struct ctad{tag<"a"> = 15, "b"_tag = std::string("Hello ctad")};
+  const tagged_tuple ctad{tag<"a"> = 15, "b"_tag = std::string("Hello ctad")};
   EXPECT_EQ(get<"a">(ctad), 15);
   EXPECT_EQ(get<"b">(ctad), "Hello ctad");
 }
 
 TEST(TaggedStruct, MutableAccess) {
   using namespace literals;
-  tagged_struct ctad{tag<"a"> = 15, "b"_tag = std::string("Hello ctad")};
+  tagged_tuple ctad{tag<"a"> = 15, "b"_tag = std::string("Hello ctad")};
   EXPECT_EQ(get<"a">(ctad), 15);
   EXPECT_EQ(get<"b">(ctad), "Hello ctad");
   get<"a">(ctad) = 10;
@@ -66,7 +66,7 @@ TEST(TaggedStruct, MutableAccess) {
 TEST(TaggedStruct, NamedArguments) {
   using namespace literals;
   using test_arguments =
-      tagged_struct<member<"a", int, [] {}>,  // Required argument.
+      tagged_tuple<member<"a", int, [] {}>,  // Required argument.
                     member<"b", auto_, [](auto& t) { return get<"a">(t) + 2; }>,
                     member<"c", auto_, [](auto& t) { return get<"b">(t) + 2; }>,
                     member<"d", auto_, []() { return 5; }>>;
@@ -85,7 +85,7 @@ TEST(TaggedStruct, RelopsPredicate){
 
   using namespace tag_relops;
   using namespace literals;
-  tagged_struct ctad{tag<"a"> = 15, tag<"b"> = std::string("Hello ctad")};
+  tagged_tuple ctad{tag<"a"> = 15, tag<"b"> = std::string("Hello ctad")};
   auto predicate = tag<"a"> == 15;
   EXPECT_TRUE(predicate(ctad));
   EXPECT_FALSE(("a"_tag != 15)(ctad));
