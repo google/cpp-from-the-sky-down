@@ -83,8 +83,7 @@ TEST(TaggedStruct, NamedArguments) {
   func({"d"_tag = 1, "a"_tag = 5});
 }
 
-#if 0
-/*TEST(TaggedStruct, RelopsPredicate){
+TEST(TaggedStruct, RelopsPredicate){
 
   using namespace tag_relops;
   using namespace literals;
@@ -104,8 +103,7 @@ TEST(TaggedStruct, NamedArguments) {
   EXPECT_TRUE((15 >= tag<"a">)(ctad));
   EXPECT_TRUE((15 == tag<"a">)(ctad));
   EXPECT_FALSE((15 != tag<"a">)(ctad));
-}*/
+}
 
-#endif
 }  // namespace
 }  // namespace ftsd
