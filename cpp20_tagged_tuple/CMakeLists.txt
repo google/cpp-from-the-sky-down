@@ -15,5 +15,10 @@ find_package(Threads REQUIRED)
 add_executable (tagged_tuple_test "tagged_tuple_test.cpp" "tagged_tuple.h")
 target_link_libraries(tagged_tuple_test PRIVATE GTest::gtest GTest::gtest_main)
 
+add_executable (example "example.cpp" "tagged_tuple.h")
+
+
+
+
 
 # TODO: Add tests and instal l targets if needed.

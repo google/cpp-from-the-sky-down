@@ -114,14 +114,14 @@ TEST(TaggedStruct, Apply) {
 
   auto f = [](auto&&... m) {
     auto tup = std::tie(m...);
-    EXPECT_EQ(std::get<0>(tup).k(), "hello");
-    EXPECT_EQ(std::get<0>(tup).v(), 1);
-    EXPECT_EQ(std::get<1>(tup).k(), "world");
-    EXPECT_EQ(std::get<1>(tup).v(), "world");
-    EXPECT_EQ(std::get<2>(tup).k(), "test");
-    EXPECT_EQ(std::get<2>(tup).v(), 7);
-    EXPECT_EQ(std::get<3>(tup).k(), "last");
-    EXPECT_EQ(std::get<3>(tup).v(), 0);
+    EXPECT_EQ(std::get<0>(tup).key(), "hello");
+    EXPECT_EQ(std::get<0>(tup).value(), 1);
+    EXPECT_EQ(std::get<1>(tup).key(), "world");
+    EXPECT_EQ(std::get<1>(tup).value(), "world");
+    EXPECT_EQ(std::get<2>(tup).key(), "test");
+    EXPECT_EQ(std::get<2>(tup).value(), 7);
+    EXPECT_EQ(std::get<3>(tup).key(), "last");
+    EXPECT_EQ(std::get<3>(tup).value(), 0);
   };
 
   ts.apply(f);
