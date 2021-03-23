@@ -134,6 +134,27 @@ struct member_impl {
 
       using tag_type = Tag;
       using value_type = T;
+
+      std::string_view k() const {
+           return Tag::value.sv();
+      }
+
+      decltype(auto) v() &{
+          return value;
+      }
+      decltype(auto) v() &&{
+          return std::move(value);
+      }
+      decltype(auto) v() const &{
+          return value;
+      }
+      decltype(auto) v() const &&{
+          return std::move(value);
+      }
+
+
+
+
 };
 template <fixed_string fs>
 struct tuple_tag {
@@ -235,6 +256,23 @@ struct tagged_tuple_base : member_to_impl_t<Self, Members>... {
       : member_to_impl_t<Self, Members>{self, p}... {}
 
   auto operator<=>(const tagged_tuple_base&) const = default;
+
+template<typename F>
+auto apply(F&& f)&{
+    f(static_cast<member_to_impl_t<Self,Members>&>(*this)...);
+}
+template<typename F>
+auto apply(F&& f)const &{
+    f(static_cast<const member_to_impl_t<Self,Members>&>(*this)...);
+}
+
+template<typename F>
+auto apply(F&& f)&&{
+    f(static_cast<member_to_impl_t<Self,Members>&&>(*this)...);
+}
+
+
+
 };
 
 template <typename Tag, typename T, auto Init>
