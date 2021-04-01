@@ -1,35 +1,105 @@
-
+use proc_macro2::TokenStream;
 use quote::quote;
-pub fn tagged_sql(struct_name_str:&str,sql:&str) ->proc_macro2::TokenStream{
-    let v:Vec<_> = sql.split_ascii_whitespace().collect();
-    let struct_name = quote::format_ident!("{}",&struct_name_str);
+use regex::Regex;
+
+#[derive(Debug)]
+struct SqlMember {
+    name: String,
+    type_name: String,
+}
+
+impl SqlMember {
+    fn to_decl(&self) -> TokenStream {
+        let name = self.name.as_str();
+        let name = syn::parse_str::<syn::Ident>(&self.name).unwrap();
+        let type_name = syn::parse_str::<syn::Type>(&self.type_name).unwrap();
+        quote! {#name:#type_name}
+    }
+    fn to_member_ref(&self, s: &str) -> TokenStream {
+        let s = syn::parse_str::<syn::Type>(&s).unwrap();
+        let member = syn::parse_str::<syn::Type>(&self.name).unwrap();
+        quote! {
+            &#s.#member
+        }
+    }
+
+    fn to_read_from_row(&self, s: &str, row: &str, index: usize) -> TokenStream {
+        let s = syn::parse_str::<syn::Type>(&s).unwrap();
+        let member = syn::parse_str::<syn::Type>(&self.name).unwrap();
+        let row = syn::parse_str::<syn::Type>(row).unwrap();
+        quote! {
+            #s.#member = #row.get(#index)?;
+        }
+    }
+}
+
+pub fn tagged_sql(struct_name_str: &str, sql: &str) -> proc_macro2::TokenStream {
+    let r = Regex::new(r#"([ ]*[a-zA-Z0=9_]+)|([ ]*/\*:[^*]+\*/)"#).unwrap();
+
+    let v: Vec<_> = r
+        .captures_iter(sql)
+        .map(|c| c.get(0).unwrap().as_str())
+        .collect();
+    let struct_name = quote::format_ident!("{}", &struct_name_str);
     let struct_name = syn::parse_str::<syn::Type>(&struct_name_str).unwrap();
+    let param_name = syn::parse_str::<syn::Type>(&format!("{}Params", struct_name_str)).unwrap();
     let mut select_members = Vec::new();
-    for (index,&part) in v.iter().enumerate(){
-        if part.starts_with("/*:") && part.ends_with("*/"){
-            let middle = part.strip_prefix("/*:").unwrap().strip_suffix("*/").unwrap().trim();
-            if !middle.starts_with("?") {
-                let name = quote::format_ident!("{}",v[index - 1]);
+    let mut param_members = Vec::new();
+    for (index, &part) in v.iter().enumerate() {
+        let part = part.trim();
+        if part.starts_with("/*:") && part.ends_with("*/") {
+            let middle = part
+                .strip_prefix("/*:")
+                .unwrap()
+                .strip_suffix("*/")
+                .unwrap()
+                .trim();
+            if !middle.find(":").is_some() {
+                let name = v[index - 1].trim();
                 let type_parsed = syn::parse_str::<syn::Type>(middle).unwrap();
-                select_members.push(
-                    quote! {#name:#type_parsed}
-                );
+                select_members.push(SqlMember {
+                    name: name.to_owned(),
+                    type_name: middle.to_owned(),
+                });
+            } else {
+                let parts: Vec<_> = middle.split(":").collect();
+                println!("parts:{:?}",parts);
+                let name = parts[0].trim();
+                param_members.push(SqlMember {
+                    name: name.to_owned(),
+                    type_name: parts[1].to_owned(),
+                });
             }
         }
     }
 
-    let quoted_sql = format!("\"{}\"",sql);
+    let select_decls: Vec<_> = select_members.iter().map(|m| m.to_decl()).collect();
 
-    quote!{
-        struct #struct_name{
-            #(#select_members),*
+    let mut tokens = Vec::new();
 
-        }
-        impl #struct_name{
+    tokens.push(quote! {
+    struct #struct_name{
+        #(#select_decls),*
+    }});
+
+    tokens.push(quote! { impl #struct_name{
             pub fn sql_str() ->&'static str{
-                #quoted_sql
+                #sql
             }
         }
+    });
+
+    println!("v:{:?}",v);
+    println!("{:?}",param_members);
+
+    if !param_members.is_empty(){
+        let param_decls: Vec<_> = param_members.iter().map(|m| m.to_decl()).collect();
+        tokens.push(quote! {
+    struct #param_name{
+        #(#param_decls),*
+    }});
+
     }
 
+    quote!{#(#tokens)*}
 }
