@@ -148,11 +148,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "tagged_rusqlite_example"
+name = "tagged_rusqlite"
 version = "0.1.0"
 dependencies = [
  "rusqlite",
  "tagged_rusqlite_proc",
+ "tagged_rusqlite_proc_impl",
+]
+
+[[package]]
+name = "tagged_rusqlite_example"
+version = "0.1.0"
+dependencies = [
+ "rusqlite",
+ "tagged_rusqlite",
 ]
 
 [[package]]

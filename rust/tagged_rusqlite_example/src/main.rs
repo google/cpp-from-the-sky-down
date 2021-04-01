@@ -1,4 +1,6 @@
-use tagged_rusqlite_proc::tagged_sql;
+use tagged_rusqlite::tagged_sql;
+use tagged_rusqlite::TaggedSqlMembers;
+use tagged_rusqlite::TaggedSqlParams;
 use rusqlite::{params, Connection, Result, Statement};
 
 struct StatementHolder<'a>{
@@ -48,7 +50,7 @@ fn main() -> Result<()> {
     )?;
 
     let mut stmt = StatementHolder::new(&conn,APerson::sql_str());
-    let person_iter = stmt.stmt.query_map(params![], APerson::map_fn())?;
+    let person_iter = stmt.stmt.query_map(params![], |r|APerson::from_row(r))?;
 
     for person in person_iter {
         println!("Found person {:?}", person.unwrap());

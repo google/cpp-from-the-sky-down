@@ -2,6 +2,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use regex::Regex;
 
+
 #[derive(Debug)]
 struct SqlMember {
     name: String,
@@ -22,7 +23,7 @@ impl SqlMember {
         }
     }
 
-    fn to_read_from_row(&self,row: &str, index: usize) -> TokenStream {
+    fn to_read_from_row(&self, row: &str, index: usize) -> TokenStream {
         let member = syn::parse_str::<syn::Type>(&self.name).unwrap();
         let row = syn::parse_str::<syn::Type>(row).unwrap();
         quote! {
@@ -86,21 +87,22 @@ pub fn tagged_sql(struct_name_str: &str, sql: &str) -> proc_macro2::TokenStream 
         .map(|(index, m)| m.to_read_from_row("row", index))
         .collect();
 
-    tokens.push(quote! { impl #struct_name{
-            pub fn sql_str() ->&'static str{
-                #sql
+    tokens.push(
+        quote! { impl tagged_rusqlite::TaggedSqlMembers for #struct_name{
+                    fn sql_str() ->&'static str{
+                        #sql
+                    }
+            fn from_row(row:&rusqlite::Row<'_>) -> rusqlite::Result<Self>
+            where Self:Sized{
+                        Ok(Self{
+                            #(#read_from_rows),*
+                        })
+
             }
-            pub fn map_fn() -> impl FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<Self>{
-                return |row:&rusqlite::Row<'_>|-> rusqlite::Result<Self>{
-                Ok(Self{
-                    #(#read_from_rows),*
-                })
 
-            };
-
-        }
-        }
-    });
+                }
+            },
+    );
 
     println!("v:{:?}", v);
     println!("{:?}", param_members);

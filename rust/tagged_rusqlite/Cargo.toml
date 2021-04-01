@@ -1,5 +1,5 @@
 [package]
-name = "tagged_rusqlite_example"
+name = "tagged_rusqlite"
 version = "0.1.0"
 authors = ["Your Name <jbandela@gmail.com>"]
 edition = "2018"
@@ -7,6 +7,6 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tagged_rusqlite = {path = "../tagged_rusqlite"}
-rusqlite = {version="0.24",features=["bundled"]}
-
+tagged_rusqlite_proc = {path = "../tagged_rusqlite_proc"}
+tagged_rusqlite_proc_impl = {path = "../tagged_rusqlite_proc_impl"}
+rusqlite="0.24"
