@@ -4,7 +4,6 @@ use syn::{parse_macro_input, LitStr,Ident,Token};
 use syn::parse::{Parse, ParseStream, Result};
 
 
-use quote::quote;
 struct TaggedSql {
     name: String,
     sql: String,

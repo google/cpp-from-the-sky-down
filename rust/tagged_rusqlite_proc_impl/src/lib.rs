@@ -10,7 +10,6 @@ struct SqlMember {
 
 impl SqlMember {
     fn to_decl(&self) -> TokenStream {
-        let name = self.name.as_str();
         let name = syn::parse_str::<syn::Ident>(&self.name).unwrap();
         let type_name = syn::parse_str::<syn::Type>(&self.type_name).unwrap();
         quote! {#name:#type_name}
@@ -23,12 +22,11 @@ impl SqlMember {
         }
     }
 
-    fn to_read_from_row(&self, s: &str, row: &str, index: usize) -> TokenStream {
-        let s = syn::parse_str::<syn::Type>(&s).unwrap();
+    fn to_read_from_row(&self,row: &str, index: usize) -> TokenStream {
         let member = syn::parse_str::<syn::Type>(&self.name).unwrap();
         let row = syn::parse_str::<syn::Type>(row).unwrap();
         quote! {
-            #s.#member = #row.get(#index)?;
+            #member:#row.get(#index)?
         }
     }
 }
@@ -54,16 +52,15 @@ pub fn tagged_sql(struct_name_str: &str, sql: &str) -> proc_macro2::TokenStream 
                 .strip_suffix("*/")
                 .unwrap()
                 .trim();
-            if !middle.find(":").is_some() {
+            if middle.find(":").is_none() {
                 let name = v[index - 1].trim();
-                let type_parsed = syn::parse_str::<syn::Type>(middle).unwrap();
                 select_members.push(SqlMember {
                     name: name.to_owned(),
                     type_name: middle.to_owned(),
                 });
             } else {
                 let parts: Vec<_> = middle.split(":").collect();
-                println!("parts:{:?}",parts);
+                println!("parts:{:?}", parts);
                 let name = parts[0].trim();
                 param_members.push(SqlMember {
                     name: name.to_owned(),
@@ -78,28 +75,43 @@ pub fn tagged_sql(struct_name_str: &str, sql: &str) -> proc_macro2::TokenStream 
     let mut tokens = Vec::new();
 
     tokens.push(quote! {
+        #[derive(Debug)]
     struct #struct_name{
         #(#select_decls),*
     }});
+
+    let read_from_rows: Vec<_> = select_members
+        .iter()
+        .enumerate()
+        .map(|(index, m)| m.to_read_from_row("row", index))
+        .collect();
 
     tokens.push(quote! { impl #struct_name{
             pub fn sql_str() ->&'static str{
                 #sql
             }
+            pub fn map_fn() -> impl FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<Self>{
+                return |row:&rusqlite::Row<'_>|-> rusqlite::Result<Self>{
+                Ok(Self{
+                    #(#read_from_rows),*
+                })
+
+            };
+
+        }
         }
     });
 
-    println!("v:{:?}",v);
-    println!("{:?}",param_members);
+    println!("v:{:?}", v);
+    println!("{:?}", param_members);
 
-    if !param_members.is_empty(){
+    if !param_members.is_empty() {
         let param_decls: Vec<_> = param_members.iter().map(|m| m.to_decl()).collect();
         tokens.push(quote! {
-    struct #param_name{
-        #(#param_decls),*
-    }});
-
+        struct #param_name{
+            #(#param_decls),*
+        }});
     }
 
-    quote!{#(#tokens)*}
+    quote! {#(#tokens)*}
 }
