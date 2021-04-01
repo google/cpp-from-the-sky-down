@@ -1,0 +1,2 @@
+[workspace]
+members = ["tagged_rusqlite_example","tagged_rusqlite_proc","tagged_rusqlite_proc_impl"]
