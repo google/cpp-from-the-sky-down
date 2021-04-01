@@ -1,7 +1,27 @@
 use proc_macro::TokenStream;
 
-use syn::{parse_macro_input, LitStr};
+use syn::{parse_macro_input, LitStr,Ident,Token};
+use syn::parse::{Parse, ParseStream, Result};
+
+
 use quote::quote;
+struct TaggedSql {
+    name: String,
+    sql: String,
+}
+
+impl Parse for TaggedSql {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let name_ident:Ident = input.parse()?;
+        input.parse::<Token![,]>()?;
+
+        let sql_lit:LitStr = input.parse()?;
+       Ok(Self {
+            name:name_ident.to_string(),
+            sql:sql_lit.value(),
+        })
+    }
+}
 
 /// Example of [function-like procedural macro][1].
 ///
@@ -9,18 +29,9 @@ use quote::quote;
 #[proc_macro]
 pub fn tagged_sql(input: TokenStream) -> TokenStream {
 //    tagged_sql_impl(input).into()
-    let input = parse_macro_input!(input as LitStr);
-    let _input_str = input.value();
+    let tagged_sql = parse_macro_input!(input as TaggedSql);
 
-    let tokens = quote! {
-
-        struct Hello{};
-        impl Hello{
-            pub fn get_str()->&'static str{
-                #input
-            }
-        }
-    };
+    let tokens = tagged_rusqlite_proc_impl::tagged_sql(&tagged_sql.name,&tagged_sql.sql);
 
     tokens.into()
 

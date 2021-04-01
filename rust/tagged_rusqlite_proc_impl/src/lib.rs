@@ -18,10 +18,17 @@ pub fn tagged_sql(struct_name_str:&str,sql:&str) ->proc_macro2::TokenStream{
         }
     }
 
+    let quoted_sql = format!("\"{}\"",sql);
+
     quote!{
-        struct #struct_name <'a>{
+        struct #struct_name{
             #(#select_members),*
 
+        }
+        impl #struct_name{
+            pub fn sql_str() ->&'static str{
+                #quoted_sql
+            }
         }
     }
 

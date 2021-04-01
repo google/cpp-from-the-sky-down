@@ -43,6 +43,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+ "tagged_rusqlite_proc_impl",
 ]
 
 [[package]]
