@@ -38,7 +38,6 @@ pub fn tagged_sql(struct_name_str: &str, sql: &str) -> proc_macro2::TokenStream 
         .captures_iter(sql)
         .map(|c| c.get(0).unwrap().as_str())
         .collect();
-    let struct_name = quote::format_ident!("{}", &struct_name_str);
     let struct_name = syn::parse_str::<syn::Type>(&struct_name_str).unwrap();
     let param_name = syn::parse_str::<syn::Type>(&format!("{}Params", struct_name_str)).unwrap();
     let row_name = syn::parse_str::<syn::Type>(&format!("{}Row", struct_name_str)).unwrap();
@@ -86,18 +85,17 @@ pub fn tagged_sql(struct_name_str: &str, sql: &str) -> proc_macro2::TokenStream 
         .map(|(index, m)| m.to_read_from_row("row", index))
         .collect();
 
-    tokens.push(quote! { impl tagged_rusqlite::TaggedRow for #row_name{
+    tokens.push(quote! {
+        impl tagged_rusqlite::TaggedRow for #row_name{
             fn sql_str() ->&'static str{
                 #sql
             }
-    fn from_row(row:&rusqlite::Row<'_>) -> rusqlite::Result<Self>
-    where Self:Sized{
+            fn from_row(row:&rusqlite::Row<'_>) -> rusqlite::Result<Self>
+            where Self:Sized{
                 Ok(Self{
                     #(#read_from_rows),*
                 })
-
-    }
-
+            }
         }
     });
 
@@ -115,39 +113,40 @@ pub fn tagged_sql(struct_name_str: &str, sql: &str) -> proc_macro2::TokenStream 
     for (i,r) in param_refs.iter().enumerate(){
         let index = i + 1;
         binds.push(quote!{
-            s.raw_bind_parameter(#index,#r);
+            s.raw_bind_parameter(#index,#r)?;
         });
     }
 
-
-    tokens.push(quote! { impl tagged_rusqlite::TaggedParams for #param_name{
-
-    fn bind_all(&self,s:&mut rusqlite::Statement) ->rusqlite::Result<()>{
-
-            #(#binds)*
-            Ok(())
+    tokens.push(quote! {
+        impl tagged_rusqlite::TaggedParams for #param_name{
+            fn bind_all(&self,s:&mut rusqlite::Statement) ->rusqlite::Result<()>{
+                #(#binds)*
+                Ok(())
+            }
         }
-}});
+    });
 
-    tokens.push(quote! { struct #struct_name{
-    }});
+    tokens.push(quote! {
+        struct #struct_name{}
+    });
 
-    tokens.push(quote! { impl tagged_rusqlite::TaggedQuery for #struct_name{
-    type Row = #row_name;
-    type Params = #param_name;
-            fn sql_str() ->&'static str{
-                #sql
+    tokens.push(quote! {
+        impl tagged_rusqlite::TaggedQuery for #struct_name{
+            type Row = #row_name;
+            type Params = #param_name;
+                fn sql_str() ->&'static str{
+                    #sql
+                }
         }
-    }});
+    });
 
-    tokens.push(
-        quote! { impl<'a> #struct_name{
-    pub fn prepare(connection: &'a rusqlite::Connection)->tagged_rusqlite::StatementHolder<'a,#struct_name>{
-        tagged_rusqlite::StatementHolder::new(connection)
-    }
-    }
-          }
-    );
+    tokens.push(quote! {
+        impl<'a> #struct_name{
+            pub fn prepare(connection: &'a rusqlite::Connection)->tagged_rusqlite::StatementHolder<'a,#struct_name>{
+                tagged_rusqlite::StatementHolder::new(connection)
+            }
+        }
+    });
 
     let struct_trait = if param_members.is_empty() {
         syn::parse_str::<syn::Type>("NoParams").unwrap()

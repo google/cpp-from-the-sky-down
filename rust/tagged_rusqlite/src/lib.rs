@@ -67,7 +67,7 @@ impl<'a, T: TaggedQuery> StatementHolder<'a, T>
         &'_ mut self,params:&T::Params
     ) -> rusqlite::Result<usize>
     {
-        params.bind_all(&mut self.stmt);
+        params.bind_all(&mut self.stmt)?;
         self.stmt.raw_execute()
     }
 }
