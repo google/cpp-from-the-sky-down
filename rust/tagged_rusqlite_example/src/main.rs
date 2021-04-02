@@ -10,7 +10,7 @@ fn main() -> Result<()> {
                   id              INTEGER PRIMARY KEY,
                   name            TEXT NOT NULL,
                   data            BLOB
-                  )"
+                  );"
     );
 
     CreateTable::prepare(&conn).execute()?;
@@ -22,7 +22,7 @@ fn main() -> Result<()> {
                 VALUES (
                     ?1 /*:name:String*/,
                     ?2 /*:data:Option<Vec<u8>>*/
-                )
+                );
                 "#
     );
 
@@ -46,7 +46,7 @@ fn main() -> Result<()> {
                             id   /*:i64*/,
                             name /*:String*/,
                             data /*:Option<Vec<u8>>*/
-                            FROM person
+                            FROM person;
                             "#
     );
 
@@ -64,7 +64,7 @@ fn main() -> Result<()> {
                             name /*:String*/,
                             data /*:Option<Vec<u8>>*/
                             FROM person
-                            WHERE name = ? /*:name:String*/
+                            WHERE name = ? /*:name:String*/;
                             "#
     );
     let search_params = SearchByNameParams {
