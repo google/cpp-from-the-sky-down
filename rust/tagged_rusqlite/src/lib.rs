@@ -48,22 +48,32 @@ where
     {
         self.stmt.query_map(rusqlite::params![], T::Row::from_row)
     }
+
+    pub fn execute(
+        &'_ mut self,
+    ) -> rusqlite::Result<usize>
+    {
+        self.stmt.execute(rusqlite::params![])
+    }
 }
 
 impl<'a, T: TaggedQuery> StatementHolder<'a, T>
     where
-        T: TaggedQuery + HasParams,
+        T: TaggedQuery,
         T::Row: TaggedRow,
         T::Params: TaggedParams,
 
 {
-    /* pub fn query_with(
+    pub fn query_bind(
         &'_ mut self,params:&T::Params
     ) -> rusqlite::Result<rusqlite::MappedRows<'_, fn(&rusqlite::Row) -> rusqlite::Result<T::Row>>>
     {
-        self.stmt.query_map(params.to_sql_slice(), T::Row::from_row)
-    }*/
-    pub fn execute_with(
+
+        params.bind_all(&mut self.stmt)?;
+        Ok(self.stmt.raw_query().mapped(T::Row::from_row))
+    }
+
+    pub fn execute_bind(
         &'_ mut self,params:&T::Params
     ) -> rusqlite::Result<usize>
     {
