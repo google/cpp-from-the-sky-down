@@ -1,11 +1,11 @@
-
 use rusqlite::{Connection, Result};
 use tagged_rusqlite::tagged_sql;
 
 fn main() -> Result<()> {
     let conn = Connection::open_in_memory()?;
 
-    tagged_sql!(CreateTable,
+    tagged_sql!(
+        CreateTable,
         "CREATE TABLE person (
                   id              INTEGER PRIMARY KEY,
                   name            TEXT NOT NULL,
@@ -29,7 +29,7 @@ fn main() -> Result<()> {
     let mut insert = InsertPerson::prepare(&conn);
     insert.execute_bind(&InsertPersonParams {
         name: "Steven".to_string(),
-        data: Some(vec![1u8,2u8]),
+        data: Some(vec![1u8, 2u8]),
     })?;
     insert.execute_bind(&InsertPersonParams {
         name: "John".to_string(),
@@ -68,11 +68,28 @@ fn main() -> Result<()> {
                             "#
     );
     let search_params = SearchByNameParams {
-        name:"John".into()
+        name: "John".into(),
     };
     for person in SearchByName::prepare(&conn).query_bind(&search_params)? {
-        println!("Found person with name {}  {:?}", &search_params.name, &person.unwrap());
+        println!(
+            "Found person with name {}  {:?}",
+            &search_params.name,
+            &person.unwrap()
+        );
     }
+
+    let mut stmt = SelectPerson::prepare(&conn);
+    println!("Found single person {:?} ", stmt.query_row()?);
+
+    let mut stmt = SearchByName::prepare(&conn);
+    let search_params = SearchByNameParams {
+        name: "Bill".into(),
+    };
+    println!(
+        "Found single person with name {}, {:?} ",
+        &search_params.name,
+        stmt.query_row_bind(&search_params)?
+    );
 
     Ok(())
 }

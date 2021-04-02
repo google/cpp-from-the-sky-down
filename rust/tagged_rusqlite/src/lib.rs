@@ -20,7 +20,7 @@ pub trait TaggedRow {
 }
 
 pub trait TaggedParams {
-    fn bind_all(&self, s:&mut rusqlite::Statement) ->rusqlite::Result<()>;
+    fn bind_all(&self, s: &mut rusqlite::Statement) -> rusqlite::Result<()>;
 }
 
 pub struct StatementHolder<'a, T: TaggedQuery> {
@@ -49,39 +49,43 @@ where
         self.stmt.query_map(rusqlite::params![], T::Row::from_row)
     }
 
-    pub fn execute(
-        &'_ mut self,
-    ) -> rusqlite::Result<usize>
-    {
+    pub fn execute(&'_ mut self) -> rusqlite::Result<usize> {
         self.stmt.execute(rusqlite::params![])
+    }
+
+    pub fn query_row(&'_ mut self) -> rusqlite::Result<T::Row> {
+        self.stmt.query_row(rusqlite::params![], T::Row::from_row)
     }
 }
 
 impl<'a, T: TaggedQuery> StatementHolder<'a, T>
-    where
-        T: TaggedQuery,
-        T::Row: TaggedRow,
-        T::Params: TaggedParams,
-
+where
+    T: TaggedQuery,
+    T::Row: TaggedRow,
+    T::Params: TaggedParams,
 {
     pub fn query_bind(
-        &'_ mut self,params:&T::Params
+        &'_ mut self,
+        params: &T::Params,
     ) -> rusqlite::Result<rusqlite::MappedRows<'_, fn(&rusqlite::Row) -> rusqlite::Result<T::Row>>>
     {
-
         params.bind_all(&mut self.stmt)?;
         Ok(self.stmt.raw_query().mapped(T::Row::from_row))
     }
 
-    pub fn execute_bind(
-        &'_ mut self,params:&T::Params
-    ) -> rusqlite::Result<usize>
-    {
+    pub fn execute_bind(&'_ mut self, params: &T::Params) -> rusqlite::Result<usize> {
         params.bind_all(&mut self.stmt)?;
         self.stmt.raw_execute()
     }
-}
 
+    pub fn query_row_bind(&'_ mut self, params: &T::Params) -> rusqlite::Result<T::Row> {
+        let mut iterator = self.query_bind(&params)?;
+        match iterator.next() {
+            Some(result) => result,
+            None => rusqlite::Result::Err(rusqlite::Error::QueryReturnedNoRows),
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

@@ -110,9 +110,9 @@ pub fn tagged_sql(struct_name_str: &str, sql: &str) -> proc_macro2::TokenStream 
         .map(|m| m.to_member_ref("self"))
         .collect();
     let mut binds = Vec::new();
-    for (i,r) in param_refs.iter().enumerate(){
+    for (i, r) in param_refs.iter().enumerate() {
         let index = i + 1;
-        binds.push(quote!{
+        binds.push(quote! {
             s.raw_bind_parameter(#index,#r)?;
         });
     }
