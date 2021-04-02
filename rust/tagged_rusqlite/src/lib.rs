@@ -20,7 +20,7 @@ pub trait TaggedRow {
 }
 
 pub trait TaggedParams {
-    fn to_sql_slice<'a>(self: &'a Self) -> Vec<&'a dyn rusqlite::ToSql>;
+    fn bind_all(&self, s:&mut rusqlite::Statement) ->rusqlite::Result<()>;
 }
 
 pub struct StatementHolder<'a, T: TaggedQuery> {
@@ -57,17 +57,18 @@ impl<'a, T: TaggedQuery> StatementHolder<'a, T>
         T::Params: TaggedParams,
 
 {
-    pub fn query_with(
+    /* pub fn query_with(
         &'_ mut self,params:&T::Params
     ) -> rusqlite::Result<rusqlite::MappedRows<'_, fn(&rusqlite::Row) -> rusqlite::Result<T::Row>>>
     {
         self.stmt.query_map(params.to_sql_slice(), T::Row::from_row)
-    }
+    }*/
     pub fn execute_with(
         &'_ mut self,params:&T::Params
     ) -> rusqlite::Result<usize>
     {
-        self.stmt.execute(params.to_sql_slice())
+        params.bind_all(&mut self.stmt);
+        self.stmt.raw_execute()
     }
 }
 

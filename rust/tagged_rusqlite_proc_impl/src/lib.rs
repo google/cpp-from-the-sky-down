@@ -2,7 +2,6 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use regex::Regex;
 
-
 #[derive(Debug)]
 struct SqlMember {
     name: String,
@@ -62,7 +61,6 @@ pub fn tagged_sql(struct_name_str: &str, sql: &str) -> proc_macro2::TokenStream 
                 });
             } else {
                 let parts: Vec<_> = middle.split(":").collect();
-                println!("parts:{:?}", parts);
                 let name = parts[0].trim();
                 param_members.push(SqlMember {
                     name: name.to_owned(),
@@ -88,59 +86,59 @@ pub fn tagged_sql(struct_name_str: &str, sql: &str) -> proc_macro2::TokenStream 
         .map(|(index, m)| m.to_read_from_row("row", index))
         .collect();
 
-    tokens.push(
-        quote! { impl tagged_rusqlite::TaggedRow for #row_name{
-                    fn sql_str() ->&'static str{
-                        #sql
-                    }
-            fn from_row(row:&rusqlite::Row<'_>) -> rusqlite::Result<Self>
-            where Self:Sized{
-                        Ok(Self{
-                            #(#read_from_rows),*
-                        })
-
+    tokens.push(quote! { impl tagged_rusqlite::TaggedRow for #row_name{
+            fn sql_str() ->&'static str{
+                #sql
             }
+    fn from_row(row:&rusqlite::Row<'_>) -> rusqlite::Result<Self>
+    where Self:Sized{
+                Ok(Self{
+                    #(#read_from_rows),*
+                })
 
-                }
-            }
-    );
+    }
 
-    println!("v:{:?}", v);
-    println!("{:?}", param_members);
+        }
+    });
 
-        let param_decls: Vec<_> = param_members.iter().map(|m| m.to_decl()).collect();
-        tokens.push(quote! {
-        struct #param_name{
-            #(#param_decls),*
-        }});
+    let param_decls: Vec<_> = param_members.iter().map(|m| m.to_decl()).collect();
+    tokens.push(quote! {
+    struct #param_name{
+        #(#param_decls),*
+    }});
 
-
-    let param_refs: Vec<_> = param_members.iter().map(|m| m.to_member_ref("self")).collect();
-    tokens.push(
-        quote! { impl tagged_rusqlite::TaggedParams for #param_name{
-
-    fn to_sql_slice<'a>(self: &'a Self) -> Vec<&'a dyn rusqlite::ToSql>{
-                vec![#(#param_refs),*]
-            }
-                }
-            }
-    );
+    let param_refs: Vec<_> = param_members
+        .iter()
+        .map(|m| m.to_member_ref("self"))
+        .collect();
+    let mut binds = Vec::new();
+    for (i,r) in param_refs.iter().enumerate(){
+        let index = i + 1;
+        binds.push(quote!{
+            s.raw_bind_parameter(#index,#r);
+        });
+    }
 
 
-    tokens.push(
-        quote! { struct #struct_name{
-            }}
-    );
+    tokens.push(quote! { impl tagged_rusqlite::TaggedParams for #param_name{
 
-    tokens.push(
-        quote! { impl tagged_rusqlite::TaggedQuery for #struct_name{
-            type Row = #row_name;
-            type Params = #param_name;
-                    fn sql_str() ->&'static str{
-                        #sql
-                }
-            }}
-    );
+    fn bind_all(&self,s:&mut rusqlite::Statement) ->rusqlite::Result<()>{
+
+            #(#binds)*
+            Ok(())
+        }
+}});
+
+    tokens.push(quote! { struct #struct_name{
+    }});
+
+    tokens.push(quote! { impl tagged_rusqlite::TaggedQuery for #struct_name{
+    type Row = #row_name;
+    type Params = #param_name;
+            fn sql_str() ->&'static str{
+                #sql
+        }
+    }});
 
     tokens.push(
         quote! { impl<'a> #struct_name{
@@ -153,17 +151,13 @@ pub fn tagged_sql(struct_name_str: &str, sql: &str) -> proc_macro2::TokenStream 
 
     let struct_trait = if param_members.is_empty() {
         syn::parse_str::<syn::Type>("NoParams").unwrap()
-    } else{
+    } else {
         syn::parse_str::<syn::Type>("HasParams").unwrap()
     };
 
-    tokens.push(
-      quote!{
-          impl tagged_rusqlite::#struct_trait for #struct_name{}
-      }
-    );
-
-
+    tokens.push(quote! {
+        impl tagged_rusqlite::#struct_trait for #struct_name{}
+    });
 
     quote! {#(#tokens)*}
 }

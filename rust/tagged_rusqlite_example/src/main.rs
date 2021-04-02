@@ -10,10 +10,21 @@ struct Person {
     data: Option<Vec<u8>>,
 }
 
-tagged_sql!(APerson,"SELECT id/*:i64*/, name/*:String*/, data/*:Option<Vec<u8>>*/ FROM person");
+tagged_sql!(SelectPerson,r#"SELECT
+                            id   /*:i64*/,
+                            name /*:String*/,
+                            data /*:Option<Vec<u8>>*/
+                            FROM person
+                            "#);
 
 
-tagged_sql!(Insert,"INSERT INTO person (name, data) VALUES (?1/*:name:String*/, ?2/*:data:Option<Vec<u8>>*/)");
+tagged_sql!(InsertPerson, r#"INSERT INTO
+                person (name, data)
+                VALUES (
+                    ?1 /*:name:String*/,
+                    ?2 /*:data:Option<Vec<u8>>*/
+                )
+                "#);
 
 fn main() -> Result<()> {
     let conn = Connection::open_in_memory()?;
@@ -27,10 +38,12 @@ fn main() -> Result<()> {
         params![],
     )?;
 
-    let mut insert = Insert::prepare(&conn);
-    insert.execute_with(&InsertParams{name:"Steven".to_string(),data:None})?;
+    let mut insert = InsertPerson::prepare(&conn);
+    insert.execute_with(&InsertPersonParams{name:"Steven".to_string(),data:None})?;
+    insert.execute_with(&InsertPersonParams{name:"John".to_string(),data:None})?;
+    insert.execute_with(&InsertPersonParams{name:"Bill".to_string(),data:None})?;
 
-    let mut stmt = APerson::prepare(&conn);
+    let mut stmt = SelectPerson::prepare(&conn);
     let person_iterator = stmt.query()?;
 
     for person in  person_iterator{
