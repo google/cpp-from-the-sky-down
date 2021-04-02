@@ -114,6 +114,19 @@ pub fn tagged_sql(struct_name_str: &str, sql: &str) -> proc_macro2::TokenStream 
             #(#param_decls),*
         }});
 
+
+    let param_refs: Vec<_> = param_members.iter().map(|m| m.to_member_ref("self")).collect();
+    tokens.push(
+        quote! { impl tagged_rusqlite::TaggedParams for #param_name{
+
+    fn to_sql_slice<'a>(self: &'a Self) -> Vec<&'a dyn rusqlite::ToSql>{
+                vec![#(#param_refs),*]
+            }
+                }
+            }
+    );
+
+
     tokens.push(
         quote! { struct #struct_name{
             }}
@@ -128,6 +141,7 @@ pub fn tagged_sql(struct_name_str: &str, sql: &str) -> proc_macro2::TokenStream 
                 }
             }}
     );
+
     tokens.push(
         quote! { impl<'a> #struct_name{
     pub fn prepare(connection: &'a rusqlite::Connection)->tagged_rusqlite::StatementHolder<'a,#struct_name>{
@@ -135,6 +149,18 @@ pub fn tagged_sql(struct_name_str: &str, sql: &str) -> proc_macro2::TokenStream 
     }
     }
           }
+    );
+
+    let struct_trait = if param_members.is_empty() {
+        syn::parse_str::<syn::Type>("NoParams").unwrap()
+    } else{
+        syn::parse_str::<syn::Type>("HasParams").unwrap()
+    };
+
+    tokens.push(
+      quote!{
+          impl tagged_rusqlite::#struct_trait for #struct_name{}
+      }
     );
 
 
