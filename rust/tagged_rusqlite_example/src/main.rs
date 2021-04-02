@@ -16,6 +16,7 @@ fn main() -> Result<()> {
     CreateTable::prepare(&conn).execute()?;
 
     tagged_sql!(
+    tagged_sql!(
         InsertPerson,
         r#"INSERT INTO
                 person (name, data)
@@ -93,3 +94,12 @@ fn main() -> Result<()> {
 
     Ok(())
 }
+
+/* Output
+Found person SelectPersonRow { id: 1, name: "Steven", data: Some([1, 2]) }
+Found person SelectPersonRow { id: 2, name: "John", data: None }
+Found person SelectPersonRow { id: 3, name: "Bill", data: None }
+Found person with name John  SearchByNameRow { id: 2, name: "John", data: None }
+Found single person SelectPersonRow { id: 1, name: "Steven", data: Some([1, 2]) }
+Found single person with name Bill, SearchByNameRow { id: 3, name: "Bill", data: None }
+ */
