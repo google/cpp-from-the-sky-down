@@ -16,7 +16,6 @@ fn main() -> Result<()> {
     CreateTable::prepare(&conn).execute()?;
 
     tagged_sql!(
-    tagged_sql!(
         InsertPerson,
         r#"INSERT INTO
                 person (name, data)
