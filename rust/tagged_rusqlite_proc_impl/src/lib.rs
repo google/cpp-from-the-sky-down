@@ -42,6 +42,7 @@ pub fn tagged_sql(struct_name_str: &str, sql: &str) -> proc_macro2::TokenStream 
     let struct_name = quote::format_ident!("{}", &struct_name_str);
     let struct_name = syn::parse_str::<syn::Type>(&struct_name_str).unwrap();
     let param_name = syn::parse_str::<syn::Type>(&format!("{}Params", struct_name_str)).unwrap();
+    let row_name = syn::parse_str::<syn::Type>(&format!("{}Row", struct_name_str)).unwrap();
     let mut select_members = Vec::new();
     let mut param_members = Vec::new();
     for (index, &part) in v.iter().enumerate() {
@@ -77,7 +78,7 @@ pub fn tagged_sql(struct_name_str: &str, sql: &str) -> proc_macro2::TokenStream 
 
     tokens.push(quote! {
         #[derive(Debug)]
-    struct #struct_name{
+    struct #row_name{
         #(#select_decls),*
     }});
 
@@ -88,7 +89,7 @@ pub fn tagged_sql(struct_name_str: &str, sql: &str) -> proc_macro2::TokenStream 
         .collect();
 
     tokens.push(
-        quote! { impl tagged_rusqlite::TaggedSqlMembers for #struct_name{
+        quote! { impl tagged_rusqlite::TaggedRow for #row_name{
                     fn sql_str() ->&'static str{
                         #sql
                     }
@@ -101,19 +102,42 @@ pub fn tagged_sql(struct_name_str: &str, sql: &str) -> proc_macro2::TokenStream 
             }
 
                 }
-            },
+            }
     );
 
     println!("v:{:?}", v);
     println!("{:?}", param_members);
 
-    if !param_members.is_empty() {
         let param_decls: Vec<_> = param_members.iter().map(|m| m.to_decl()).collect();
         tokens.push(quote! {
         struct #param_name{
             #(#param_decls),*
         }});
+
+    tokens.push(
+        quote! { struct #struct_name{
+            }}
+    );
+
+    tokens.push(
+        quote! { impl tagged_rusqlite::TaggedQuery for #struct_name{
+            type Row = #row_name;
+            type Params = #param_name;
+                    fn sql_str() ->&'static str{
+                        #sql
+                }
+            }}
+    );
+    tokens.push(
+        quote! { impl<'a> #struct_name{
+    pub fn prepare(connection: &'a rusqlite::Connection)->tagged_rusqlite::StatementHolder<'a,#struct_name>{
+        tagged_rusqlite::StatementHolder::new(connection)
     }
+    }
+          }
+    );
+
+
 
     quote! {#(#tokens)*}
 }
