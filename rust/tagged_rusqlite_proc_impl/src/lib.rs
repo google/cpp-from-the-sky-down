@@ -87,7 +87,7 @@ pub fn tagged_sql(struct_name_str: &str, sql: &str) -> proc_macro2::TokenStream 
     let mut tokens = Vec::new();
 
     tokens.push(quote! {
-        #[derive(Debug)]
+    #[derive(PartialOrd, PartialEq, Debug)]
     struct #row_name{
         #(#select_decls),*
     }});

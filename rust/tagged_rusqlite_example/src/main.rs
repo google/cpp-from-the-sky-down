@@ -11,6 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // limitations under the License.
 
+mod lib;
+
 use rusqlite::{Connection, Result};
 use tagged_rusqlite::tagged_sql;
 
