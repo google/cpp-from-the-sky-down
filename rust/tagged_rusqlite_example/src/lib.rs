@@ -26,7 +26,7 @@ mod tests {
                     ?1 /*:name:String*/,
                     ?2 /*:data:Option<Vec<u8>>*/
                 )
-                RETURNINGjj id /*:i64*/;
+                RETURNING id /*:i64*/;
                 "#
     );
 
