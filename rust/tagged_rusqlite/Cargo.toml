@@ -9,4 +9,4 @@ edition = "2018"
 [dependencies]
 tagged_rusqlite_proc = {path = "../tagged_rusqlite_proc"}
 tagged_rusqlite_proc_impl = {path = "../tagged_rusqlite_proc_impl"}
-rusqlite = {version="0.24",features=["bundled"]}
+rusqlite = {version="0.25",features=["bundled"]}

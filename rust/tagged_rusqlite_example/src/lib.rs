@@ -25,23 +25,27 @@ mod tests {
                 VALUES (
                     ?1 /*:name:String*/,
                     ?2 /*:data:Option<Vec<u8>>*/
-                );
+                )
+                RETURNINGjj id /*:i64*/;
                 "#
     );
 
         let mut insert = InsertPerson::prepare(&conn);
-        insert.execute_bind(&InsertPersonParams {
+        let id = insert.query_row_bind(&InsertPersonParams {
             name: "Steven".to_string(),
             data: Some(vec![1u8, 2u8]),
         })?;
-        insert.execute_bind(&InsertPersonParams {
+        assert_eq!(id.id,1);
+        let id = insert.query_row_bind(&InsertPersonParams {
             name: "John".to_string(),
             data: None,
         })?;
-        insert.execute_bind(&InsertPersonParams {
+        assert_eq!(id.id,2);
+        let id = insert.query_row_bind(&InsertPersonParams {
             name: "Bill".to_string(),
             data: None,
         })?;
+        assert_eq!(id.id,3);
 
         tagged_sql!(
         SelectPerson,

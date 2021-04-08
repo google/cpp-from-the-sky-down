@@ -8,5 +8,5 @@ edition = "2018"
 
 [dependencies]
 tagged_rusqlite = {path = "../tagged_rusqlite"}
-rusqlite = {version="0.24",features=["bundled"]}
+rusqlite = {version="0.25",features=["bundled"]}
 

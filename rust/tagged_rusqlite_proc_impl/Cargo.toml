@@ -11,4 +11,4 @@ syn="1.0"
 quote="1.0"
 proc-macro2 = "1.0"
 regex="1"
-rusqlite = "0.24"
+rusqlite = {version="0.25",features=["bundled"]}
