@@ -109,6 +109,7 @@ struct member_impl {
       }
       : value_(Init(self)) {}
       member_impl(T value) : value_(std::move(value)) {}
+      member_impl() : value_(Init()) {}
       member_impl(const member_impl&) = default;
       member_impl& operator=(const member_impl&) = default;
       member_impl(member_impl&&) = default;
@@ -239,6 +240,15 @@ struct tagged_tuple_base : member_to_impl_t<Self, Members>... {
   tagged_tuple_base(Self& self, parameters<Args...> p)
       : member_to_impl_t<Self, Members>{self, p}... {}
 
+  tagged_tuple_base(){}
+  tagged_tuple_base(const tagged_tuple_base&) = default;
+  tagged_tuple_base& operator=(const tagged_tuple_base&) = default;
+
+  tagged_tuple_base(tagged_tuple_base&&) = default;
+  tagged_tuple_base& operator=(tagged_tuple_base&&) = default;
+
+
+
   auto operator<=>(const tagged_tuple_base&) const = default;
 
   template <typename F>
@@ -253,6 +263,36 @@ struct tagged_tuple_base : member_to_impl_t<Self, Members>... {
   template <typename F>
   auto apply(F&& f) && {
     f(static_cast<member_to_impl_t<Self, Members>&&>(*this)...);
+  }
+
+  template<typename F>
+  void for_each(F&& f)&{
+      auto functor = [&](auto&&... a) mutable{
+        (f(std::forward<decltype(a)>(a)),...);
+      };
+      apply(functor);
+  }
+
+template<typename F>
+  void for_each(F&& f)const &{
+      auto functor = [&](auto&&... a) mutable{
+        (f(std::forward<decltype(a)>(a)),...);
+      };
+      apply(functor);
+  }
+
+template<typename F>
+  void for_each(F&& f)&&{
+      auto functor = [&f](auto&&... a) mutable{
+        (f(std::forward<decltype(a)>(a)),...);
+      };
+      apply(functor);
+  }
+
+
+
+  static constexpr auto size(){
+      return sizeof...(Members);
   }
 };
 
@@ -287,6 +327,12 @@ struct tagged_tuple : tagged_tuple_base<tagged_tuple<Members...>, Members...> {
   template <typename... Args>
   tagged_tuple(Args&&... args)
       : super(*this, parameters{std::forward<Args>(args)...}) {}
+
+  tagged_tuple(){}
+  tagged_tuple(const tagged_tuple& other) = default;
+  tagged_tuple& operator=(const tagged_tuple& ) = default;
+  tagged_tuple(tagged_tuple&& ) = default;
+  tagged_tuple& operator=(tagged_tuple&& other) = default;
 
   template <typename Tag>
   auto& operator[](Tag) {
