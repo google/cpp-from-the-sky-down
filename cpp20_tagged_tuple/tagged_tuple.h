@@ -324,9 +324,10 @@ decltype(auto) get(S&& s) {
 template <typename... Members>
 struct tagged_tuple : tagged_tuple_base<tagged_tuple<Members...>, Members...> {
   using super = tagged_tuple_base<tagged_tuple, Members...>;
-  template <typename... Args>
-  tagged_tuple(Args&&... args)
-      : super(*this, parameters{std::forward<Args>(args)...}) {}
+
+template <typename... Tag, typename... T, auto... Init>
+  tagged_tuple(member_impl<Tag,T,Init>... args)
+      : super(*this, parameters{std::move(args)...}) {}
 
   tagged_tuple(){}
   tagged_tuple(const tagged_tuple& other) = default;
@@ -354,9 +355,9 @@ struct member_impl_to_member {
 template <typename T>
 using member_impl_to_member_t = typename member_impl_to_member<T>::type;
 
-template <typename... Members>
-tagged_tuple(Members&&...)
-    -> tagged_tuple<member_impl_to_member_t<std::decay_t<Members>>...>;
+template <typename... Tag, typename... T, auto... Init>
+tagged_tuple(member_impl<Tag,T,Init>...)
+    -> tagged_tuple<member_impl_to_member_t<member_impl<Tag,T,Init>>...>;
 
 template <fixed_string fs>
 inline constexpr auto tag = tuple_tag<fixed_string<fs.size()>(fs)>{};

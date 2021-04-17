@@ -22,6 +22,23 @@ TEST(TaggedStruct, Construction) {
   EXPECT_EQ(get<"last">(ts), 0);
 }
 
+TEST(TaggedStruct, Copy) {
+  tagged_tuple<member<"hello", auto_, [] { return 5; }>,
+               member<"world", std::string, [] { return "world"; }>,
+               member<"test", auto_,
+                      [](auto& t) {
+                        return 2 * get<"hello">(t) + get<"world">(t).size();
+                      }>,
+               member<"last", int>>
+      t{tag<"hello"> = 1};
+ auto ts = t;
+
+  EXPECT_EQ(get<"hello">(ts), 1);
+  EXPECT_EQ(get<"world">(ts), "world");
+  EXPECT_EQ(get<"test">(ts), 7);
+  EXPECT_EQ(get<"last">(ts), 0);
+}
+
 TEST(TaggedStruct, ConstructionUdl) {
   using namespace ftsd::literals;
 
