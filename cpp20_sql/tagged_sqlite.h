@@ -26,7 +26,9 @@
 #include <type_traits>
 #include <utility>
 
-namespace skydown {
+#include "../cpp20_tagged_tuple/tagged_tuple.h"
+
+namespace ftsd {
 
 namespace sqlite_experimental {
 
@@ -293,32 +295,10 @@ auto to_concrete(tagged_tuple<member<Tags, Ts>...> &&t) {
       make_member<Tags>(to_concrete(get<Tags>(std::move(t))))...};
 }
 
-template <std::size_t N>
-struct fixed_string {
-  constexpr fixed_string(const char (&foo)[N + 1]) {
-    std::copy_n(foo, N + 1, data);
-  }
-  constexpr fixed_string(const fixed_string &) = default;
-  constexpr fixed_string(std::string_view s) {
-    std::copy_n(s.data(), N, data);
-  };
-  auto operator<=>(const fixed_string &) const = default;
-  char data[N + 1] = {};
-  constexpr std::string_view sv() const {
-    return std::string_view(&data[0], N);
-  }
-  constexpr auto size() const { return N; }
-  constexpr auto operator[](std::size_t i) const { return data[i]; }
-};
+using ftsd::internal_tagged_tuple::fixed_string;
 
 template <fixed_string fs>
 struct compile_string {};
-
-template <std::size_t N>
-fixed_string(const char (&str)[N]) -> fixed_string<N - 1>;
-
-template <std::size_t N>
-fixed_string(fixed_string<N>) -> fixed_string<N>;
 
 template <bool make_optional, typename Tag, typename T>
 auto maybe_make_optional(member<Tag, T> m) {
@@ -556,7 +536,7 @@ std::false_type is_optional(...);
 template <typename PTuple, typename ATuple>
 void do_binding(sqlite3_stmt *stmt, PTuple p_tuple, ATuple a_tuple) {
   int index = 1;
-  skydown::sqlite_experimental::for_each(p_tuple, [&](auto &m) mutable {
+  ftsd::sqlite_experimental::for_each(p_tuple, [&](auto &m) mutable {
     using m_t = std::decay_t<decltype(m)>;
     using tag = typename m_t::tag_type;
     m.value = [&]() -> typename m_t::value_type {
@@ -639,7 +619,7 @@ class prepared_statement {
 
 template <fixed_string S, typename T>
 decltype(auto) field(T &&t) {
-  return skydown::sqlite_experimental::get<
+  return ftsd::sqlite_experimental::get<
       compile_string<fixed_string<S.size()>(S)>>(std::forward<T>(t));
 }
 
@@ -664,4 +644,4 @@ using sqlite_experimental::field;
 using sqlite_experimental::prepared_statement;
 using sqlite_experimental::to_concrete;
 
-}  // namespace skydown
+}  // namespace ftsd

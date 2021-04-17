@@ -16,13 +16,13 @@
 
 #include <iostream>
 int main() {
-    using skydown::bind;
-    using skydown::field;
+    using ftsd::bind;
+    using ftsd::field;
 
   sqlite3 *sqldb;
   sqlite3_open(":memory:", &sqldb);
 
-  skydown::prepared_statement<
+  ftsd::prepared_statement<
       "CREATE TABLE customers("
       "id INTEGER NOT NULL PRIMARY KEY, "
       "name TEXT NOT NULL"
@@ -30,7 +30,7 @@ int main() {
       >{sqldb}
       .execute();
 
-  skydown::prepared_statement<
+  ftsd::prepared_statement<
       "CREATE TABLE orders("
       "id INTEGER NOT NULL PRIMARY KEY,"
       "item TEXT NOT NULL, "
@@ -41,13 +41,13 @@ int main() {
       >{sqldb}
       .execute();
 
-  skydown::prepared_statement<
+  ftsd::prepared_statement<
       "INSERT INTO customers(name) "
       "VALUES(? /*:name:text*/);"  //
       >{sqldb}
       .execute(bind<"name">("John"));
 
- auto customer_id_or = skydown::prepared_statement<
+ auto customer_id_or = ftsd::prepared_statement<
       "select id/*:integer*/ from customers "
       "where name = ? /*:name:text*/;"  //
       >
@@ -59,7 +59,7 @@ int main() {
   }
   auto customer_id = field<"id">(customer_id_or.value());
 
-  skydown::prepared_statement<
+  ftsd::prepared_statement<
       "INSERT INTO orders(item , customerid , price, discount_code ) "
       "VALUES (?/*:item:text*/, ?/*:customerid:integer*/, ?/*:price:real*/, "
       "?/*:discount_code:text?*/ );"  //
@@ -72,9 +72,9 @@ int main() {
                        bind<"customerid">(customer_id));
   insert_order.execute(bind<"customerid">(customer_id), bind<"price">(2000),
                        bind<"item">("MacBook"),
-                       skydown::bind<"discount_code">("BIGSALE"));
+                       ftsd::bind<"discount_code">("BIGSALE"));
 
-  skydown::prepared_statement<
+  ftsd::prepared_statement<
       "SELECT orders.id /*:integer*/, name/*:text*/, item/*:text*/, price/*:real*/, "
       "discount_code/*:text?*/ "
       "FROM orders JOIN customers ON customers.id = customerid "
@@ -95,7 +95,7 @@ int main() {
       std::cout << field<"price">(row) << " ";
       std::cout << field<"name">(row) << " ";
       std::cout << field<"item">(row) << " ";
-      std::cout << skydown::field<"item">(row) << " ";
+      std::cout << ftsd::field<"item">(row) << " ";
       std::cout << field<"discount_code">(row).value_or("<NO CODE>") << "\n";
     }
   }
