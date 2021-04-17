@@ -29,7 +29,7 @@ int main() {
       "name TEXT NOT NULL"
       ");"  //
       >{sqldb}
-      .execute({});
+      .execute();
 
   ftsd::prepared_statement<
       "CREATE TABLE orders("
@@ -40,7 +40,7 @@ int main() {
       "discount_code TEXT "
       ");"  //
       >{sqldb}
-      .execute({});
+      .execute();
 
   ftsd::prepared_statement<
       "INSERT INTO customers(name) "

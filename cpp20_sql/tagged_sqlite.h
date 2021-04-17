@@ -186,9 +186,6 @@ bool bind_impl(sqlite3_stmt *stmt, int index, const std::optional<T> &v) {
   }
 }
 
-
-
-
 auto to_concrete(const std::string_view &v) { return std::string(v); }
 auto to_concrete(std::int64_t i) { return i; }
 auto to_concrete(double d) { return d; }
@@ -213,14 +210,16 @@ auto to_concrete(std::optional<T> &&o)
 }
 
 template <auto... Tags, typename... Ts, auto... Init>
-auto to_concrete(const tagged_tuple<ftsd::internal_tagged_tuple::member<Tags, Ts, Init>...> &t) {
+auto to_concrete(
+    const tagged_tuple<ftsd::internal_tagged_tuple::member<Tags, Ts, Init>...>
+        &t) {
   return tagged_tuple{(tag<Tags> = to_concrete(get<Tags>(t)))...};
 }
 
 template <auto... Tags, typename... Ts, auto... Init>
-auto to_concrete(tagged_tuple<ftsd::internal_tagged_tuple::member<Tags, Ts, Init>...> &&t) {
-  return tagged_tuple{
-      (tag<Tags> = to_concrete(get<Tags>(std::move(t))))...};
+auto to_concrete(
+    tagged_tuple<ftsd::internal_tagged_tuple::member<Tags, Ts, Init>...> &&t) {
+  return tagged_tuple{(tag<Tags> = to_concrete(get<Tags>(std::move(t))))...};
 }
 
 using ftsd::internal_tagged_tuple::fixed_string;
@@ -229,9 +228,11 @@ template <fixed_string fs>
 struct compile_string {};
 
 template <bool make_optional, typename Tag, typename T, auto Init>
-auto maybe_make_optional(ftsd::internal_tagged_tuple::member_impl<Tag, T,Init> m) {
+auto maybe_make_optional(
+    ftsd::internal_tagged_tuple::member_impl<Tag, T, Init> m) {
   if constexpr (make_optional) {
-    return ftsd::internal_tagged_tuple::member_impl<Tag, std::optional<T>,Init>{std::nullopt};
+    return ftsd::internal_tagged_tuple::member_impl<Tag, std::optional<T>,
+                                                    Init>{std::nullopt};
   } else {
     return m;
   }
@@ -367,16 +368,16 @@ constexpr auto parse_type_specs() {
     auto colon_pos = comment.find(":");
     if constexpr (ret_counts.fields > 0) {
       if (colon_pos == comment.npos) {
-        int prev_name_end = static_cast<int>(pos+1);
+        int prev_name_end = static_cast<int>(pos + 1);
         int prev_name_begin = 0;
-        for (int rpos = static_cast<int>(pos-1); rpos > -1; --rpos) {
+        for (int rpos = static_cast<int>(pos - 1); rpos > -1; --rpos) {
           char c = str[rpos];
           if (is_name(c)) {
-            if (prev_name_end == pos+1) {
+            if (prev_name_end == pos + 1) {
               prev_name_end = rpos + 1;
             }
           } else {
-            if (prev_name_end == pos+1) continue;
+            if (prev_name_end == pos + 1) continue;
             prev_name_begin = rpos + 1;
             break;
           }
@@ -428,8 +429,8 @@ constexpr auto make_member_ts() {
       sv.substr(ts.name.first, ts.name.second)};
   constexpr fixed_string<ts.type.second> type =
       sv.substr(ts.type.first, ts.type.second);
-  return maybe_make_optional<ts.optional>(tag<name> = (
-      string_to_type_t<compile_string<type>>{}));
+  return maybe_make_optional<ts.optional>(
+      tag<name> = (string_to_type_t<compile_string<type>>{}));
 }
 
 template <fixed_string query_string, type_specs ts, std::size_t... I>
@@ -467,7 +468,7 @@ void do_binding(sqlite3_stmt *stmt, PTuple p_tuple) {
   p_tuple.for_each([&](auto &m) mutable {
     using m_t = std::decay_t<decltype(m)>;
     using tag = typename m_t::tag_type;
-   auto r = bind_impl(stmt, index, m.value());
+    auto r = bind_impl(stmt, index, m.value());
     check_sqlite_return<bool>(r, true);
     ++index;
   });
@@ -499,11 +500,14 @@ class prepared_statement {
     auto sv = Query.sv();
     sqlite3_stmt *stmt;
     auto specs = parse_type_specs<Query>();
-    auto rc =
-        sqlite3_prepare_v2(sqldb, sv.data(),
-                           static_cast<int>(sv.size()), &stmt, 0);
+    auto rc = sqlite3_prepare_v2(sqldb, sv.data(), static_cast<int>(sv.size()),
+                                 &stmt, 0);
     check_sqlite_return(rc);
     stmt_.reset(stmt);
+  }
+  row_range<RowType> execute_rows() requires(PTuple::size() == 0) {
+    reset_stmt();
+    return row_range<RowType>(stmt_.get());
   }
   row_range<RowType> execute_rows(PTuple p_tuple) {
     reset_stmt();
@@ -520,10 +524,25 @@ class prepared_statement {
       return std::nullopt;
     }
   }
+  std::optional<decltype(to_concrete(std::declval<RowType>()))>
+  execute_single_row() requires(PTuple::size() == 0) {
+    auto rng = execute_rows();
+    auto begin = rng.begin();
+    if (begin != rng.end()) {
+      return to_concrete(*begin);
+    } else {
+      return std::nullopt;
+    }
+  }
   void execute(PTuple p_tuple) {
     reset_stmt();
-
     do_binding(stmt_.get(), std::move(p_tuple));
+    auto r = sqlite3_step(stmt_.get());
+    check_sqlite_return(r, SQLITE_DONE);
+  }
+
+  void execute() requires(PTuple::size() == 0) {
+    reset_stmt();
     auto r = sqlite3_step(stmt_.get());
     check_sqlite_return(r, SQLITE_DONE);
   }
@@ -536,7 +555,7 @@ decltype(auto) field(T &&t) {
 
 template <fixed_string fs, typename T>
 auto bind(T &&t) {
-    return tag<fs> = std::forward<T>(t);
+  return tag<fs> = std::forward<T>(t);
 }
 
 template <typename Tag>
