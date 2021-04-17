@@ -356,39 +356,35 @@ constexpr std::string_view end_group = "}}";
 constexpr std::string_view delimiters = ", ();";
 constexpr std::string_view quotes = "\"\'";
 
-template <fixed_string query_string, bool is_parameter, bool all = false>
-constexpr auto get_type_spec_count(std::string_view start_group,
-                                   std::string_view end_group) {
-  constexpr auto sv = query_string.sv();
-  std::size_t count = 0;
-  std::size_t start = 0;
-  std::size_t end = 0;
-  (void)end;
-  bool in_quote_single = false;
-  bool in_quote_double = false;
+struct type_specs_count {
+  std::size_t fields;
+  std::size_t params;
+  auto operator<=>(const type_specs_count &) const = default;
+};
 
-  for (std::size_t i = 0; i < sv.size(); ++i) {
-    char c = sv[i];
-    if (c == '\'' && !in_quote_double) {
-      in_quote_single = !in_quote_single;
-      continue;
+inline constexpr std::string_view start_comment = "/*:";
+inline constexpr std::string_view end_comment = "*/";
+
+template <fixed_string query_string>
+constexpr auto get_type_spec_count() {
+  constexpr auto sv = query_string.sv();
+  type_specs_count count{0, 0};
+
+  std::string_view str = sv;
+  while (!str.empty()) {
+    auto pos = str.find(start_comment);
+    if (pos == str.npos) break;
+    pos += start_comment.size();
+    str = str.substr(pos);
+    pos = str.find(end_comment);
+    if (pos == str.npos) {
+      break;
     }
-    if (c == '\"' && !in_quote_single) {
-      in_quote_double = !in_quote_double;
-      continue;
-    }
-    if (in_quote_double || in_quote_single) continue;
-    if (delimiters.find(c) != delimiters.npos) {
-      start = i + 1;
-      continue;
-    }
-    if (c == ':') {
-      i = sv.find_first_of(delimiters, i);
-      if (i == sv.npos) throw("unable to find end of tag");
-      (void)end;
-      if (all || (sv[start] == '?') == is_parameter) {
-        ++count;
-      }
+    auto comment = str.substr(0, pos);
+    if (comment.find(":") == comment.npos) {
+      ++count.fields;
+    } else {
+      ++count.params;
     }
   }
   return count;
@@ -402,8 +398,8 @@ struct pair {
 };
 
 struct type_spec {
-  pair<std::size_t, std::size_t> name = {0, 0};
-  pair<std::size_t, std::size_t> type = {0, 0};
+  pair<std::size_t, std::size_t> name;
+  pair<std::size_t, std::size_t> type;
   bool optional;
   constexpr auto operator<=>(const type_spec &other) const = default;
 };
@@ -417,70 +413,104 @@ struct type_specs {
   constexpr auto &operator[](std::size_t i) { return data[i]; }
 };
 
+template <std::size_t Fields, std::size_t Params>
+struct combined_type_specs {
+  type_specs<Fields> fields;
+  type_specs<Params> params;
+  auto operator<=>(const combined_type_specs &) const = default;
+};
+
 template <>
 struct type_specs<0> {
   auto operator<=>(const type_specs &) const = default;
   static constexpr std::size_t size() { return 0; }
 };
 
-constexpr type_spec parse_type_spec(std::size_t base, std::string_view sv) {
-  auto colon = sv.find(":");
-  auto name = sv.substr(0, colon);
-
-  bool optional = sv[sv.size() - 1] == '?' ? true : false;
-  auto last_colon = sv.find_last_of(':');
-  auto size = sv.size();
-  auto new_size = size - (optional ? 2 : 1);
-  std::string_view type = sv.substr(last_colon + 1, new_size - last_colon);
-  return type_spec{.name = {base, name.size()},
-                   .type = {base + last_colon + 1, type.size()},
-                   .optional = optional};
-}
-
-template <fixed_string query_string, bool is_parameter, bool all = false>
+template <fixed_string query_string>
 constexpr auto parse_type_specs() {
   constexpr auto sv = query_string.sv();
-  constexpr auto size = get_type_spec_count<query_string, is_parameter, all>(
-      start_group, end_group);
-  type_specs<size> ar{};
-  if constexpr (size == 0) {
-    return ar;
-  } else {
-    std::size_t count = 0;
-    std::size_t start = 0;
-    std::size_t end = 0;
-    bool in_quote_single = false;
-    bool in_quote_double = false;
+  constexpr auto ret_counts = get_type_spec_count<query_string>();
+  combined_type_specs<ret_counts.fields, ret_counts.params> ret = {};
 
-    for (std::size_t i = 0; i < sv.size(); ++i) {
-      char c = sv[i];
-      if (c == '\'' && !in_quote_double) {
-        in_quote_single = !in_quote_single;
-        continue;
-      }
-      if (c == '\"' && !in_quote_single) {
-        in_quote_double = !in_quote_double;
-        continue;
-      }
-      if (in_quote_double || in_quote_single) continue;
-      if (delimiters.find(c) != delimiters.npos) {
-        start = i + 1;
-        continue;
-      }
-      if (c == ':') {
-        i = sv.find_first_of(delimiters, i);
-        //  if (i == sv.npos) throw("unable to find end of tag");
-        end = i;
-        if (all || (sv[start] == '?') == is_parameter) {
-          if (!all && is_parameter) ++start;
-          ar[count] = parse_type_spec(start, sv.substr(start, end - start));
-          ++count;
+  type_specs_count counts{0, 0};
+
+  auto in_range_inclusive = [](char c, char b, char e) {
+    return b <= c && c <= e;
+  };
+  auto is_name = [in_range_inclusive](char c) {
+    return in_range_inclusive(c, 'A', 'Z') || in_range_inclusive(c, 'a', 'z') ||
+           in_range_inclusive(c, '0', '9') || c == '_' || c == '.';
+  };
+
+  auto is_space = [](char c) {
+    return c == ' ' || c == '\n' || c == '\r' || c == '\t';
+  };
+
+  const std::string_view str = sv;
+  std::size_t offset = 0;
+  while (offset != str.npos && offset < str.size()) {
+    auto pos = str.find(start_comment, offset);
+    offset = pos + start_comment.size();
+    if (pos == str.npos) break;
+    auto end_pos = str.find(end_comment, offset);
+    auto comment_begin = pos + start_comment.size();
+    auto comment_end = end_pos;
+    auto comment = str.substr(comment_begin, comment_end - comment_begin);
+    auto colon_pos = comment.find(":");
+    if constexpr (ret_counts.fields > 0) {
+      if (colon_pos == comment.npos) {
+        int prev_name_end = static_cast<int>(pos+1);
+        int prev_name_begin = 0;
+        for (int rpos = static_cast<int>(pos-1); rpos > -1; --rpos) {
+          char c = str[rpos];
+          if (is_name(c)) {
+            if (prev_name_end == pos+1) {
+              prev_name_end = rpos + 1;
+            }
+          } else {
+            if (prev_name_end == pos+1) continue;
+            prev_name_begin = rpos + 1;
+            break;
+          }
         }
-        start = i + 1;
+        type_spec &spec = ret.fields[counts.fields];
+        spec.name.first = prev_name_begin;
+        spec.name.second = prev_name_end - prev_name_begin;
+        spec.type.first = comment_begin;
+        spec.type.second = comment_end - comment_begin;
+        bool optional = false;
+        auto type = str.substr(comment_begin, comment_end - comment_begin);
+        if (!type.empty() && type.ends_with("?")) {
+          optional = true;
+          --spec.type.second;
+        }
+        spec.optional = optional;
+        auto name =
+            str.substr(spec.name.first, spec.name.second - spec.name.first);
+        ++counts.fields;
       }
     }
-    return ar;
+
+    if constexpr (ret_counts.params > 0) {
+      if (colon_pos != comment.npos) {
+        auto name = comment.substr(0, colon_pos);
+        auto type = comment.substr(colon_pos + 1);
+        bool optional = false;
+        if (!type.empty() && type.ends_with("?")) {
+          optional = true;
+          type.remove_suffix(1);
+        }
+        type_spec &spec = ret.params[counts.params];
+        spec.name.first = comment_begin;
+        spec.name.second = name.size();
+        spec.type.first = comment_begin + colon_pos + 1;
+        spec.type.second = type.size();
+        spec.optional = optional;
+        ++counts.params;
+      }
+    }
   }
+  return ret;
 }
 
 template <fixed_string query_string, type_spec ts>
@@ -501,51 +531,21 @@ constexpr auto make_members_helper(std::index_sequence<I...>) {
 
 template <fixed_string query_string>
 constexpr auto make_members() {
-  constexpr auto ts = parse_type_specs<query_string, false>();
-  if constexpr (ts.size() == 0) {
+  constexpr auto ts = parse_type_specs<query_string>();
+  constexpr auto fields = ts.fields;
+  if constexpr (fields.size() == 0) {
     return tagged_tuple<>{};
   } else {
-    return make_members_helper<query_string, ts>(
-        std::make_index_sequence<ts.size()>());
+    return make_members_helper<query_string, fields>(
+        std::make_index_sequence<fields.size()>());
   }
 }
 
 template <fixed_string query_string>
 constexpr auto make_parameters() {
-  constexpr auto ts = parse_type_specs<query_string, true>();
-  return make_members_helper<query_string, ts>(
-      std::make_index_sequence<ts.size()>());
-}
-
-// todo make constexpr
-template <std::size_t N>
-inline std::string get_sql_string(std::string_view sv, type_specs<N> specs) {
-  if constexpr (N == 0)
-    return std::string(sv);
-  else {
-    std::string ret;
-    ret.reserve(sv.size());
-    std::size_t prev_i = 0;
-    for (type_spec &ts : specs.data) {
-      ret += std::string(sv.substr(prev_i, ts.name.first - prev_i));
-      [[maybe_unused]] std::string_view name =
-          sv.substr(ts.name.first, ts.name.second);
-      [[maybe_unused]] std::string_view type =
-          sv.substr(ts.type.first, ts.type.second);
-      if (sv[ts.name.first] == '?') {
-        ret += '?';
-      } else {
-        ret += std::string(sv.substr(ts.name.first, ts.name.second));
-      }
-      ret += " ";
-      prev_i = ts.type.first + ts.type.second;
-      if (ts.optional) ++prev_i;
-    }
-
-    ret += std::string(sv.substr(prev_i));
-
-    return ret;
-  }
+  constexpr auto ts = parse_type_specs<query_string>();
+  return make_members_helper<query_string, ts.params>(
+      std::make_index_sequence<ts.params.size()>());
 }
 
 template <typename T>
@@ -598,16 +598,15 @@ class prepared_statement {
   prepared_statement(sqlite3 *sqldb) {
     auto sv = Query.sv();
     sqlite3_stmt *stmt;
-    auto specs = parse_type_specs<Query, true, true>();
-    auto query_string = get_sql_string(sv, specs);
+    auto specs = parse_type_specs<Query>();
     auto rc =
-        sqlite3_prepare_v2(sqldb, query_string.c_str(),
-                           static_cast<int>(query_string.size()), &stmt, 0);
+        sqlite3_prepare_v2(sqldb, sv.data(),
+                           static_cast<int>(sv.size()), &stmt, 0);
     check_sqlite_return(rc);
     stmt_.reset(stmt);
   }
   template <typename... Args>
-  row_range<RowType> execute_rows(Args &&... args) {
+  row_range<RowType> execute_rows(Args &&...args) {
     reset_stmt();
 
     PTuple p_tuple = {};
@@ -617,7 +616,7 @@ class prepared_statement {
   }
   template <typename... Args>
   std::optional<decltype(to_concrete(std::declval<RowType>()))>
-  execute_single_row(Args &&... args) {
+  execute_single_row(Args &&...args) {
     auto rng = execute_rows(std::forward<Args>(args)...);
     auto begin = rng.begin();
     if (begin != rng.end()) {
@@ -627,7 +626,7 @@ class prepared_statement {
     }
   }
   template <typename... Args>
-  void execute(Args &&... args) {
+  void execute(Args &&...args) {
     reset_stmt();
 
     PTuple p_tuple = {};

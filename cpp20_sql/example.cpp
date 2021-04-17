@@ -14,6 +14,7 @@
 
 #include "tagged_sqlite.h"
 
+#include <iostream>
 int main() {
     using skydown::bind;
     using skydown::field;
@@ -42,13 +43,13 @@ int main() {
 
   skydown::prepared_statement<
       "INSERT INTO customers(name) "
-      "VALUES(?name:text);"  //
+      "VALUES(? /*:name:text*/);"  //
       >{sqldb}
       .execute(bind<"name">("John"));
 
  auto customer_id_or = skydown::prepared_statement<
-      "select id:integer from customers "
-      "where name = ?name:text;"  //
+      "select id/*:integer*/ from customers "
+      "where name = ? /*:name:text*/;"  //
       >
       {sqldb}.execute_single_row(bind<"name">("John"));;
 
@@ -60,8 +61,8 @@ int main() {
 
   skydown::prepared_statement<
       "INSERT INTO orders(item , customerid , price, discount_code ) "
-      "VALUES (?item:text, ?customerid:integer, ?price:real, "
-      "?discount_code:text? );"  //
+      "VALUES (?/*:item:text*/, ?/*:customerid:integer*/, ?/*:price:real*/, "
+      "?/*:discount_code:text?*/ );"  //
       >
       insert_order{sqldb};
 
@@ -74,10 +75,10 @@ int main() {
                        skydown::bind<"discount_code">("BIGSALE"));
 
   skydown::prepared_statement<
-      "SELECT orders.id:integer, name:text, item:text, price:real, "
-      "discount_code:text? "
+      "SELECT orders.id /*:integer*/, name/*:text*/, item/*:text*/, price/*:real*/, "
+      "discount_code/*:text?*/ "
       "FROM orders JOIN customers ON customers.id = customerid "
-      "WHERE price > ?min_price:real;">
+      "WHERE price > ?/*:min_price:real*/;">
       select_orders{sqldb};
 
   for (;;) {
