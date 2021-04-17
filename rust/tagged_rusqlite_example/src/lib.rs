@@ -70,11 +70,11 @@ mod tests {
                             name /*:String*/,
                             data /*:Option<Vec<u8>>*/
                             FROM person
-                            WHERE name = ? /*:name:String*/;
+                            WHERE name = ? /*:name2:String*/;
                             "#
     );
         let search_params = SearchByNameParams {
-            name: "John".into(),
+            name2: "John".into(),
         };
         let people: Result<Vec<_>, _> = SearchByName::prepare(&conn).query_bind(&search_params)?.collect();
         assert_eq!(people?, vec![
@@ -87,7 +87,7 @@ mod tests {
 
         let mut stmt = SearchByName::prepare(&conn);
         let search_params = SearchByNameParams {
-            name: "Bill".into(),
+            name2: "Bill".into(),
         };
         assert_eq!(stmt.query_row_bind(&search_params)?, SearchByNameRow { id: 3, name: "Bill".into(), data: None });
         Ok(())

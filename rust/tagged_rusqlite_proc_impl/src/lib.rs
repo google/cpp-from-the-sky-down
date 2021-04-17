@@ -45,7 +45,7 @@ impl SqlMember {
 }
 
 pub fn tagged_sql(struct_name_str: &str, sql: &str) -> proc_macro2::TokenStream {
-    let r = Regex::new(r#"([ ]*[a-zA-Z0=9_]+)|([ ]*/\*:[^*]+\*/)"#).unwrap();
+    let r = Regex::new(r#"([ ]*[a-zA-Z0-9_]+)|([ ]*/\*:[^*]+\*/)"#).unwrap();
 
     let v: Vec<_> = r
         .captures_iter(sql)
