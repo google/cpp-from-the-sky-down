@@ -40,7 +40,6 @@ fn main() -> Result<()> {
                   );"#
     );
 
-
     CreateOrders::prepare(&conn).execute()?;
 
     tagged_sql!(
@@ -52,10 +51,10 @@ fn main() -> Result<()> {
                 "#
     );
 
-    let mut insert_customer = InsertCustomer::prepare(&conn);
-    insert_customer.execute_bind(&InsertCustomerParams {
-        name: "John".to_string(),
-    })?;
+    InsertCustomer::prepare(&conn)
+        .execute_bind(&InsertCustomerParams {
+            name: "John".to_string(),
+        })?;
 
     tagged_sql!(
         InsertOrder,
@@ -78,28 +77,30 @@ fn main() -> Result<()> {
         "#
     );
 
-    let customerid: i64 = FindCustomer::prepare(&conn).query_row_bind(&FindCustomerParams {
-        name: "John".into(),
-    })?.id;
+    let customerid: i64 = FindCustomer::prepare(&conn)
+        .query_row_bind(&FindCustomerParams {
+            name: "John".into(),
+        })?
+        .id;
 
     let mut insert_order = InsertOrder::prepare(&conn);
     insert_order.execute_bind(&InsertOrderParams {
         item: "Phone".into(),
         price: 1444.44,
         customerid,
-        discount_code: None
+        discount_code: None,
     })?;
     insert_order.execute_bind(&InsertOrderParams {
         item: "Laptop".into(),
         price: 1300.44,
         customerid,
-        discount_code: None
+        discount_code: None,
     })?;
     insert_order.execute_bind(&InsertOrderParams {
         item: "Laptop".into(),
-        price: 1300.44,
+        price: 2000.0,
         customerid,
-        discount_code: Some("BIGSALE".to_owned())
+        discount_code: Some("BIGSALE".to_owned()),
     })?;
 
     tagged_sql!(
@@ -122,4 +123,3 @@ fn main() -> Result<()> {
     }
     Ok(())
 }
-
