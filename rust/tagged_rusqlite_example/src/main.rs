@@ -51,10 +51,9 @@ fn main() -> Result<()> {
                 "#
     );
 
-    InsertCustomer::prepare(&conn)
-        .execute_bind(&InsertCustomerParams {
-            name: "John".to_string(),
-        })?;
+    InsertCustomer::prepare(&conn).execute_bind(&InsertCustomerParams {
+        name: "John".to_string(),
+    })?;
 
     tagged_sql!(
         InsertOrder,
@@ -119,7 +118,11 @@ fn main() -> Result<()> {
 
     let mut find_orders = FindOrders::prepare(&conn);
     for orders in find_orders.query_bind(&FindOrdersParams { min_price: 100.0 })? {
-        println!("{:?}", &orders);
+        let orders = orders?;
+        println!(
+            "{} {} {} {} {:?}",
+            &orders.oid, &orders.name, &orders.item, &orders.price, &orders.discount_code
+        );
     }
     Ok(())
 }
