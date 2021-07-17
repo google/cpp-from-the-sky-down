@@ -115,8 +115,12 @@ struct member_impl {
       member_impl(member_impl&&) = default;
       member_impl& operator=(member_impl&&) = default;
       template <typename Self, typename OtherT, auto OtherInit>
-      member_impl(Self& self, const member_impl<Tag, OtherT, OtherInit>& other)
-          : value_(other.value_){};
+      member_impl(Self&, const member_impl<Tag, OtherT, OtherInit>& other)
+          : value_(other.value_){}
+      template <typename Self, typename OtherT, auto OtherInit>
+      member_impl(Self& self,member_impl<Tag, OtherT, OtherInit>& other)
+          : value_(other.value_){}
+ 
       template <typename Self, typename OtherT, auto OtherInit>
       member_impl(Self& self, member_impl<Tag, OtherT, OtherInit>&& other)
           : value_(std::move(other.value_)){};
@@ -241,11 +245,24 @@ struct tagged_tuple_base : member_to_impl_t<Self, Members>... {
       : member_to_impl_t<Self, Members>{self, p}... {}
 
   tagged_tuple_base(){}
+
+  template<typename OtherSelf, typename... OtherMembers>
+  tagged_tuple_base(tagged_tuple_base<OtherSelf, OtherMembers...>& other)
+
+      : member_to_impl_t<Self, Members>{other,static_cast<member_to_impl_t<OtherSelf, OtherMembers>&>(other)}... {}
+
+  template<typename OtherSelf, typename... OtherMembers>
+  tagged_tuple_base(const tagged_tuple_base<OtherSelf, OtherMembers...>& other)
+
+      : member_to_impl_t<Self, Members>{other,static_cast<const member_to_impl_t<OtherSelf, OtherMembers>&>(other)}... {}
+
+
   tagged_tuple_base(const tagged_tuple_base&) = default;
   tagged_tuple_base& operator=(const tagged_tuple_base&) = default;
 
   tagged_tuple_base(tagged_tuple_base&&) = default;
   tagged_tuple_base& operator=(tagged_tuple_base&&) = default;
+
 
 
 
@@ -330,6 +347,10 @@ template <typename... Tag, typename... T, auto... Init>
       : super(*this, parameters{std::move(args)...}) {}
 
   tagged_tuple(){}
+  template<typename... OtherMembers>
+  tagged_tuple(tagged_tuple<OtherMembers...>& other):super(other){}
+  template<typename... OtherMembers>
+  tagged_tuple(const tagged_tuple<OtherMembers...>& other):super(other){}
   tagged_tuple(const tagged_tuple& other) = default;
   tagged_tuple& operator=(const tagged_tuple& ) = default;
   tagged_tuple(tagged_tuple&& ) = default;
