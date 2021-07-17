@@ -8,10 +8,10 @@
 namespace ftsd {
 
 template <typename TaggedTuple>
-class struct_of_vectors;
+class soa_vector;
 
 template <auto... Tags, typename... Ts, auto... Inits>
-class struct_of_vectors<tagged_tuple<member<Tags, Ts, Inits>...>> {
+class soa_vector<tagged_tuple<member<Tags, Ts, Inits>...>> {
   using TaggedTuple = tagged_tuple<member<Tags, Ts, Inits>...>;
   tagged_tuple<member<
       Tags, std::vector<internal_tagged_tuple::t_or_auto_t<TaggedTuple, Ts, Inits>>>...>
@@ -32,7 +32,7 @@ class struct_of_vectors<tagged_tuple<member<Tags, Ts, Inits>...>> {
   decltype(auto) first() const { return first_helper<Tags...>(); }
 
  public:
-  struct_of_vectors() = default;
+  soa_vector() = default;
   decltype(auto) vectors(){return (vectors_);}
   decltype(auto) vectors()const{return (vectors_);}
 
@@ -70,18 +70,18 @@ class struct_of_vectors<tagged_tuple<member<Tags, Ts, Inits>...>> {
 };
 
   template <typename Tag, typename TaggedTuple>
-  decltype(auto) get_impl(struct_of_vectors<TaggedTuple>& s) {
+  decltype(auto) get_impl(soa_vector<TaggedTuple>& s) {
     return std::span{ftsd::get<Tag::value>(s.vectors())};
   }
 
 
   template <typename Tag, typename TaggedTuple>
-  auto get_impl(const struct_of_vectors<TaggedTuple>& s) {
+  auto get_impl(const soa_vector<TaggedTuple>& s) {
     return std::span{ftsd::get<Tag::value>(s.vectors())};
   }
 
   template <typename Tag, typename TaggedTuple>
-  auto get_impl(struct_of_vectors<TaggedTuple>&& s) {
+  auto get_impl(soa_vector<TaggedTuple>&& s) {
     return std::span{ftsd::get<Tag::value>(std::move(s.vectors()))};
   }
 

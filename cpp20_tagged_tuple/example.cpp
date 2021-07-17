@@ -2,7 +2,7 @@
 #include <string>
 
 #include "tagged_tuple.h"
-#include "struct_of_vectors.h"
+#include "soa_vector.h"
 
 using ftsd::get;
 using ftsd::tagged_tuple;
@@ -62,7 +62,7 @@ int main() {
   T t2{tag<"world"> = "JRB"};
 
 
-  ftsd::struct_of_vectors<T> v;
+  ftsd::soa_vector<T> v;
 
   v.push_back(t2);
 
