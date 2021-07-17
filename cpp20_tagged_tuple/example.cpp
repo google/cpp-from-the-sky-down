@@ -2,6 +2,7 @@
 #include <string>
 
 #include "tagged_tuple.h"
+#include "struct_of_vectors.h"
 
 using ftsd::get;
 using ftsd::tagged_tuple;
@@ -36,36 +37,9 @@ void print(const T& t) {
   std::cout << "}\n";
 }
 
-template<typename TaggedTuple>
-struct tagged_tuple_ref;
-
-
-template <auto... Tags, typename... T, auto... Init>
-struct tagged_tuple_ref<ftsd::tagged_tuple<ftsd::member<Tags, T, Init>...>>{
-
-  using Self = ftsd::tagged_tuple<ftsd::member<Tags, T, Init>...>;
-  using type = ftsd::tagged_tuple<ftsd::member<
-      Tags,std::add_lvalue_reference_t<
-          typename ftsd::internal_tagged_tuple::t_or_auto<Self, T, Init>::type>,
-      []{}>...>;
-};
-
-template <auto... Tags, typename... T, auto... Init>
-struct tagged_tuple_ref<const ftsd::tagged_tuple<ftsd::member<Tags, T, Init>...>>{
-
-  using Self = ftsd::tagged_tuple<ftsd::member<Tags, T, Init>...>;
-  using type = ftsd::tagged_tuple<ftsd::member<
-      Tags,std::add_lvalue_reference_t<
-          std::add_const_t<typename ftsd::internal_tagged_tuple::t_or_auto<Self, T, Init>::type>>,
-      []{}>...>;
-};
-
-template<typename TaggedTuple>
-using tagged_tuple_ref_t = typename tagged_tuple_ref<TaggedTuple>::type;
-
 template <typename TaggedTuple>
 auto make_ref(TaggedTuple& t) {
-    return tagged_tuple_ref_t<TaggedTuple>(t);
+    return ftsd::tagged_tuple_ref_t<TaggedTuple>(t);
 }
 
 int main() {
@@ -77,14 +51,36 @@ int main() {
                         return 2 * get<"hello">(t) + get<"world">(t).size();
                       }>,
                member<"last", int>>
-      old_ts{tag<"world"> = "Universe", tag<"hello"> = 1};
+      ts{tag<"world"> = "Universe", tag<"hello"> = 1};
 
-  auto ts = make_ref(old_ts);
-  print(ts);
+  auto ref_ts = make_ref(ts);
+ print(ref_ts);
 
 
-  using T = decltype(old_ts);
+
+  using T = decltype(ts);
   T t2{tag<"world"> = "JRB"};
+
+
+  ftsd::struct_of_vectors<T> v;
+
+  v.push_back(t2);
+
+  print(v[0]);
+
+  get<"world">(v[0]) = "Changed";
+
+  print(v[0]);
+
+  auto v0 = get<"world">(v);
+  v0.front() = "Changed again";
+  
+
+  std::cout << get<"world">(v).front();
+
+
+
+  return 0;
 
   std::cout << get<"hello">(ts) << "\n";
   std::cout << get<"world">(ts) << "\n";

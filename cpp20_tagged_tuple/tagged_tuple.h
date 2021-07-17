@@ -6,6 +6,7 @@
 #include <tuple>
 #include <utility>
 
+
 namespace ftsd {
 
 namespace internal_tagged_tuple {
@@ -108,7 +109,8 @@ struct member_impl {
         ->std::convertible_to<T>;
       }
       : value_(Init(self)) {}
-      member_impl(T value) : value_(std::move(value)) {}
+      member_impl(T value) requires(!std::is_reference_v<T>) : value_(std::move(value)) {}
+      member_impl(T value) requires(std::is_reference_v<T>) : value_(value) {}
       member_impl() : value_(Init()) {}
       member_impl(const member_impl&) = default;
       member_impl& operator=(const member_impl&) = default;
@@ -204,6 +206,11 @@ requires requires {
 struct t_or_auto<Self, auto_, Init> {
   using type = decltype(Init(std::declval<Self&>()));
 };
+
+
+
+template <typename Self, typename T, auto Init>
+using t_or_auto_t = typename t_or_auto<Self,T,Init>::type;
 
 template <fixed_string Fs, typename T, auto Init = default_init<T>>
 struct member {
@@ -334,7 +341,7 @@ decltype(auto) get_impl(const member_impl<Tag, T, Init>&& m) {
 }
 
 template <fixed_string fs, typename S>
-decltype(auto) get(S&& s) {
+decltype(auto) get(S&& s){
   return get_impl<tuple_tag<fixed_string<fs.size()>(fs)>>(std::forward<S>(s));
 }
 
@@ -379,6 +386,35 @@ using member_impl_to_member_t = typename member_impl_to_member<T>::type;
 template <typename... Tag, typename... T, auto... Init>
 tagged_tuple(member_impl<Tag,T,Init>...)
     -> tagged_tuple<member_impl_to_member_t<member_impl<Tag,T,Init>>...>;
+
+template<typename TaggedTuple>
+struct tagged_tuple_ref;
+
+
+template <auto... Tags, typename... T, auto... Init>
+struct tagged_tuple_ref<tagged_tuple<member<Tags, T, Init>...>>{
+
+  using Self = tagged_tuple<member<Tags, T, Init>...>;
+  using type = tagged_tuple<member<
+      Tags,std::add_lvalue_reference_t<
+          typename t_or_auto<Self, T, Init>::type>,
+      Init>...>;
+};
+
+template <auto... Tags, typename... T, auto... Init>
+struct tagged_tuple_ref<const tagged_tuple<member<Tags, T, Init>...>>{
+
+  using Self = tagged_tuple<member<Tags, T, Init>...>;
+  using type = tagged_tuple<member<
+      Tags,std::add_lvalue_reference_t<
+          std::add_const_t<typename t_or_auto<Self, T, Init>::type>>,
+      Init>...>;
+};
+
+template<typename TaggedTuple>
+using tagged_tuple_ref_t = typename tagged_tuple_ref<TaggedTuple>::type;
+
+
 
 template <fixed_string fs>
 inline constexpr auto tag = tuple_tag<fixed_string<fs.size()>(fs)>{};
@@ -430,6 +466,8 @@ auto make_tag_comparator_predicate(T1 a, T2 b) {
                                                       std::move(b)};
 }
 
+
+
 namespace tag_relops {
 // Compare two tags
 template <typename A, typename B>
@@ -471,6 +509,7 @@ using internal_tagged_tuple::get;
 using internal_tagged_tuple::member;
 using internal_tagged_tuple::tag;
 using internal_tagged_tuple::tagged_tuple;
+using internal_tagged_tuple::tagged_tuple_ref_t;
 
 namespace tag_relops = internal_tagged_tuple::tag_relops;
 
