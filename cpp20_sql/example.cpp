@@ -18,7 +18,6 @@
 int main() {
     using ftsd::bind;
     using ftsd::field;
-    using ftsd::tag;
 
   sqlite3 *sqldb;
   sqlite3_open(":memory:", &sqldb);
@@ -46,13 +45,13 @@ int main() {
       "INSERT INTO customers(name) "
       "VALUES(? /*:name:text*/);"  //
       >{sqldb}
-      .execute({ftsd::tag<"name"> = "John"});
+      .execute({bind<"name">("John")});
 
  auto customer_id_or = ftsd::prepared_statement<
       "select id/*:integer*/ from customers "
       "where name = ? /*:name:text*/;"  //
       >
-      {sqldb}.execute_single_row({tag<"name"> = "John"});
+      {sqldb}.execute_single_row({bind<"name">("John")});
 
   if(!customer_id_or){
     std::cerr << "Unable to find customer name\n";
