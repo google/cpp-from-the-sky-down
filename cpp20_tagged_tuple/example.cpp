@@ -1,5 +1,7 @@
 #include <iostream>
 #include <string>
+#include <assert.h>
+
 
 #include "tagged_tuple.h"
 #include "soa_vector.h"
@@ -42,7 +44,29 @@ auto make_ref(TaggedTuple& t) {
     return ftsd::tagged_tuple_ref_t<TaggedTuple>(t);
 }
 
+using ftsd::soa_vector;
+void soa_vector_example(){
+    using Person = tagged_tuple<
+        member<"name",std::string>,
+        member<"address",std::string>,
+        member<"id", std::int64_t>,
+        member<"score", double>>;
+
+    soa_vector<Person> v;
+
+    v.push_back(Person{tag<"name"> = "John", tag<"address"> = "somewhere", tag<"id"> = 1, tag<"score"> = 10.5});
+    v.push_back(Person{tag<"name"> = "Jane", tag<"address"> = "there", tag<"id"> = 2, tag<"score"> = 12.5});
+
+    assert(get<"name">(v[1]) == "Jane");
+
+    auto scores = get<"score">(v);
+    assert(*std::max_element(scores.begin(),scores.end()) == 12.5);
+
+
+}
+
 int main() {
+    soa_vector_example();
   tagged_tuple<member<"hello", auto_, [] { return 5; }>,
                member<"world", std::string,
                       [](auto& self) { return get<"hello">(self); }>,
@@ -57,6 +81,7 @@ int main() {
  print(ref_ts);
 
 
+ 
 
   using T = decltype(ts);
   T t2{tag<"world"> = "JRB"};
