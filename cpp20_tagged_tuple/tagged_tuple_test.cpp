@@ -1,8 +1,10 @@
 
 #include "tagged_tuple.h"
-#include "soa_vector.h"
 
 #include <gtest/gtest.h>
+
+#include "soa_vector.h"
+#include "to_from_nlohmann_json.h"
 
 namespace ftsd {
 namespace {
@@ -32,7 +34,7 @@ TEST(TaggedStruct, Copy) {
                       }>,
                member<"last", int>>
       t{tag<"hello"> = 1};
- auto ts = t;
+  auto ts = t;
 
   EXPECT_EQ(get<"hello">(ts), 1);
   EXPECT_EQ(get<"world">(ts), "world");
@@ -143,29 +145,80 @@ TEST(TaggedStruct, Apply) {
   };
 
   ts.apply(f);
-
 }
 
 TEST(SoaVector, Basic) {
-    using Person = tagged_tuple<
-        member<"name",std::string>,
-        member<"address",std::string>,
-        member<"id", std::int64_t>,
-        member<"score", double>>;
+  using Person =
+      tagged_tuple<member<"name", std::string>, member<"address", std::string>,
+                   member<"id", std::int64_t>, member<"score", double>>;
 
-    soa_vector<Person> v;
+  soa_vector<Person> v;
 
-    v.push_back(Person{tag<"name"> = "John", tag<"address"> = "somewhere", tag<"id"> = 1, tag<"score"> = 10.5});
-    v.push_back(Person{tag<"name"> = "Jane", tag<"address"> = "there", tag<"id"> = 2, tag<"score"> = 12.5});
+  v.push_back({tag<"name"> = "John", tag<"address"> = "somewhere",
+               tag<"id"> = 1, tag<"score"> = 10.5});
+  v.push_back({tag<"name"> = "Jane", tag<"address"> = "there", tag<"id"> = 2,
+               tag<"score"> = 12.5});
 
-    EXPECT_EQ(get<"name">(v[1]) , "Jane");
+  EXPECT_EQ(get<"name">(v[1]), "Jane");
 
-    auto scores = get<"score">(v);
-    EXPECT_EQ(*std::max_element(scores.begin(),scores.end()) , 12.5);
-
-
+  auto scores = get<"score">(v);
+  EXPECT_EQ(*std::max_element(scores.begin(), scores.end()), 12.5);
 }
 
+TEST(Json, BasicRoundTrip) {
+  using Person =
+      tagged_tuple<member<"name", std::string>, member<"address", std::string>,
+                   member<"id", std::int64_t>, member<"score", double>>;
+
+  Person person{tag<"name"> = "John", tag<"address"> = "Somewhere",
+                tag<"id"> = 1, tag<"score"> = 15};
+  nlohmann::json j = person;
+
+  auto person2 = j.get<Person>();
+
+  EXPECT_EQ(person, person2);
+}
+
+TEST(Json, Defaults) {
+  using Person =
+      tagged_tuple<member<"name", std::string>, member<"address", std::string>,
+                   member<"id", std::int64_t>,
+                   member<"score", double, [] { return 100.0; }>>;
+
+  Person person{tag<"name"> = "John", tag<"address"> = "Somewhere",
+                tag<"id"> = 1, tag<"score"> = 15};
+  nlohmann::json j = person;
+
+  auto person2 = j.get<Person>();
+
+  EXPECT_EQ(person, person2);
+  j.erase("score");
+
+  auto person3 = j.get<Person>();
+
+  EXPECT_NE(person2, person3);
+  EXPECT_EQ(get<"score">(person3), 100);
+  get<"score">(person3) = 15;
+  EXPECT_EQ(person2, person3);
+}
+
+TEST(Json, Required) {
+  using Person =
+      tagged_tuple<member<"name", std::string>, member<"address", std::string>,
+                   member<"id", std::int64_t, [] {}>,
+                   member<"score", double, [] { return 100.0; }>>;
+
+  Person person{tag<"name"> = "John", tag<"address"> = "Somewhere",
+                tag<"id"> = 1, tag<"score"> = 15};
+  nlohmann::json j = person;
+
+  auto person2 = j.get<Person>();
+
+  EXPECT_EQ(person, person2);
+  j.erase("id");
+
+  EXPECT_THROW({ j.get<Person>(); }, nlohmann::json::out_of_range);
+}
 
 }  // namespace
 }  // namespace ftsd

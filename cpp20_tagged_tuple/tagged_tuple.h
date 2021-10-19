@@ -142,7 +142,7 @@ struct member_impl {
       using tag_type = Tag;
       using value_type = T;
 
-      std::string_view key() const { return Tag::value.sv(); }
+      static constexpr std::string_view key() { return Tag::value.sv(); }
 
       value_type& value() & { return value_; }
       value_type&& value() && { return std::move(value_); }
@@ -510,6 +510,7 @@ using internal_tagged_tuple::member;
 using internal_tagged_tuple::tag;
 using internal_tagged_tuple::tagged_tuple;
 using internal_tagged_tuple::tagged_tuple_ref_t;
+using internal_tagged_tuple::member_to_impl_t;
 
 namespace tag_relops = internal_tagged_tuple::tag_relops;
 
