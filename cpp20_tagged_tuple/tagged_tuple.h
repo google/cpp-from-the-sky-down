@@ -275,18 +275,23 @@ struct tagged_tuple_base : member_to_impl_t<Self, Members>... {
 
   auto operator<=>(const tagged_tuple_base&) const = default;
 
+  template<typename F>
+  static auto apply_static(F&& f) {
+    return f(static_cast<member_to_impl_t<Self, Members>*>(nullptr)...);
+  }
+
   template <typename F>
   auto apply(F&& f) & {
-    f(static_cast<member_to_impl_t<Self, Members>&>(*this)...);
+    return f(static_cast<member_to_impl_t<Self, Members>&>(*this)...);
   }
   template <typename F>
   auto apply(F&& f) const& {
-    f(static_cast<const member_to_impl_t<Self, Members>&>(*this)...);
+    return f(static_cast<const member_to_impl_t<Self, Members>&>(*this)...);
   }
 
   template <typename F>
   auto apply(F&& f) && {
-    f(static_cast<member_to_impl_t<Self, Members>&&>(*this)...);
+    return f(static_cast<member_to_impl_t<Self, Members>&&>(*this)...);
   }
 
   template<typename F>
@@ -510,7 +515,6 @@ using internal_tagged_tuple::member;
 using internal_tagged_tuple::tag;
 using internal_tagged_tuple::tagged_tuple;
 using internal_tagged_tuple::tagged_tuple_ref_t;
-using internal_tagged_tuple::member_to_impl_t;
 
 namespace tag_relops = internal_tagged_tuple::tag_relops;
 
