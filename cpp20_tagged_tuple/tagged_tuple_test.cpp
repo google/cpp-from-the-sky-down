@@ -201,7 +201,6 @@ TEST(Json, Defaults) {
   get<"score">(person3) = 15;
   EXPECT_EQ(person2, person3);
 }
-
 TEST(Json, Required) {
   using Person =
       tagged_tuple<member<"name", std::string>, member<"address", std::string>,
@@ -209,7 +208,7 @@ TEST(Json, Required) {
                    member<"score", double, [] { return 100.0; }>>;
 
   Person person{tag<"name"> = "John", tag<"address"> = "Somewhere",
-                tag<"id"> = 1, tag<"score"> = 15};
+                tag<"id"> = 1, tag<"score"> = 15.0};
   nlohmann::json j = person;
 
   auto person2 = j.get<Person>();
@@ -218,6 +217,30 @@ TEST(Json, Required) {
   j.erase("id");
 
   EXPECT_THROW({ j.get<Person>(); }, nlohmann::json::out_of_range);
+}
+
+TEST(Json, DefaultSelf) {
+  using Person =
+      tagged_tuple<member<"name", std::string>, member<"address", std::string>,
+                   member<"id", std::int64_t, [] {}>,
+                   member<"score", double,
+                          [](auto& self) { return get<"id">(self) + 1.0; }>>;
+
+  Person person{tag<"name"> = "John", tag<"address"> = "Somewhere",
+                tag<"id"> = 1, tag<"score"> = 15.0};
+  nlohmann::json j = person;
+
+  auto person2 = j.get<Person>();
+
+  EXPECT_EQ(person, person2);
+  j.erase("score");
+
+  auto person3 = j.get<Person>();
+  EXPECT_NE(person, person3);
+  EXPECT_EQ(get<"score">(person3), get<"id">(person3) + 1.0);
+  get<"score">(person3) = 15.0;
+  EXPECT_EQ(person, person3);
+
 }
 
 }  // namespace

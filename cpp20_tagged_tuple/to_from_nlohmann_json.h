@@ -11,24 +11,24 @@ struct adl_serializer<ftsd::tagged_tuple<Members...>> {
   // one argument
 
   template <typename Member>
-  requires requires { {Member::init()}; }
   static auto get_from_json(const json& j) {
     using ftsd::tag;
     auto key = std::string(Member::key());
-    if constexpr (std::is_same_v<decltype(Member::init()), void>) {
-      return tag<Member::tag_type::value> =
+    if constexpr (!Member::has_default_init()) {
+      return tag<Member::fixed_key()> =
                  j.at(key).get<typename Member::value_type>();
     } else {
       if (j.contains(key)) {
-        return tag<Member::tag_type::value> =
-                   j.at(key).get<typename Member::value_type>();
+        return tag<Member::fixed_key()> =
+                   std::optional<typename Member::value_type>(
+                       j.at(key).get<typename Member::value_type>());
       } else {
-        return tag<Member::tag_type::value> = Member::init();
+        return tag<Member::tag_type::value> = std::optional<typename Member::value_type>();
       }
     }
   }
   static TTuple from_json(const json& j) {
-    return TTuple::apply_static([&]<typename... M>(M* ...) {
+    return TTuple::apply_static([&]<typename... M>(M * ...) {
       return TTuple(get_from_json<M>(j)...);
     });
   }
