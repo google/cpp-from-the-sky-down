@@ -7,8 +7,6 @@ namespace nlohmann {
 template <typename... Members>
 struct adl_serializer<ftsd::tagged_tuple<Members...>> {
   using TTuple = ftsd::tagged_tuple<Members...>;
-  // note: the return type is no longer 'void', and the method only takes
-  // one argument
 
   template <typename Member>
   static auto get_from_json(const json& j) {
@@ -33,12 +31,8 @@ struct adl_serializer<ftsd::tagged_tuple<Members...>> {
     });
   }
 
-  // Here's the catch! You must provide a to_json method! Otherwise you
-  // will not be able to convert move_only_type to json, since you fully
-  // specialized adl_serializer on that type
   static void to_json(json& j, const TTuple& t) {
-    t.for_each(
-        [&](auto& member) { j[std::string(member.key())] = member.value(); });
+    t.for_each([&](auto& member) { j[member.key().data()] = member.value(); });
   }
 };
 }  // namespace nlohmann
