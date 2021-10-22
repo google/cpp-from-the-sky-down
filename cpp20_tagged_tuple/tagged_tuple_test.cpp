@@ -240,7 +240,31 @@ TEST(Json, DefaultSelf) {
   EXPECT_EQ(get<"score">(person3), get<"id">(person3) + 1.0);
   get<"score">(person3) = 15.0;
   EXPECT_EQ(person, person3);
+}
+TEST(TaggedTupleConstexpr, DefaultConstructed) {
+  using Tup = tagged_tuple<
+      member<"a", int, [] { return 1; }>,
+      member<"b", double, [] { return 5.0; }>,
+      member<"c", int, [](auto& self) { return get<"a">(self) + 1; }>>;
+  // using Tup = tagged_tuple<member<"a",int>>;
+  constexpr Tup t{};
+  using namespace ftsd::literals;
+  static_assert(get<"a">(t) == 1);
+  static_assert(get<"b">(t) == 5.0);
+  static_assert(get<"c">(t) == 2);
+}
 
+TEST(TaggedTupleConstexpr, WithParameters) {
+  using Tup = tagged_tuple<
+      member<"a", int, [] { return 1; }>,
+      member<"b", double, [] { return 5.0; }>,
+      member<"c", int, [](auto& self) { return get<"a">(self) + 1; }>>;
+  // using Tup = tagged_tuple<member<"a",int>>;
+  constexpr Tup t{tag<"a"> = 5};
+  using namespace ftsd::literals;
+  static_assert(get<"a">(t) == 5);
+  static_assert(get<"b">(t) == 5.0);
+  static_assert(get<"c">(t) == 6);
 }
 
 }  // namespace
