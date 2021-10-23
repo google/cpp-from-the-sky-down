@@ -1,7 +1,7 @@
 #pragma once
 #include <boost/stl_interfaces/iterator_interface.hpp>
-#include <vector>
 #include <span>
+#include <vector>
 
 #include "tagged_tuple.h"
 
@@ -14,7 +14,7 @@ template <auto... Tags, typename... Ts, auto... Inits>
 class soa_vector<tagged_tuple<member<Tags, Ts, Inits>...>> {
   using TaggedTuple = tagged_tuple<member<Tags, Ts, Inits>...>;
   tagged_tuple<member<
-      Tags, std::vector<internal_tagged_tuple::t_or_auto_t<TaggedTuple, Ts, Inits>>>...>
+      Tags, std::vector<tagged_tuple_value_type_t<Tags, TaggedTuple>>>...>
       vectors_;
 
   template <auto Tag, auto...>
@@ -33,8 +33,8 @@ class soa_vector<tagged_tuple<member<Tags, Ts, Inits>...>> {
 
  public:
   soa_vector() = default;
-  decltype(auto) vectors(){return (vectors_);}
-  decltype(auto) vectors()const{return (vectors_);}
+  decltype(auto) vectors() { return (vectors_); }
+  decltype(auto) vectors() const { return (vectors_); }
 
   void push_back(TaggedTuple t) {
     (ftsd::get<Tags>(vectors_).push_back(get<Tags>(t)), ...);
@@ -50,41 +50,31 @@ class soa_vector<tagged_tuple<member<Tags, Ts, Inits>...>> {
 
   auto operator[](std::size_t i) {
     return tagged_tuple_ref_t<TaggedTuple>(
-        internal_tagged_tuple::member_impl<
-           internal_tagged_tuple::tuple_tag<Tags>,
-            std::add_lvalue_reference_t<internal_tagged_tuple::t_or_auto_t<TaggedTuple,Ts,Inits>>,
-            []{}>(ftsd::get<Tags>(vectors_)[i])...);
+        (ftsd::tag<Tags> = std::ref(ftsd::get<Tags>(vectors_)[i]))...);
   }
 
   auto operator[](std::size_t i) const {
     return tagged_tuple_ref_t<TaggedTuple>(
-        internal_tagged_tuple::member_impl<
-            internal_tagged_tuple::tuple_tag<Tags>,
-            std::add_lvalue_reference_t<
-                const internal_tagged_tuple::t_or_auto_t<TaggedTuple,Ts,Inits>>,
-            []{}>(ftsd::get<Tags>(vectors_)[i])...);
+        (ftsd::tag<Tags> = std::ref(ftsd::get<Tags>(vectors_)[i]))...);
   }
 
   auto front() { return (*this)[0]; }
   auto back() { return (*this)[size() - 1]; }
 };
 
-  template <typename Tag, typename TaggedTuple>
-  decltype(auto) get_impl(soa_vector<TaggedTuple>& s) {
-    return std::span{ftsd::get<Tag::value>(s.vectors())};
-  }
+template <typename Tag, typename TaggedTuple>
+decltype(auto) get_impl(soa_vector<TaggedTuple>& s) {
+  return std::span{ftsd::get<Tag::value>(s.vectors())};
+}
 
+template <typename Tag, typename TaggedTuple>
+auto get_impl(const soa_vector<TaggedTuple>& s) {
+  return std::span{ftsd::get<Tag::value>(s.vectors())};
+}
 
-  template <typename Tag, typename TaggedTuple>
-  auto get_impl(const soa_vector<TaggedTuple>& s) {
-    return std::span{ftsd::get<Tag::value>(s.vectors())};
-  }
-
-  template <typename Tag, typename TaggedTuple>
-  auto get_impl(soa_vector<TaggedTuple>&& s) {
-    return std::span{ftsd::get<Tag::value>(std::move(s.vectors()))};
-  }
-
-
+template <typename Tag, typename TaggedTuple>
+auto get_impl(soa_vector<TaggedTuple>&& s) {
+  return std::span{ftsd::get<Tag::value>(std::move(s.vectors()))};
+}
 
 }  // namespace ftsd

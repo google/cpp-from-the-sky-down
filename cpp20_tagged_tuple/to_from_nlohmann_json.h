@@ -11,15 +11,14 @@ struct adl_serializer<ftsd::tagged_tuple<Members...>> {
   template <typename Member>
   static auto get_from_json(const json& j) {
     using ftsd::tag;
-    auto key = std::string(Member::key());
     if constexpr (!Member::has_default_init()) {
       return tag<Member::fixed_key()> =
-                 j.at(key).get<typename Member::value_type>();
+                 j.at(Member::key().data()).get<typename Member::value_type>();
     } else {
-      if (j.contains(key)) {
+      if (j.contains(Member::key().data())) {
         return tag<Member::fixed_key()> =
                    std::optional<typename Member::value_type>(
-                       j.at(key).get<typename Member::value_type>());
+                       j.at(Member::key().data()).get<typename Member::value_type>());
       } else {
         return tag<Member::tag_type::value> = std::optional<typename Member::value_type>();
       }
