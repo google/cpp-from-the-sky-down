@@ -211,14 +211,14 @@ auto to_concrete(std::optional<T> &&o)
 
 template <auto... Tags, typename... Ts, auto... Init>
 auto to_concrete(
-    const tagged_tuple<ftsd::internal_tagged_tuple::member<Tags, Ts, Init>...>
+    const tagged_tuple<ftsd::member<Tags, Ts, Init>...>
         &t) {
   return tagged_tuple{(tag<Tags> = to_concrete(get<Tags>(t)))...};
 }
 
 template <auto... Tags, typename... Ts, auto... Init>
 auto to_concrete(
-    tagged_tuple<ftsd::internal_tagged_tuple::member<Tags, Ts, Init>...> &&t) {
+    tagged_tuple<ftsd::member<Tags, Ts, Init>...> &&t) {
   return tagged_tuple{(tag<Tags> = to_concrete(get<Tags>(std::move(t))))...};
 }
 
