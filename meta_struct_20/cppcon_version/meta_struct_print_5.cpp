@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cstddef>
+#include <string_view>
 #include <type_traits>
 
 template <std::size_t N>
@@ -7,6 +8,11 @@ struct fixed_string {
   constexpr fixed_string(const char (&foo)[N + 1]) {
     std::copy_n(foo, N + 1, data);
   }
+  constexpr fixed_string(std::string_view s) {
+    static_assert(s.size() <= N);
+    std::copy(s.begin(), s.end(), data);
+  }
+  constexpr std::string_view sv() const { return std::string_view(data); }
   auto operator<=>(const fixed_string&) const = default;
   char data[N + 1] = {};
 };
@@ -63,8 +69,7 @@ auto call_init(Self& self, F& f) requires(requires {
 template <typename T, typename Self, typename F>
 auto call_init(Self& self, F& f) requires(requires {
   { f() } -> std::same_as<void>;
-}) {
-}
+}) {}
 
 template <fixed_string Tag, typename T, auto Init = default_init<T>()>
 struct member {
@@ -117,6 +122,39 @@ struct meta_struct : meta_struct_impl<Members...> {
   constexpr auto operator<=>(const meta_struct&) const = default;
 };
 
+template <typename F, typename... MembersImpl>
+constexpr decltype(auto) meta_struct_apply(F&& f, meta_struct_impl<MembersImpl...>& m) {
+  return std::forward<F>(f)(static_cast<MembersImpl&>(m)...);
+}
+
+template <typename F, typename... MembersImpl>
+constexpr decltype(auto) meta_struct_apply(F&& f,
+                               const meta_struct_impl<MembersImpl...>& m) {
+  return std::forward<F>(f)(static_cast<const MembersImpl&>(m)...);
+}
+
+template <typename F, typename... MembersImpl>
+constexpr decltype(auto) meta_struct_apply(F&& f, meta_struct_impl<MembersImpl...>&& m) {
+  return std::forward<F>(f)(static_cast<MembersImpl&&>(m)...);
+}
+
+template <typename MetaStructImpl>
+struct apply_static_impl;
+
+template <typename... MembersImpl>
+struct apply_static_impl<meta_struct_impl<MembersImpl...>> {
+  template <typename F>
+  constexpr static decltype(auto) apply(F&& f) {
+    return f(static_cast<MembersImpl*>(nullptr)...);
+  }
+};
+
+template <typename MetaStruct, typename F>
+auto meta_struct_apply(F&& f) {
+  return apply_static_impl<typename MetaStruct::super>::apply(
+      std::forward<F>(f));
+}
+
 template <fixed_string tag, typename T, auto Init>
 decltype(auto) get_impl(member<tag, T, Init>& m) {
   return (m.value);
@@ -140,16 +178,35 @@ decltype(auto) get(MetaStruct&& s) {
 #include <iostream>
 #include <string>
 
+template <typename MetaStruct>
+void print(std::ostream& os, const MetaStruct& ms) {
+  meta_struct_apply(
+      [&](const auto&... m) {
+        auto print_item = [&](auto& m) {
+          std::cout << m.tag().sv() << ":" << m.value << "\n";
+        };
+        (print_item(m), ...);
+      },
+      ms);
+};
+
 int main() {
-  using Person = meta_struct<  //
-      member<"id", int>,       //
-      member<"score", int,
-             [](auto& self) { return get<"id">(self) + 1; }>,  //
-      member<"name", std::string, [] { return "John"; }>          //
+  using Person = meta_struct<                                                //
+      member<"id", int>,                                                     //
+      member<"score", int, [](auto& self) { return get<"id">(self) + 1; }>,  //
+      member<"name", std::string, [] { return "John"; }>                     //
       >;
+
+  meta_struct_apply<Person>([]<typename... M>(M * ...) {
+    std::cout << "The tags are: ";
+    auto print_tag = [](auto t) { std::cout << t.sv() << " "; };
+    (print_tag(M::tag()), ...);
+    std::cout << "\n";
+  });
 
   Person p;
 
   std::cout << get<"id">(p) << " " << get<"name">(p) << " " << get<"score">(p)
             << "\n";
+  print(std::cout,p);
 }
