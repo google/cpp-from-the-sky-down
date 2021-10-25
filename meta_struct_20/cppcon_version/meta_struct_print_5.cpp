@@ -180,24 +180,6 @@ decltype(auto) get(MetaStruct&& s) {
 #include <iostream>
 #include <string>
 
-template <typename MetaStruct>
-void print(std::ostream& os) {
-  meta_struct_apply<MetaStruct>([]<typename... M>(M * ...) {
-    std::cout << "The tags are: ";
-    ((std::cout << M::tag().sv() << " "), ...);
-    std::cout << "\n";
-  });
-}
-
-template <typename MetaStruct>
-void print(std::ostream& os, const MetaStruct& ms) {
-  meta_struct_apply(
-      [&](const auto&... m) {
-        ((std::cout << m.tag().sv() << ":" << m.value << "\n"), ...);
-      },
-      ms);
-};
-
 int main() {
   using Person = meta_struct<                                                //
       member<"id", int>,                                                     //
@@ -205,9 +187,17 @@ int main() {
       member<"name", std::string, [] { return "John"; }>                     //
       >;
 
-  print<Person>(std::cout);
+   meta_struct_apply<Person>([]<typename... M>(M * ...) {
+    std::cout << "The tags are: ";
+    ((std::cout << M::tag().sv() << " "), ...);
+    std::cout << "\n";
+  });
 
   Person p;
+  meta_struct_apply(
+      [&](const auto&... m) {
+        ((std::cout << m.tag().sv() << ":" << m.value << "\n"), ...);
+      },
+      p);
 
-  print(std::cout, p);
 }
