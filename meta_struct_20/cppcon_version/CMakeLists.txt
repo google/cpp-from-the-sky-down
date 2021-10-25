@@ -19,6 +19,7 @@ add_executable (meta_struct_constructed_2 "meta_struct_constructed_2.cpp")
 add_executable (meta_struct_init_3 "meta_struct_init_3.cpp")
 add_executable (meta_struct_init_self_4 "meta_struct_init_self_4.cpp")
 add_executable (meta_struct_print_5 "meta_struct_print_5.cpp")
+add_executable (meta_struct_optional_arguments_6 "meta_struct_optional_arguments_6.cpp")
 
 
 
