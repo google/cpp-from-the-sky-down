@@ -123,18 +123,20 @@ struct meta_struct : meta_struct_impl<Members...> {
 };
 
 template <typename F, typename... MembersImpl>
-constexpr decltype(auto) meta_struct_apply(F&& f, meta_struct_impl<MembersImpl...>& m) {
+constexpr decltype(auto) meta_struct_apply(
+    F&& f, meta_struct_impl<MembersImpl...>& m) {
   return std::forward<F>(f)(static_cast<MembersImpl&>(m)...);
 }
 
 template <typename F, typename... MembersImpl>
-constexpr decltype(auto) meta_struct_apply(F&& f,
-                               const meta_struct_impl<MembersImpl...>& m) {
+constexpr decltype(auto) meta_struct_apply(
+    F&& f, const meta_struct_impl<MembersImpl...>& m) {
   return std::forward<F>(f)(static_cast<const MembersImpl&>(m)...);
 }
 
 template <typename F, typename... MembersImpl>
-constexpr decltype(auto) meta_struct_apply(F&& f, meta_struct_impl<MembersImpl...>&& m) {
+constexpr decltype(auto) meta_struct_apply(
+    F&& f, meta_struct_impl<MembersImpl...>&& m) {
   return std::forward<F>(f)(static_cast<MembersImpl&&>(m)...);
 }
 
@@ -179,17 +181,22 @@ decltype(auto) get(MetaStruct&& s) {
 #include <string>
 
 template <typename MetaStruct>
+void print(std::ostream& os) {
+  meta_struct_apply<MetaStruct>([]<typename... M>(M * ...) {
+    std::cout << "The tags are: ";
+    ((std::cout << M::tag().sv() << " "), ...);
+    std::cout << "\n";
+  });
+}
+
+template <typename MetaStruct>
 void print(std::ostream& os, const MetaStruct& ms) {
   meta_struct_apply(
       [&](const auto&... m) {
-        auto print_item = [&](auto& m) {
-          std::cout << m.tag().sv() << ":" << m.value << "\n";
-        };
-        (print_item(m), ...);
+        ((std::cout << m.tag().sv() << ":" << m.value << "\n"), ...);
       },
       ms);
 };
-
 
 int main() {
   using Person = meta_struct<                                                //
@@ -198,16 +205,9 @@ int main() {
       member<"name", std::string, [] { return "John"; }>                     //
       >;
 
-  meta_struct_apply<Person>([]<typename... M>(M * ...) {
-    std::cout << "The tags are: ";
-    auto print_tag = [](auto t) { std::cout << t.sv() << " "; };
-    (print_tag(M::tag()), ...);
-    std::cout << "\n";
-  });
+  print<Person>(std::cout);
 
   Person p;
 
-  std::cout << get<"id">(p) << " " << get<"name">(p) << " " << get<"score">(p)
-            << "\n";
-  print(std::cout,p);
+  print(std::cout, p);
 }
