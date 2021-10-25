@@ -22,6 +22,7 @@ add_executable (meta_struct_init_self_4 "meta_struct_init_self_4.cpp")
 add_executable (meta_struct_print_5 "meta_struct_print_5.cpp")
 add_executable (meta_struct_optional_arguments_6 "meta_struct_optional_arguments_6.cpp")
 add_executable (meta_struct_required_named_args_7 "meta_struct_required_named_args_7.cpp")
+add_executable (meta_struct_conversion_8 "meta_struct_conversion_8.cpp")
 
 
 
