@@ -13,6 +13,7 @@ find_package(Boost REQUIRED)
 
 
 # Add source to this project's executable.
+add_executable (struct "struct.cpp")
 add_executable (fixed_string "fixed_string.cpp")
 add_executable (meta_struct_1 "meta_struct_1.cpp")
 add_executable (meta_struct_constructed_2 "meta_struct_constructed_2.cpp")

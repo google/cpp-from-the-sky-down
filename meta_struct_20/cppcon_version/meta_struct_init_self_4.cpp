@@ -63,8 +63,7 @@ auto call_init(Self& self, F& f) requires(requires {
 template <typename T, typename Self, typename F>
 auto call_init(Self& self, F& f) requires(requires {
   { f() } -> std::same_as<void>;
-}) {
-}
+}) {}
 
 template <fixed_string Tag, typename T, auto Init = default_init<T>()>
 struct member {
@@ -141,11 +140,10 @@ decltype(auto) get(MetaStruct&& s) {
 #include <string>
 
 int main() {
-  using Person = meta_struct<  //
-      member<"id", int>,       //
-      member<"score", int,
-             [](auto& self) { return get<"id">(self) + 1; }>,  //
-      member<"name", std::string, [] { return "John"; }>          //
+  using Person = meta_struct<                                                //
+      member<"id", int>,                                                     //
+      member<"score", int, [](auto& self) { return get<"id">(self) + 1; }>,  //
+      member<"name", std::string, [] { return "John"; }>                     //
       >;
 
   Person p;
