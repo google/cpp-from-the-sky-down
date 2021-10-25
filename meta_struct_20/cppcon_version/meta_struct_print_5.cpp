@@ -190,6 +190,7 @@ void print(std::ostream& os, const MetaStruct& ms) {
       ms);
 };
 
+
 int main() {
   using Person = meta_struct<                                                //
       member<"id", int>,                                                     //
