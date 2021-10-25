@@ -48,7 +48,7 @@ struct member {
   constexpr member& operator=(member&&) = default;
   constexpr member& operator=(const member&) = default;
 
-  constexpr auto operator<=>(const member&) const = default;
+  auto operator<=>(const member&) const = default;
 };
 
 template <typename... Members>
@@ -63,7 +63,7 @@ struct meta_struct_impl : Members... {
   constexpr meta_struct_impl& operator=(meta_struct_impl&&) = default;
   constexpr meta_struct_impl& operator=(const meta_struct_impl&) = default;
 
-  constexpr auto operator<=>(const meta_struct_impl&) const = default;
+  auto operator<=>(const meta_struct_impl&) const = default;
 };
 
 template <typename... Members>
@@ -79,7 +79,7 @@ struct meta_struct : meta_struct_impl<Members...> {
   constexpr meta_struct& operator=(meta_struct&&) = default;
   constexpr meta_struct& operator=(const meta_struct&) = default;
 
-  constexpr auto operator<=>(const meta_struct&) const = default;
+  auto operator<=>(const meta_struct&) const = default;
 };
 
 template <fixed_string tag, typename T>

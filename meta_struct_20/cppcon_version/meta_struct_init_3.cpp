@@ -38,7 +38,7 @@ inline constexpr auto arg = arg_type<Tag>{};
 template <typename T>
 struct default_init {
   constexpr default_init() = default;
-  constexpr auto operator<=>(const default_init&) const = default;
+  auto operator<=>(const default_init&) const = default;
   constexpr auto operator()() const {
     if constexpr (std::is_default_constructible_v<T>) {
       return T{};
@@ -63,7 +63,7 @@ struct member {
   constexpr member& operator=(member&&) = default;
   constexpr member& operator=(const member&) = default;
 
-  constexpr auto operator<=>(const member&) const = default;
+  auto operator<=>(const member&) const = default;
 };
 
 template <typename... Members>
@@ -77,7 +77,7 @@ struct meta_struct_impl : Members... {
   constexpr meta_struct_impl& operator=(meta_struct_impl&&) = default;
   constexpr meta_struct_impl& operator=(const meta_struct_impl&) = default;
 
-  constexpr auto operator<=>(const meta_struct_impl&) const = default;
+  auto operator<=>(const meta_struct_impl&) const = default;
 };
 
 template <typename... Members>
@@ -93,7 +93,7 @@ struct meta_struct : meta_struct_impl<Members...> {
   constexpr meta_struct& operator=(meta_struct&&) = default;
   constexpr meta_struct& operator=(const meta_struct&) = default;
 
-  constexpr auto operator<=>(const meta_struct&) const = default;
+  auto operator<=>(const meta_struct&) const = default;
 };
 
 template <fixed_string tag, typename T, auto Init>
