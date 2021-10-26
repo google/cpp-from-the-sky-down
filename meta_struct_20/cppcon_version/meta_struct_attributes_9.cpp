@@ -43,14 +43,6 @@ struct parms : TagsAndValues... {
 template <typename... TagsAndValues>
 parms(TagsAndValues...) -> parms<TagsAndValues...>;
 
-template <fixed_string Tag>
-struct arg_type {
-  template <typename T>
-  constexpr auto operator=(T t) const {
-    return tag_and_value<Tag, T>{std::move(t)};
-  }
-};
-
 template <typename T>
 struct default_init {
   constexpr default_init() = default;
@@ -63,21 +55,21 @@ struct default_init {
 };
 
 template <typename T, typename Self, typename F>
-auto call_init(Self&, F& f) requires(requires {
+constexpr auto call_init(Self&, F& f) requires(requires {
   { f() } -> std::convertible_to<T>;
 }) {
   return f();
 }
 
 template <typename T, typename Self, typename F>
-auto call_init(Self& self, F& f) requires(requires {
+constexpr auto call_init(Self& self, F& f) requires(requires {
   { f(self) } -> std::convertible_to<T>;
 }) {
   return f(self);
 }
 
 template <typename T, typename Self, typename F>
-auto call_init(Self& self, F& f) requires(requires {
+constexpr auto call_init(Self& self, F& f) requires(requires {
   { f() } -> std::same_as<void>;
 }) {
   static_assert(!std::is_same_v<decltype(f()), void>,
@@ -218,7 +210,7 @@ struct meta_struct : meta_struct_impl<Members...> {
 };
 
 template <fixed_string Tag>
-struct attr_type {
+struct arg_type {
   template <typename T>
   constexpr auto operator=(T t) const {
     return member<Tag, T>(*this, tag_and_value<Tag, T>(std::move(t)));
@@ -226,11 +218,7 @@ struct attr_type {
 };
 
 template <fixed_string Tag>
-inline constexpr auto attr = attr_type<Tag>{};
-
-template <fixed_string Tag>
-inline constexpr auto arg = attr_type<Tag>{};
-
+inline constexpr auto arg = arg_type<Tag>{};
 
 template <typename F, typename... MembersImpl>
 constexpr decltype(auto) meta_struct_apply(
@@ -298,7 +286,24 @@ constexpr auto get_attributes(MetaStruct&& s) {
 
 template <fixed_string Tag, typename MetaStruct>
 constexpr auto get_attributes() {
-  return decltype(get_member_impl<Tag>(std::declval<MetaStruct&>()))::attributes();
+  return decltype(get_member_impl<Tag>(
+      std::declval<MetaStruct&>()))::attributes();
+}
+
+template <fixed_string tag, typename T, auto Init, auto Attributes>
+constexpr std::true_type has_impl(const member<tag, T, Init, Attributes>&);
+
+template <fixed_string tag, typename T, auto Init, auto Attributes>
+constexpr std::false_type has_impl(no_conversion);
+
+template <fixed_string tag, typename MetaStruct>
+constexpr bool has(MetaStruct&& s) {
+  return decltype(has_impl<tag>(s))::value;
+}
+
+template <fixed_string tag, typename MetaStruct>
+constexpr bool has() {
+  return decltype(has_impl<tag>(std::declval<MetaStruct&>()))::value;
 }
 
 #include <iostream>
@@ -326,18 +331,22 @@ void print_name_id(NameAndIdArgs args) {
             << get<"id">(args) << "\n";
 }
 
+enum class encoding : int { fixed = 0, variable = 1 };
+
 int main() {
   using Person = meta_struct<                                               //
-      member<"id", int, required>,                                          //
-      member<"name", std::string, required, {attr<"attribute"> = true}>,    //
+      member<"id", int, required, {arg<"encoding"> = encoding::variable}>,  //
+      member<"name", std::string, required>,                                //
       member<"score", int, [](auto& self) { return get<"id">(self) + 1; }>  //
       >;
 
-  constexpr meta_struct<member<"attribute", bool, [] { return false; }>>
-      attributes = get_attributes<"name", Person>();
+  constexpr auto attributes = get_attributes<"id", Person>();
 
-  if constexpr (get<"attribute">(attributes)) {
-    std::cout << "Attribute was true";
+  if constexpr (has<"encoding">(attributes) &&
+                get<"encoding">(attributes) == encoding::variable) {
+    std::cout << "Encoding was variable";
+  } else {
+    std::cout << "Encoding was fixed";
   }
 
   auto print = [](auto& t) {
