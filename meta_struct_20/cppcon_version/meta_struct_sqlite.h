@@ -222,17 +222,6 @@ auto to_concrete(meta_struct<ftsd::member<Tags, Ts, Init, Attributes>...> &&t) {
   return meta_struct{(arg<Tags> = to_concrete(get<Tags>(std::move(t))))...};
 }
 
-template <bool make_optional, typename Member>
-auto maybe_make_optional(Member m) {
-  if constexpr (make_optional) {
-    return member<Member::tag(), std::optional<typename Member::element_type>,
-                  Member::init(), Member::attributes()>{
-        m, arg<Member::tag()> = std::optional<typename Member::element_type>()};
-  } else {
-    return m;
-  }
-}
-
 template <fixed_string Tag>
 struct string_to_type;
 
@@ -424,32 +413,31 @@ constexpr auto make_member_ts() {
       sv.substr(ts.name.first, ts.name.second));
   constexpr auto type = fixed_string<ts.type.second>::from_string_view(
       sv.substr(ts.type.first, ts.type.second));
-  return maybe_make_optional<ts.optional>(arg<name> =
-                                              (string_to_type_t<type>{}));
+  return arg<name> = [&]() {
+    using value_type = string_to_type_t<type>;
+
+    if constexpr (ts.optional) {
+      return std::optional<value_type>();
+    } else {
+      return value_type{};
+    }
+  }();
 }
 
 template <fixed_string query_string, type_specs ts, std::size_t... I>
-constexpr auto make_members_helper(std::index_sequence<I...>) {
+constexpr auto make_meta_struct_from_type_specs(std::index_sequence<I...>) {
   return meta_struct{make_member_ts<query_string, ts[I]>()...};
 }
 
 template <fixed_string query_string>
-constexpr auto make_members() {
+constexpr auto make_meta_structs_from_query() {
   constexpr auto ts = parse_type_specs<query_string>();
   constexpr auto fields = ts.fields;
-  if constexpr (fields.size() == 0) {
-    return meta_struct<>{};
-  } else {
-    return make_members_helper<query_string, fields>(
-        std::make_index_sequence<fields.size()>());
-  }
-}
-
-template <fixed_string query_string>
-constexpr auto make_parameters() {
-  constexpr auto ts = parse_type_specs<query_string>();
-  return make_members_helper<query_string, ts.params>(
-      std::make_index_sequence<ts.params.size()>());
+  return std::make_pair(
+      make_meta_struct_from_type_specs<query_string, fields>(
+          std::make_index_sequence<ts.fields.size()>()),
+      make_meta_struct_from_type_specs<query_string, ts.params>(
+          std::make_index_sequence<ts.params.size()>()));
 }
 
 template <typename T>
@@ -457,14 +445,16 @@ std::true_type is_optional(const std::optional<T> &);
 
 std::false_type is_optional(...);
 
-template <typename PTuple>
-void do_binding(sqlite3_stmt *stmt, PTuple p_tuple) {
+template <typename ParametersMetaStruct>
+void do_binding(sqlite3_stmt *stmt, ParametersMetaStruct parameters) {
   int index = 1;
-  meta_struct_for_each([&](auto &m) mutable {
-    auto r = bind_impl(stmt, index, m.value);
-    check_sqlite_return<bool>(r, true);
-    ++index;
-  },p_tuple);
+  meta_struct_for_each(
+      [&](auto &m) mutable {
+        auto r = bind_impl(stmt, index, m.value);
+        check_sqlite_return<bool>(r, true);
+        ++index;
+      },
+      parameters);
 }
 
 struct stmt_closer {
@@ -477,8 +467,9 @@ using unique_stmt = std::unique_ptr<sqlite3_stmt, stmt_closer>;
 
 template <fixed_string Query>
 class prepared_statement {
-  using RowType = decltype(make_members<Query>());
-  using PTuple = decltype(make_parameters<Query>());
+  using RowTypeAndParametersMetaStruct = decltype(make_meta_structs_from_query<Query>());
+  using RowType = typename RowTypeAndParametersMetaStruct::first_type;
+  using ParametersMetaStruct = typename RowTypeAndParametersMetaStruct::second_type;
 
   unique_stmt stmt_;
   void reset_stmt() {
@@ -498,18 +489,18 @@ class prepared_statement {
     check_sqlite_return(rc);
     stmt_.reset(stmt);
   }
-  row_range<RowType> execute_rows() requires(meta_struct_size<PTuple>() == 0) {
+  row_range<RowType> execute_rows() requires(meta_struct_size<ParametersMetaStruct>() == 0) {
     reset_stmt();
     return row_range<RowType>(stmt_.get());
   }
-  row_range<RowType> execute_rows(PTuple p_tuple) {
+  row_range<RowType> execute_rows(ParametersMetaStruct parameters) {
     reset_stmt();
-    do_binding(stmt_.get(), std::move(p_tuple));
+    do_binding(stmt_.get(), std::move(parameters));
     return row_range<RowType>(stmt_.get());
   }
   std::optional<decltype(to_concrete(std::declval<RowType>()))>
-  execute_single_row(PTuple p_tuple) {
-    auto rng = execute_rows(std::move(p_tuple));
+  execute_single_row(ParametersMetaStruct parameters) {
+    auto rng = execute_rows(std::move(parameters));
     auto begin = rng.begin();
     if (begin != rng.end()) {
       return to_concrete(*begin);
@@ -518,7 +509,7 @@ class prepared_statement {
     }
   }
   std::optional<decltype(to_concrete(std::declval<RowType>()))>
-  execute_single_row() requires(meta_struct_size<PTuple>() == 0) {
+  execute_single_row() requires(meta_struct_size<ParametersMetaStruct>() == 0) {
     auto rng = execute_rows();
     auto begin = rng.begin();
     if (begin != rng.end()) {
@@ -527,14 +518,14 @@ class prepared_statement {
       return std::nullopt;
     }
   }
-  void execute(PTuple p_tuple) {
+  void execute(ParametersMetaStruct parameters) {
     reset_stmt();
-    do_binding(stmt_.get(), std::move(p_tuple));
+    do_binding(stmt_.get(), std::move(parameters));
     auto r = sqlite3_step(stmt_.get());
     check_sqlite_return(r, SQLITE_DONE);
   }
 
-  void execute() requires(meta_struct_size<PTuple>() == 0) {
+  void execute() requires(meta_struct_size<ParametersMetaStruct>() == 0) {
     reset_stmt();
     auto r = sqlite3_step(stmt_.get());
     check_sqlite_return(r, SQLITE_DONE);

@@ -26,6 +26,8 @@ struct fixed_string {
   char data[N + 1] = {};
 
   constexpr fixed_string(no_init_fixed_string) : data{} {};
+
+  constexpr std::size_t size()const { return N; }
 };
 template <std::size_t N>
 fixed_string(const char (&str)[N]) -> fixed_string<N - 1>;
