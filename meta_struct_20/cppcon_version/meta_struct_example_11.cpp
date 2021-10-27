@@ -67,4 +67,7 @@ int main() {
 
   print_name_id(p);
   print_name_id(n);
+
+  static_assert(ftsd::meta_struct_size<NameAndId>() == 2);
+  static_assert(ftsd::meta_struct_size(n) == 2);
 }

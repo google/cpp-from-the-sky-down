@@ -225,32 +225,32 @@ struct arg_type {
 template <fixed_string Tag>
 inline constexpr auto arg = arg_type<Tag>{};
 
-template <typename F, typename... MembersImpl>
-constexpr decltype(auto) meta_struct_apply(
-    F&& f, meta_struct_impl<MembersImpl...>& m) {
-  return std::forward<F>(f)(static_cast<MembersImpl&>(m)...);
+template <typename F, typename... Members>
+constexpr decltype(auto) meta_struct_apply(F&& f,
+                                           meta_struct_impl<Members...>& m) {
+  return std::forward<F>(f)(static_cast<Members&>(m)...);
 }
 
-template <typename F, typename... MembersImpl>
+template <typename F, typename... Members>
 constexpr decltype(auto) meta_struct_apply(
-    F&& f, const meta_struct_impl<MembersImpl...>& m) {
-  return std::forward<F>(f)(static_cast<const MembersImpl&>(m)...);
+    F&& f, const meta_struct_impl<Members...>& m) {
+  return std::forward<F>(f)(static_cast<const Members&>(m)...);
 }
 
-template <typename F, typename... MembersImpl>
-constexpr decltype(auto) meta_struct_apply(
-    F&& f, meta_struct_impl<MembersImpl...>&& m) {
-  return std::forward<F>(f)(static_cast<MembersImpl&&>(m)...);
+template <typename F, typename... Members>
+constexpr decltype(auto) meta_struct_apply(F&& f,
+                                           meta_struct_impl<Members...>&& m) {
+  return std::forward<F>(f)(static_cast<Members&&>(m)...);
 }
 
 template <typename MetaStructImpl>
 struct apply_static_impl;
 
-template <typename... MembersImpl>
-struct apply_static_impl<meta_struct_impl<MembersImpl...>> {
+template <typename... Members>
+struct apply_static_impl<meta_struct_impl<Members...>> {
   template <typename F>
   constexpr static decltype(auto) apply(F&& f) {
-    return f(static_cast<MembersImpl*>(nullptr)...);
+    return f(static_cast<Members*>(nullptr)...);
   }
 };
 
@@ -311,14 +311,32 @@ constexpr bool has() {
   return decltype(has_impl<tag>(std::declval<MetaStruct&>()))::value;
 }
 
+template <typename... Members>
+constexpr std::size_t meta_struct_size_impl(
+    const meta_struct_impl<Members...>*) {
+  return sizeof...(Members);
+}
+
+template <typename... Members>
+constexpr std::size_t meta_struct_size(const meta_struct_impl<Members...>&) {
+  return sizeof...(Members);
+}
+
+template <typename MetaStruct>
+constexpr std::size_t meta_struct_size() {
+  return meta_struct_size_impl(static_cast<MetaStruct*>(nullptr));
+}
+
 }  // namespace internal_meta_struct
-using internal_meta_struct::meta_struct_apply;
 using internal_meta_struct::arg;
+using internal_meta_struct::fixed_string;
 using internal_meta_struct::get;
 using internal_meta_struct::get_attributes;
 using internal_meta_struct::has;
 using internal_meta_struct::member;
 using internal_meta_struct::meta_struct;
+using internal_meta_struct::meta_struct_apply;
+using internal_meta_struct::meta_struct_size;
 using internal_meta_struct::required;
 
 }  // namespace ftsd
