@@ -3,11 +3,10 @@
 #include <iostream>
 #include <string>
 
-using namespace ftsd;
 
 template <typename MetaStruct>
 void print(std::ostream& os, const MetaStruct& ms) {
-  meta_struct_apply(
+  ftsd::meta_struct_apply(
       [&](const auto&... m) {
         auto print_item = [&](auto& m) {
           std::cout << m.tag().sv() << ":" << m.value << "\n";
@@ -17,9 +16,9 @@ void print(std::ostream& os, const MetaStruct& ms) {
       ms);
 };
 
-using NameAndIdArgs = meta_struct<     //
-    member<"name", std::string_view>,  //
-    member<"id", const int&>           //
+using NameAndIdArgs = ftsd::meta_struct<     //
+    ftsd::member<"name", std::string_view>,  //
+    ftsd::member<"id", const int&>           //
     >;
 
 void print_name_id(NameAndIdArgs args) {
@@ -30,16 +29,16 @@ void print_name_id(NameAndIdArgs args) {
 enum class encoding : int { fixed = 0, variable = 1 };
 
 int main() {
-  using Person = meta_struct<                                               //
-      member<"id", int, required, {arg<"encoding"> = encoding::variable}>,  //
-      member<"name", std::string, required>,                                //
-      member<"score", int, [](auto& self) { return get<"id">(self) + 1; }>  //
+  using Person = ftsd::meta_struct<                                               //
+      ftsd::member<"id", int, ftsd::required, {ftsd::arg<"encoding"> = encoding::variable}>,  //
+      ftsd::member<"name", std::string, ftsd::required>,                                //
+      ftsd::member<"score", int, [](auto& self) { return ftsd::get<"id">(self) + 1; }>  //
       >;
 
-  constexpr auto attributes = get_attributes<"id", Person>();
+  constexpr auto attributes = ftsd::get_attributes<"id", Person>();
 
-  if constexpr (has<"encoding">(attributes) &&
-                get<"encoding">(attributes) == encoding::variable) {
+  if constexpr (ftsd::has<"encoding">(attributes) &&
+                ftsd::get<"encoding">(attributes) == encoding::variable) {
     std::cout << "Encoding was variable";
   } else {
     std::cout << "Encoding was fixed";
@@ -53,11 +52,11 @@ int main() {
         t);
   };
 
-  Person p{arg<"id"> = 2, arg<"name"> = "John"};
+  Person p{ftsd::arg<"id"> = 2, ftsd::arg<"name"> = "John"};
 
-  using NameAndId = meta_struct<         //
-      member<"name", std::string_view>,  //
-      member<"id", int>                  //
+  using NameAndId = ftsd::meta_struct<         //
+      ftsd::member<"name", std::string_view>,  //
+      ftsd::member<"id", int>                  //
       >;
 
   print(p);
