@@ -117,7 +117,12 @@ auto read_row(sqlite3_stmt *stmt) {
     ++index;
   };
 
-  meta_struct_apply([&](auto &...m) mutable { (read_into(m), ...); }, row);
+  meta_struct_for_each(
+      [&](auto &m) mutable {
+        read_row_into(stmt, index, m.value);
+        ++index;
+      },
+      row);
   return row;
 }
 
@@ -252,7 +257,6 @@ constexpr std::string_view quotes = "\"\'";
 struct type_specs_count {
   std::size_t fields;
   std::size_t params;
-  auto operator<=>(const type_specs_count &) const = default;
 };
 
 inline constexpr std::string_view start_comment = "/*:";
@@ -407,7 +411,7 @@ constexpr auto parse_type_specs() {
 }
 
 template <fixed_string query_string, type_spec ts>
-constexpr auto make_member_ts() {
+constexpr auto make_member_from_type_spec() {
   constexpr auto sv = query_string.sv();
   constexpr auto name = fixed_string<ts.name.second>::from_string_view(
       sv.substr(ts.name.first, ts.name.second));
@@ -415,7 +419,6 @@ constexpr auto make_member_ts() {
       sv.substr(ts.type.first, ts.type.second));
   return arg<name> = [&]() {
     using value_type = string_to_type_t<type>;
-
     if constexpr (ts.optional) {
       return std::optional<value_type>();
     } else {
@@ -426,15 +429,14 @@ constexpr auto make_member_ts() {
 
 template <fixed_string query_string, type_specs ts, std::size_t... I>
 constexpr auto make_meta_struct_from_type_specs(std::index_sequence<I...>) {
-  return meta_struct{make_member_ts<query_string, ts[I]>()...};
+  return meta_struct{make_member_from_type_spec<query_string, ts[I]>()...};
 }
 
 template <fixed_string query_string>
 constexpr auto make_meta_structs_from_query() {
   constexpr auto ts = parse_type_specs<query_string>();
-  constexpr auto fields = ts.fields;
   return std::make_pair(
-      make_meta_struct_from_type_specs<query_string, fields>(
+      make_meta_struct_from_type_specs<query_string, ts.fields>(
           std::make_index_sequence<ts.fields.size()>()),
       make_meta_struct_from_type_specs<query_string, ts.params>(
           std::make_index_sequence<ts.params.size()>()));
@@ -467,9 +469,11 @@ using unique_stmt = std::unique_ptr<sqlite3_stmt, stmt_closer>;
 
 template <fixed_string Query>
 class prepared_statement {
-  using RowTypeAndParametersMetaStruct = decltype(make_meta_structs_from_query<Query>());
+  using RowTypeAndParametersMetaStruct =
+      decltype(make_meta_structs_from_query<Query>());
   using RowType = typename RowTypeAndParametersMetaStruct::first_type;
-  using ParametersMetaStruct = typename RowTypeAndParametersMetaStruct::second_type;
+  using ParametersMetaStruct =
+      typename RowTypeAndParametersMetaStruct::second_type;
 
   unique_stmt stmt_;
   void reset_stmt() {
@@ -483,7 +487,6 @@ class prepared_statement {
   prepared_statement(sqlite3 *sqldb) {
     auto sv = Query.sv();
     sqlite3_stmt *stmt;
-    auto specs = parse_type_specs<Query>();
     auto rc = sqlite3_prepare_v2(sqldb, sv.data(), static_cast<int>(sv.size()),
                                  &stmt, 0);
     check_sqlite_return(rc);
