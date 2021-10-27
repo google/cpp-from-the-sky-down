@@ -410,37 +410,51 @@ constexpr auto parse_type_specs() {
   return ret;
 }
 
-template <fixed_string query_string, type_spec ts>
-constexpr auto make_member_from_type_spec() {
-  constexpr auto sv = query_string.sv();
-  constexpr auto name = fixed_string<ts.name.second>::from_string_view(
-      sv.substr(ts.name.first, ts.name.second));
-  constexpr auto type = fixed_string<ts.type.second>::from_string_view(
-      sv.substr(ts.type.first, ts.type.second));
-  return arg<name> = [&]() {
-    using value_type = string_to_type_t<type>;
-    if constexpr (ts.optional) {
-      return std::optional<value_type>();
-    } else {
-      return value_type{};
-    }
-  }();
-}
+template <fixed_string query_string, type_spec ts, bool required>
+struct member_from_type_spec {
+  static constexpr auto sv = query_string.sv();
+  static constexpr auto name_str =
+      fixed_string<ts.name.second>::from_string_view(
+          sv.substr(ts.name.first, ts.name.second));
+  static constexpr auto type_str =
+      fixed_string<ts.type.second>::from_string_view(
+          sv.substr(ts.type.first, ts.type.second));
 
-template <fixed_string query_string, type_specs ts, std::size_t... I>
-constexpr auto make_meta_struct_from_type_specs(std::index_sequence<I...>) {
-  return meta_struct{make_member_from_type_spec<query_string, ts[I]>()...};
-}
+  using type_from_string = string_to_type_t<type_str>;
+  using value_type =
+      std::conditional_t<ts.optional, std::optional<type_from_string>,
+                         type_from_string>;
+
+  using type = ftsd::member<name_str, value_type, []() {
+    if constexpr (required && !ts.optional)
+      return ftsd::required;
+    else
+      return ftsd::default_init<value_type>();
+  }()>;
+};
+
+template <fixed_string query_string, type_specs ts, bool required,
+          typename Sequence>
+struct meta_struct_from_type_specs;
+
+template <fixed_string query_string, type_specs ts, bool required,
+          std::size_t... I>
+struct meta_struct_from_type_specs<query_string, ts, required,
+                                   std::index_sequence<I...>> {
+  using type = typename meta_struct<
+      typename member_from_type_spec<query_string, ts[I], required>::type...>;
+};
 
 template <fixed_string query_string>
-constexpr auto make_meta_structs_from_query() {
-  constexpr auto ts = parse_type_specs<query_string>();
-  return std::make_pair(
-      make_meta_struct_from_type_specs<query_string, ts.fields>(
-          std::make_index_sequence<ts.fields.size()>()),
-      make_meta_struct_from_type_specs<query_string, ts.params>(
-          std::make_index_sequence<ts.params.size()>()));
-}
+struct meta_structs_from_query {
+  static constexpr auto ts = parse_type_specs<query_string>();
+  using fields_type = typename meta_struct_from_type_specs<
+      query_string, ts.fields, false,
+      std::make_index_sequence<ts.fields.size()>>::type;
+  using parameters_type = typename meta_struct_from_type_specs<
+      query_string, ts.params, true,
+      std::make_index_sequence<ts.params.size()>>::type;
+};
 
 template <typename T>
 std::true_type is_optional(const std::optional<T> &);
@@ -470,10 +484,10 @@ using unique_stmt = std::unique_ptr<sqlite3_stmt, stmt_closer>;
 template <fixed_string Query>
 class prepared_statement {
   using RowTypeAndParametersMetaStruct =
-      decltype(make_meta_structs_from_query<Query>());
-  using RowType = typename RowTypeAndParametersMetaStruct::first_type;
+      typename meta_structs_from_query<Query>;
+  using RowType = typename RowTypeAndParametersMetaStruct::fields_type;
   using ParametersMetaStruct =
-      typename RowTypeAndParametersMetaStruct::second_type;
+      typename RowTypeAndParametersMetaStruct::parameters_type;
 
   unique_stmt stmt_;
   void reset_stmt() {

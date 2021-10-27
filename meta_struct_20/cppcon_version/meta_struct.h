@@ -75,21 +75,21 @@ struct default_init {
   }
 };
 
-template <typename T, typename Self, typename F>
+template <fixed_string Tag,typename T, typename Self, typename F>
 constexpr auto call_init(Self&, F& f) requires(requires {
   { f() } -> std::convertible_to<T>;
 }) {
   return f();
 }
 
-template <typename T, typename Self, typename F>
+template <fixed_string Tag,typename T, typename Self, typename F>
 constexpr auto call_init(Self& self, F& f) requires(requires {
   { f(self) } -> std::convertible_to<T>;
 }) {
   return f(self);
 }
 
-template <typename T, typename Self, typename F>
+template <fixed_string Tag,typename T, typename Self, typename F>
 constexpr auto call_init(Self& self, F& f) requires(requires {
   { f() } -> std::same_as<void>;
 }) {
@@ -113,13 +113,13 @@ struct member {
 
   template <typename Self>
   constexpr member(Self& self, no_conversion)
-      : value(call_init<T>(self, Init)) {}
+      : value(call_init<Tag,T>(self, Init)) {}
   template <typename Self>
   constexpr member(Self& self,
                    tag_and_value<Tag, std::optional<std::remove_reference_t<T>>>
                        tv_or) requires(!std::is_reference_v<T>)
       : value(tv_or.value.has_value() ? std::move(*tv_or.value)
-                                      : call_init<T>(self, Init)) {}
+                                      : call_init<Tag,T>(self, Init)) {}
 
   template <typename Self, typename OtherT, auto OtherInit,
             auto OtherAttributes>
@@ -362,5 +362,6 @@ using internal_meta_struct::meta_struct;
 using internal_meta_struct::meta_struct_apply;
 using internal_meta_struct::meta_struct_size;
 using internal_meta_struct::required;
+using internal_meta_struct::default_init;
 
 }  // namespace ftsd
