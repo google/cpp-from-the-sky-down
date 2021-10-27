@@ -38,13 +38,22 @@ struct tag_and_value {
 };
 
 template <typename... Members>
+struct meta_struct_impl;
+ 
+
+template <typename... Members>
 struct meta_struct;
 
 template <typename... Members>
 meta_struct(Members...) -> meta_struct<Members...>;
 
 template <>
-struct meta_struct<> {};
+struct meta_struct_impl<> {};
+
+
+
+template <>
+struct meta_struct<>:meta_struct_impl<> {};
 
 struct no_conversion {};
 template <typename... TagsAndValues>
@@ -148,7 +157,7 @@ struct member {
 };
 
 template <typename... Members>
-struct meta_struct_impl : Members... {
+struct meta_struct_impl<Members...> : Members... {
   template <typename... Args>
   constexpr meta_struct_impl(parms<Args...> p)
       : Members(*this, std::move(p))... {}

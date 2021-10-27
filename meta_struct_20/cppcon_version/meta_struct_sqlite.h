@@ -489,17 +489,13 @@ class prepared_statement {
     check_sqlite_return(rc);
     stmt_.reset(stmt);
   }
-  row_range<RowType> execute_rows() requires(meta_struct_size<ParametersMetaStruct>() == 0) {
-    reset_stmt();
-    return row_range<RowType>(stmt_.get());
-  }
-  row_range<RowType> execute_rows(ParametersMetaStruct parameters) {
+  row_range<RowType> execute_rows(ParametersMetaStruct parameters = {}) {
     reset_stmt();
     do_binding(stmt_.get(), std::move(parameters));
     return row_range<RowType>(stmt_.get());
   }
   std::optional<decltype(to_concrete(std::declval<RowType>()))>
-  execute_single_row(ParametersMetaStruct parameters) {
+  execute_single_row(ParametersMetaStruct parameters = {}) {
     auto rng = execute_rows(std::move(parameters));
     auto begin = rng.begin();
     if (begin != rng.end()) {
@@ -508,25 +504,10 @@ class prepared_statement {
       return std::nullopt;
     }
   }
-  std::optional<decltype(to_concrete(std::declval<RowType>()))>
-  execute_single_row() requires(meta_struct_size<ParametersMetaStruct>() == 0) {
-    auto rng = execute_rows();
-    auto begin = rng.begin();
-    if (begin != rng.end()) {
-      return to_concrete(*begin);
-    } else {
-      return std::nullopt;
-    }
-  }
-  void execute(ParametersMetaStruct parameters) {
+
+  void execute(ParametersMetaStruct parameters = {}) {
     reset_stmt();
     do_binding(stmt_.get(), std::move(parameters));
-    auto r = sqlite3_step(stmt_.get());
-    check_sqlite_return(r, SQLITE_DONE);
-  }
-
-  void execute() requires(meta_struct_size<ParametersMetaStruct>() == 0) {
-    reset_stmt();
     auto r = sqlite3_step(stmt_.get());
     check_sqlite_return(r, SQLITE_DONE);
   }
