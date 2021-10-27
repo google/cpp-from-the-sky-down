@@ -550,8 +550,6 @@ struct param_helper {
 
 }  // namespace sqlite_experimental
 
-using sqlite_experimental::bind;
-using sqlite_experimental::field;
 using sqlite_experimental::prepared_statement;
 using sqlite_experimental::to_concrete;
 

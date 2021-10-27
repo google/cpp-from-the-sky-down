@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "meta_struct_sqlite.h"
-
 #include <iostream>
-using ftsd::bind;
+
+#include "meta_struct_sqlite.h"
 int main() {
+  using ftsd::arg;
 
   sqlite3 *sqldb;
   sqlite3_open(":memory:", &sqldb);
@@ -44,15 +44,15 @@ int main() {
       "INSERT INTO customers(name) "
       "VALUES(? /*:name:text*/);"  //
       >{sqldb}
-      .execute({bind<"name">("John")});
+      .execute({arg<"name"> = "John"});
 
- auto customer_id_or = ftsd::prepared_statement<
-      "select id/*:integer*/ from customers "
-      "where name = ? /*:name:text*/;"  //
-      >
-      {sqldb}.execute_single_row({bind<"name">("John")});
+  auto customer_id_or = ftsd::prepared_statement<
+                            "select id/*:integer*/ from customers "
+                            "where name = ? /*:name:text*/;"  //
+                            >{sqldb}
+                            .execute_single_row({arg<"name"> = "John"});
 
-  if(!customer_id_or){
+  if (!customer_id_or) {
     std::cerr << "Unable to find customer name\n";
     return 1;
   }
@@ -65,16 +65,17 @@ int main() {
       >
       insert_order{sqldb};
 
-  insert_order.execute({bind<"item">("Phone"), bind<"price">(1444.44),
-                       bind<"customerid">(customer_id)});
-  insert_order.execute({bind<"item">("Laptop"), bind<"price">(1300.44),
-                       bind<"customerid">(customer_id)});
-  insert_order.execute({bind<"customerid">(customer_id), bind<"price">(2000),
-                       bind<"item">("MacBook"),
-                       ftsd::bind<"discount_code">("BIGSALE")});
+  insert_order.execute({arg<"item"> = "Phone", arg<"price"> = 1444.4,
+                        arg<"customerid"> = customer_id});
+  insert_order.execute({arg<"item"> = "Laptop", arg<"price"> = 1300.4,
+                        arg<"customerid"> = customer_id});
+  insert_order.execute({arg<"customerid"> = customer_id, arg<"price"> = 2000,
+                        arg<"item"> = "MacBook",
+                        ftsd::arg<"discount_code"> = "BIGSALE"});
 
   ftsd::prepared_statement<
-      "SELECT orders.id /*:integer*/, name/*:text*/, item/*:text*/, price/*:real*/, "
+      "SELECT orders.id /*:integer*/, name/*:text*/, item/*:text*/, "
+      "price/*:real*/, "
       "discount_code/*:text?*/ "
       "FROM orders JOIN customers ON customers.id = customerid "
       "WHERE price > ?/*:min_price:real*/;">
@@ -86,7 +87,7 @@ int main() {
     std::cin >> min_price;
 
     for (auto &row :
-         select_orders.execute_rows({bind<"min_price">(min_price)})) {
+         select_orders.execute_rows({arg<"min_price"> = min_price})) {
       // Access the fields using by indexing the row with the column (`_col`).
       // We will get a compiler error if we try to access a column that is not
       // part of the select statement.
