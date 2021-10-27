@@ -10,6 +10,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(GTest CONFIG REQUIRED)
 find_package(Threads REQUIRED)
 find_package(Boost REQUIRED)
+find_package(SQLite3 REQUIRED)
+
+
+# Add source to this project's executable.
+add_executable (meta_struct_sqlite_example "meta_struct_sqlite_example.cpp" "meta_struct_sqlite.h")
+target_link_libraries(meta_struct_sqlite_example SQLite::SQLite3 Threads::Threads ${CMAKE_DL_LIBS})
 
 
 # Add source to this project's executable.
