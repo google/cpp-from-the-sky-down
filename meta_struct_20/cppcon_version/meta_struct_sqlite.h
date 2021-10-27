@@ -112,11 +112,6 @@ auto read_row(sqlite3_stmt *stmt) {
         "sqlite error: mismatch between read_row and sql columns");
   }
   int index = 0;
-  auto read_into = [&](auto &m) mutable {
-    read_row_into(stmt, index, m.value);
-    ++index;
-  };
-
   meta_struct_for_each(
       [&](auto &m) mutable {
         read_row_into(stmt, index, m.value);
@@ -248,12 +243,6 @@ struct string_to_type<"real"> {
 template <fixed_string Tag>
 using string_to_type_t = typename string_to_type<Tag>::type;
 
-constexpr std::string_view start_group = "{{";
-constexpr std::string_view end_group = "}}";
-
-constexpr std::string_view delimiters = ", ();";
-constexpr std::string_view quotes = "\"\'";
-
 struct type_specs_count {
   std::size_t fields;
   std::size_t params;
@@ -287,16 +276,15 @@ constexpr auto get_type_spec_count() {
   return count;
 }
 
-template <typename First, typename Second>
-struct pair {
-  First first;
-  Second second;
-  constexpr auto operator<=>(const pair &other) const = default;
+struct query_substring {
+  std::size_t offset;
+  std::size_t count;
+  constexpr auto operator<=>(const query_substring &other) const = default;
 };
 
 struct type_spec {
-  pair<std::size_t, std::size_t> name;
-  pair<std::size_t, std::size_t> type;
+  query_substring name;
+  query_substring type;
   bool optional;
   constexpr auto operator<=>(const type_spec &other) const = default;
 };
@@ -371,19 +359,19 @@ constexpr auto parse_type_specs() {
           }
         }
         type_spec &spec = ret.fields[counts.fields];
-        spec.name.first = prev_name_begin;
-        spec.name.second = prev_name_end - prev_name_begin;
-        spec.type.first = comment_begin;
-        spec.type.second = comment_end - comment_begin;
+        spec.name.offset = prev_name_begin;
+        spec.name.count = prev_name_end - prev_name_begin;
+        spec.type.offset = comment_begin;
+        spec.type.count = comment_end - comment_begin;
         bool optional = false;
         auto type = str.substr(comment_begin, comment_end - comment_begin);
         if (!type.empty() && type.ends_with("?")) {
           optional = true;
-          --spec.type.second;
+          --spec.type.count;
         }
         spec.optional = optional;
         auto name =
-            str.substr(spec.name.first, spec.name.second - spec.name.first);
+            str.substr(spec.name.offset, spec.name.count - spec.name.offset);
         ++counts.fields;
       }
     }
@@ -398,10 +386,10 @@ constexpr auto parse_type_specs() {
           type.remove_suffix(1);
         }
         type_spec &spec = ret.params[counts.params];
-        spec.name.first = comment_begin;
-        spec.name.second = name.size();
-        spec.type.first = comment_begin + colon_pos + 1;
-        spec.type.second = type.size();
+        spec.name.offset = comment_begin;
+        spec.name.count = name.size();
+        spec.type.offset = comment_begin + colon_pos + 1;
+        spec.type.count = type.size();
         spec.optional = optional;
         ++counts.params;
       }
@@ -414,11 +402,11 @@ template <fixed_string query_string, type_spec ts, bool required>
 struct member_from_type_spec {
   static constexpr auto sv = query_string.sv();
   static constexpr auto name_str =
-      fixed_string<ts.name.second>::from_string_view(
-          sv.substr(ts.name.first, ts.name.second));
+      fixed_string<ts.name.count>::from_string_view(
+          sv.substr(ts.name.offset, ts.name.count));
   static constexpr auto type_str =
-      fixed_string<ts.type.second>::from_string_view(
-          sv.substr(ts.type.first, ts.type.second));
+      fixed_string<ts.type.count>::from_string_view(
+          sv.substr(ts.type.offset, ts.type.count));
 
   using type_from_string = string_to_type_t<type_str>;
   using value_type =

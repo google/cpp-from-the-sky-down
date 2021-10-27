@@ -21,34 +21,34 @@ int main() {
   sqlite3 *sqldb;
   sqlite3_open(":memory:", &sqldb);
 
-  ftsd::prepared_statement<
-      "CREATE TABLE customers("
-      "id INTEGER NOT NULL PRIMARY KEY, "
-      "name TEXT NOT NULL"
-      ");"  //
+  ftsd::prepared_statement<  //
+      R"( CREATE TABLE customers(
+      id INTEGER NOT NULL PRIMARY KEY, 
+      name TEXT NOT NULL
+      );)"                   //
+      >{sqldb}
+      .execute();
+
+  ftsd::prepared_statement<  //
+      R"( CREATE TABLE orders(
+      id INTEGER NOT NULL PRIMARY KEY,
+      item TEXT NOT NULL, 
+      customerid INTEGER NOT NULL,
+      price REAL NOT NULL, 
+      discount_code TEXT 
+      );)"                   //
       >{sqldb}
       .execute();
 
   ftsd::prepared_statement<
-      "CREATE TABLE orders("
-      "id INTEGER NOT NULL PRIMARY KEY,"
-      "item TEXT NOT NULL, "
-      "customerid INTEGER NOT NULL,"
-      "price REAL NOT NULL, "
-      "discount_code TEXT "
-      ");"  //
-      >{sqldb}
-      .execute();
-
-  ftsd::prepared_statement<
-      "INSERT INTO customers(name) "
-      "VALUES(? /*:name:text*/);"  //
+      R"(INSERT INTO customers(name) 
+      VALUES(? /*:name:text*/);)"  //
       >{sqldb}
       .execute({arg<"name"> = "John"});
 
   auto customer_id_or = ftsd::prepared_statement<
-                            "select id/*:integer*/ from customers "
-                            "where name = ? /*:name:text*/;"  //
+                            R"(SELECT id /*:integer*/ from customers 
+                            WHERE name = ? /*:name:text*/;)"  //
                             >{sqldb}
                             .execute_single_row({arg<"name"> = "John"});
 
