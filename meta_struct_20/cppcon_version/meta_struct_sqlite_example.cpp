@@ -59,9 +59,9 @@ int main() {
   auto customer_id = get<"id">(customer_id_or.value());
 
   ftsd::prepared_statement<
-      "INSERT INTO orders(item , customerid , price, discount_code ) "
-      "VALUES (?/*:item:text*/, ?/*:customerid:integer*/, ?/*:price:real*/, "
-      "?/*:discount_code:text?*/ );"  //
+      R"(INSERT INTO orders(item , customerid , price, discount_code ) 
+      VALUES (?/*:item:text*/, ?/*:customerid:integer*/, ?/*:price:real*/, 
+      ?/*:discount_code:text?*/ );)"  //
       >
       insert_order{sqldb};
 
@@ -74,11 +74,12 @@ int main() {
                         ftsd::arg<"discount_code"> = "BIGSALE"});
 
   ftsd::prepared_statement<
-      "SELECT orders.id /*:integer*/, name/*:text*/, item/*:text*/, "
-      "price/*:real*/, "
-      "discount_code/*:text?*/ "
-      "FROM orders JOIN customers ON customers.id = customerid "
-      "WHERE price > ?/*:min_price:real*/;">
+      R"(SELECT orders.id /*:integer*/, name/*:text*/, item/*:text*/, 
+      price/*:real*/, 
+      discount_code/*:text?*/ 
+      FROM orders JOIN customers ON customers.id = customerid 
+      WHERE price > ?/*:min_price:real*/;)"  //
+      >
       select_orders{sqldb};
 
   for (;;) {

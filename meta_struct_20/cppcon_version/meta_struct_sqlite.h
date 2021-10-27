@@ -450,7 +450,7 @@ std::true_type is_optional(const std::optional<T> &);
 std::false_type is_optional(...);
 
 template <typename ParametersMetaStruct>
-void do_binding(sqlite3_stmt *stmt, ParametersMetaStruct parameters) {
+void bind_parameters(sqlite3_stmt *stmt, ParametersMetaStruct parameters) {
   int index = 1;
   meta_struct_for_each(
       [&](auto &m) mutable {
@@ -496,7 +496,7 @@ class prepared_statement {
   }
   row_range<RowType> execute_rows(ParametersMetaStruct parameters = {}) {
     reset_stmt();
-    do_binding(stmt_.get(), std::move(parameters));
+    bind_parameters(stmt_.get(), std::move(parameters));
     return row_range<RowType>(stmt_.get());
   }
   std::optional<decltype(to_concrete(std::declval<RowType>()))>
@@ -512,7 +512,7 @@ class prepared_statement {
 
   void execute(ParametersMetaStruct parameters = {}) {
     reset_stmt();
-    do_binding(stmt_.get(), std::move(parameters));
+    bind_parameters(stmt_.get(), std::move(parameters));
     auto r = sqlite3_step(stmt_.get());
     check_sqlite_return(r, SQLITE_DONE);
   }
