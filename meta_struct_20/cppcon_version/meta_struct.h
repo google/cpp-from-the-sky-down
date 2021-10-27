@@ -9,18 +9,23 @@
 namespace ftsd {
 namespace internal_meta_struct {
 
+struct no_init_fixed_string {};
+
 template <std::size_t N>
 struct fixed_string {
   constexpr fixed_string(const char (&foo)[N + 1]) {
     std::copy_n(foo, N + 1, data);
   }
-  constexpr fixed_string(std::string_view s) {
-    static_assert(s.size() <= N);
-    std::copy(s.begin(), s.end(), data);
+  constexpr static auto from_string_view(std::string_view s) {
+    fixed_string<N> fs{no_init_fixed_string{}};
+    std::copy(s.begin(), s.end(), fs.data);
+    return fs;
   }
   constexpr std::string_view sv() const { return std::string_view(data); }
   auto operator<=>(const fixed_string&) const = default;
   char data[N + 1] = {};
+
+  constexpr fixed_string(no_init_fixed_string) : data{} {};
 };
 template <std::size_t N>
 fixed_string(const char (&str)[N]) -> fixed_string<N - 1>;
@@ -260,6 +265,15 @@ constexpr auto meta_struct_apply(F&& f) {
       std::forward<F>(f));
 }
 
+template <typename MetaStruct, typename F>
+constexpr void meta_struct_for_each(F&& f,MetaStruct&& ms) {
+  meta_struct_apply(
+      [&](auto&... m) mutable {
+        (std::forward<F>(f)(m), ...);
+      },
+      std::forward<MetaStruct>(ms));
+}
+
 template <fixed_string tag, typename T, auto Init, auto Attributes>
 constexpr decltype(auto) get_impl(member<tag, T, Init, Attributes>& m) {
   return (m.value);
@@ -312,19 +326,18 @@ constexpr bool has() {
 }
 
 template <typename... Members>
-constexpr std::size_t meta_struct_size_impl(
-    const meta_struct_impl<Members...>*) {
+constexpr std::size_t meta_struct_size_impl(const meta_struct<Members...>*) {
   return sizeof...(Members);
 }
 
 template <typename... Members>
-constexpr std::size_t meta_struct_size(const meta_struct_impl<Members...>&) {
+constexpr std::size_t meta_struct_size(const meta_struct<Members...>&) {
   return sizeof...(Members);
 }
 
 template <typename MetaStruct>
 constexpr std::size_t meta_struct_size() {
-  return meta_struct_size_impl(static_cast<MetaStruct*>(nullptr));
+  return meta_struct_size_impl(static_cast<const MetaStruct*>(nullptr));
 }
 
 }  // namespace internal_meta_struct

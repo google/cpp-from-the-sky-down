@@ -15,9 +15,8 @@
 #include "meta_struct_sqlite.h"
 
 #include <iostream>
+using ftsd::bind;
 int main() {
-    using ftsd::bind;
-    using ftsd::field;
 
   sqlite3 *sqldb;
   sqlite3_open(":memory:", &sqldb);
@@ -57,7 +56,7 @@ int main() {
     std::cerr << "Unable to find customer name\n";
     return 1;
   }
-  auto customer_id = field<"id">(customer_id_or.value());
+  auto customer_id = get<"id">(customer_id_or.value());
 
   ftsd::prepared_statement<
       "INSERT INTO orders(item , customerid , price, discount_code ) "
@@ -91,12 +90,12 @@ int main() {
       // Access the fields using by indexing the row with the column (`_col`).
       // We will get a compiler error if we try to access a column that is not
       // part of the select statement.
-      std::cout << field<"orders.id">(row) << " ";
-      std::cout << field<"price">(row) << " ";
-      std::cout << field<"name">(row) << " ";
-      std::cout << field<"item">(row) << " ";
-      std::cout << ftsd::field<"item">(row) << " ";
-      std::cout << field<"discount_code">(row).value_or("<NO CODE>") << "\n";
+      std::cout << get<"orders.id">(row) << " ";
+      std::cout << get<"price">(row) << " ";
+      std::cout << get<"name">(row) << " ";
+      std::cout << get<"item">(row) << " ";
+      std::cout << ftsd::get<"item">(row) << " ";
+      std::cout << get<"discount_code">(row).value_or("<NO CODE>") << "\n";
     }
   }
 }

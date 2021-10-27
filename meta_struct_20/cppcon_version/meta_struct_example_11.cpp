@@ -70,4 +70,6 @@ int main() {
 
   static_assert(ftsd::meta_struct_size<NameAndId>() == 2);
   static_assert(ftsd::meta_struct_size(n) == 2);
+
+  constexpr auto fs = ftsd::fixed_string<4>::from_string_view("John");
 }
