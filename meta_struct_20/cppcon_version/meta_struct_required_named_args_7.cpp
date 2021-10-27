@@ -215,7 +215,9 @@ using substr_args = meta_struct<                      //
     member<"str", const std::string&, required>,      //
     member<"offset", std::size_t, [] { return 0; }>,  //
     member<"count", std::size_t,
-           [](auto& self) { return get<"str">(self).size(); }>  //
+           [](auto& self) {
+             return get<"str">(self).size() - get<"offset">(self);
+           }>  //
     >;
 
 auto substr(substr_args args) {
