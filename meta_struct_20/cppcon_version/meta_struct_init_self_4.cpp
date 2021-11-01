@@ -83,7 +83,7 @@ struct member {
   constexpr member& operator=(member&&) = default;
   constexpr member& operator=(const member&) = default;
 
-  constexpr auto operator<=>(const member&) const = default;
+  auto operator<=>(const member&) const = default;
 };
 
 template <typename... Members>

@@ -429,7 +429,7 @@ template <fixed_string query_string, type_specs ts, bool required,
           std::size_t... I>
 struct meta_struct_from_type_specs<query_string, ts, required,
                                    std::index_sequence<I...>> {
-  using type = typename meta_struct<
+  using type = meta_struct<
       typename member_from_type_spec<query_string, ts[I], required>::type...>;
 };
 
@@ -472,7 +472,7 @@ using unique_stmt = std::unique_ptr<sqlite3_stmt, stmt_closer>;
 template <fixed_string Query>
 class prepared_statement {
   using RowTypeAndParametersMetaStruct =
-      typename meta_structs_from_query<Query>;
+      meta_structs_from_query<Query>;
   using RowType = typename RowTypeAndParametersMetaStruct::fields_type;
   using ParametersMetaStruct =
       typename RowTypeAndParametersMetaStruct::parameters_type;

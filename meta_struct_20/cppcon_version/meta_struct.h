@@ -157,7 +157,7 @@ struct member {
 };
 
 template <typename... Members>
-struct meta_struct_impl<Members...> : Members... {
+struct meta_struct_impl: Members... {
   template <typename... Args>
   constexpr meta_struct_impl(parms<Args...> p)
       : Members(*this, std::move(p))... {}

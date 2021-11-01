@@ -7,9 +7,7 @@ project(cpp20_tagged_struct)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-find_package(GTest CONFIG REQUIRED)
 find_package(Threads REQUIRED)
-find_package(Boost REQUIRED)
 find_package(SQLite3 REQUIRED)
 
 
@@ -19,7 +17,6 @@ target_link_libraries(meta_struct_sqlite_example SQLite::SQLite3 Threads::Thread
 
 
 # Add source to this project's executable.
-add_executable (struct "struct.cpp")
 add_executable (fixed_string "fixed_string.cpp")
 add_executable (meta_struct_1 "meta_struct_1.cpp")
 add_executable (meta_struct_constructed_2 "meta_struct_constructed_2.cpp")
