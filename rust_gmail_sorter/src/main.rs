@@ -1,6 +1,8 @@
 extern crate google_gmail1 as gmail1;
 extern crate hyper;
 extern crate hyper_rustls;
+
+use std::collections::HashMap;
 use gmail1::api::{BatchModifyMessagesRequest, Message, MessagePartHeader};
 use gmail1::{oauth2, Gmail};
 use gmail1::{Error, Result};
@@ -112,10 +114,10 @@ async fn fetch_inbox_ids<F: Fn(usize, &str)>(gmail: &Gmail, f: &F) -> Option<Vec
             ids.push(m.id.unwrap());
         }
         f(ids.len(), &format!("{:?}", &ids));
-        page_token = None;
         if page_token.is_none() {
             break;
         }
+//        break;
     }
 
     Some(ids)
@@ -129,7 +131,9 @@ fn update_status(current: &mut Email, status: &Option<Status>) {
 
 async fn fetch_inbox<F: Fn(usize, &str)>(gmail: &Gmail, f: F) -> Vec<Email> {
     let mut emails: Vec<Email> = vec![];
-    let ids = fetch_inbox_ids(gmail, &f).await.unwrap_or_default();
+    let mut ids = fetch_inbox_ids(gmail, &f).await.unwrap_or_default();
+//    ids.truncate(1000);
+
     for id in &ids {
         let result = gmail
             .users()
@@ -141,7 +145,7 @@ async fn fetch_inbox<F: Fn(usize, &str)>(gmail: &Gmail, f: F) -> Vec<Email> {
         f(emails.len(), "Getting");
         f(emails.len(), &format!("{:?}", &result));
         if (result.is_err()) {
-            f(emails.len(), &format!("Error {:?}", &result.err()));
+            f(emails.len(), "");
             continue;
         }
         let email = Email::new(&result.unwrap().1);
@@ -238,9 +242,12 @@ async fn main() {
 
     let labels = hub.users().labels_list("me").doit().await.unwrap().1;
     let labels = labels.labels.unwrap();
+    let mut label_map = HashMap::<String,String>::default();
     for label in labels{
+        label_map.insert(label.name.clone().unwrap(),label.id.clone().unwrap());
         println!("{:?}",&label.name.unwrap());
     }
+    // return;
 
     /* dotenv::dotenv().unwrap();
 
@@ -262,10 +269,13 @@ async fn main() {
         .ok()
         .unwrap_or("archive".to_owned());
 
+    let follow_up = label_map.get(&follow_up).unwrap().clone();
+    let read_through = label_map.get(&read_through).unwrap().clone();
+
     let mut window = pancurses::initscr();
-    let mut emails = fetch_inbox(&hub, |c, s| {
+    let mut emails = fetch_inbox(&hub, |c, _| {
         window.clear();
-        window.addstr(format!("Read {} emails {}", c, s));
+        window.addstr(format!("Read {} emails", c));
         window.refresh();
     })
     .await;
