@@ -1,0 +1,22 @@
+[package]
+name = "rust_gmail_sorter"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+google-gmail1 = "*"
+hyper = "^0.14"
+hyper-rustls = "^0.22"
+serde = "^1.0"
+serde_json = "^1.0"
+tokio = { version = "1", features = ["full"] }
+chrono = "0.4.19"
+html2text = "0.2.1"
+pancurses = {version = "0.16.1", features = ["win32"]}
+dotenv = "0.15.0"
+itertools = "0.10.0"
+
+anyhow = "1.0.40"
+email-address-parser = "1.0.3"
