@@ -1,15 +1,15 @@
 extern crate google_gmail1 as gmail1;
 extern crate hyper;
 extern crate hyper_rustls;
-use gmail1::api::{Message, MessagePartHeader};
+use gmail1::api::{BatchModifyMessagesRequest, Message, MessagePartHeader};
 use gmail1::{oauth2, Gmail};
 use gmail1::{Error, Result};
 use itertools::Itertools;
+use pancurses::Input::Character;
 use std::default::Default;
 use std::fmt::Debug;
 use std::fs;
 use std::ops::Deref;
-use pancurses::Input::Character;
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
 enum Status {
@@ -80,11 +80,14 @@ impl Email {
     }
 }
 
-async fn fetch_inbox_ids<F:Fn(usize,&str)>(gmail: &Gmail, f: &F) -> Option<Vec<String>> {
+async fn fetch_inbox_ids<F: Fn(usize, &str)>(gmail: &Gmail, f: &F) -> Option<Vec<String>> {
     let mut ids: Vec<String> = vec![];
     let mut page_token: Option<String> = None;
     loop {
-        let query = gmail.users().messages_list("me").add_label_ids("INBOX")
+        let query = gmail
+            .users()
+            .messages_list("me")
+            .add_label_ids("INBOX")
             .add_scope(String::from("https://mail.google.com/"));
         let query = if page_token.is_none() {
             query
@@ -92,25 +95,30 @@ async fn fetch_inbox_ids<F:Fn(usize,&str)>(gmail: &Gmail, f: &F) -> Option<Vec<S
             query.page_token(&page_token.unwrap())
         };
         let response = query.doit().await;
-        if response.is_err(){
+        if response.is_err() {
             break;
         }
         let response = response.unwrap();
         page_token = response.1.next_page_token.clone();
-        if page_token.is_none(){ break;}
         let current_ids = response.1.messages;
-        if current_ids.is_none() {break;}
+        if current_ids.is_none() {
+            break;
+        }
         let current_ids = current_ids.unwrap();
-        for m in current_ids{
-           if m.id.is_none() { continue;}
+        for m in current_ids {
+            if m.id.is_none() {
+                continue;
+            }
             ids.push(m.id.unwrap());
         }
-        f(ids.len(),&format!("{:?}",&ids));
+        f(ids.len(), &format!("{:?}", &ids));
+        page_token = None;
+        if page_token.is_none() {
+            break;
+        }
     }
 
     Some(ids)
-
-
 }
 
 fn update_status(current: &mut Email, status: &Option<Status>) {
@@ -119,24 +127,86 @@ fn update_status(current: &mut Email, status: &Option<Status>) {
     }
 }
 
-async fn fetch_inbox<F:Fn(usize, &str)>(gmail: &Gmail, f:F) -> Vec<Email> {
+async fn fetch_inbox<F: Fn(usize, &str)>(gmail: &Gmail, f: F) -> Vec<Email> {
     let mut emails: Vec<Email> = vec![];
-    let ids =  fetch_inbox_ids(gmail,&f).await.unwrap_or_default();
-    for id in &ids{
-        let result = gmail.users().messages_get("me",id).format("metadata")
-
+    let ids = fetch_inbox_ids(gmail, &f).await.unwrap_or_default();
+    for id in &ids {
+        let result = gmail
+            .users()
+            .messages_get("me", id)
+            .format("full")
             .add_scope(String::from("https://mail.google.com/"))
-            .doit().await;
+            .doit()
+            .await;
         f(emails.len(), "Getting");
-        f(emails.len(),&format!("{:?}",&result));
-        if(result.is_err()) {
-            f(emails.len(),&format!("Error {:?}",&result.err()));
-            continue;}
+        f(emails.len(), &format!("{:?}", &result));
+        if (result.is_err()) {
+            f(emails.len(), &format!("Error {:?}", &result.err()));
+            continue;
+        }
         let email = Email::new(&result.unwrap().1);
-        if email.is_none() {continue;}
+        if email.is_none() {
+            continue;
+        }
         emails.push(email.unwrap());
     }
     emails
+}
+
+async fn move_chunks<F: Fn(&str, u32, u32)>(gmail:&Gmail, inbox:&str, to: &Vec<String>, label: &str, f: &F) -> anyhow::Result<()> {
+    let mut i: u32 = 032;
+    for chunk in &to.iter().chunks(100) {
+        let v: Vec<_> = chunk.map(|i| i.clone()).collect();
+        let mut request = BatchModifyMessagesRequest::default();
+        request.ids = Some(v);
+        if(label != "archive"){
+            request.add_label_ids = Some(vec![label.to_owned()]);
+        }
+        request.remove_label_ids = Some(vec![inbox.to_owned()]);
+        let mut command = gmail
+            .users()
+            .messages_batch_modify(request, "me")
+            .add_scope(String::from("https://mail.google.com/"))
+            .doit()
+            .await?;
+        f(label, i, to.len() as u32);
+        i += 1;
+    }
+    Ok(())
+}
+
+async fn move_emails<F: Fn(&str, u32, u32)>(
+    gmail: &Gmail,
+    emails: &Vec<Email>,
+    inbox: &str,
+    archive: &str,
+    follow_up: &str,
+    read_through: &str,
+    f: F,
+) -> anyhow::Result<()> {
+    let to_archive: Vec<_> = emails
+        .iter()
+        .filter(|e| e.status == Status::Archive)
+        .map(|e| e.id.clone())
+        .collect();
+    let to_follow_up: Vec<_> = emails
+        .iter()
+        .filter(|e| e.status == Status::FollowUp)
+        .map(|e| e.id.clone())
+        .collect();
+    let to_read_through: Vec<_> = emails
+        .iter()
+        .filter(|e| e.status == Status::ReadThrough)
+        .map(|e| e.id.clone())
+        .collect();
+
+
+    move_chunks(&gmail,"INBOX",&to_follow_up, follow_up,&f).await?;
+    move_chunks(&gmail,"INBOX",&to_follow_up, follow_up,&f).await?;
+    move_chunks(&gmail,"INBOX",&to_read_through, read_through,&f).await?;
+    move_chunks(&gmail,"INBOX",&to_archive, archive,&f).await?;
+
+    Ok(())
 }
 
 #[tokio::main]
@@ -156,7 +226,7 @@ async fn main() {
         secret,
         oauth2::InstalledFlowReturnMethod::HTTPRedirect,
     )
-        .persist_tokens_to_disk("./tokens")
+    .persist_tokens_to_disk("./tokens")
     .build()
     .await
     .unwrap();
@@ -166,7 +236,13 @@ async fn main() {
         auth,
     );
 
-   /* dotenv::dotenv().unwrap();
+    let labels = hub.users().labels_list("me").doit().await.unwrap().1;
+    let labels = labels.labels.unwrap();
+    for label in labels{
+        println!("{:?}",&label.name.unwrap());
+    }
+
+    /* dotenv::dotenv().unwrap();
 
     let password = dotenv::var("IMAP_PASSWORD").ok().unwrap_or(String::new());
     let user = dotenv::var("IMAP_USER").ok().unwrap_or(String::new());
@@ -176,14 +252,23 @@ async fn main() {
     let archive = dotenv::var("IMAP_ARCHIVE").ok().unwrap();
 
     */
+    let follow_up = dotenv::var("IMAP_FOLLOWUP")
+        .ok()
+        .unwrap_or("follow-up".to_owned());
+    let read_through = dotenv::var("IMAP_READTHROUGH")
+        .ok()
+        .unwrap_or("read-through".to_owned());
+    let archive = dotenv::var("IMAP_ARCHIVE")
+        .ok()
+        .unwrap_or("archive".to_owned());
 
     let mut window = pancurses::initscr();
-    let mut emails = fetch_inbox(&hub,|c, s| {
+    let mut emails = fetch_inbox(&hub, |c, s| {
         window.clear();
         window.addstr(format!("Read {} emails {}", c, s));
         window.refresh();
     })
-        .await;
+    .await;
     emails.sort_by(|a, b| {
         (&a.from_domain, &a.from_name, &a.date)
             .cmp(&(&b.from_domain, &b.from_name, &b.date))
@@ -207,7 +292,7 @@ async fn main() {
                 i + 1,
                 emails.len(),
                 emails[i].status.to_string(),
-                emails[i].date,
+                chrono::NaiveDateTime::from_timestamp(emails[i].date / 1_000, 0),
                 emails[i].from_name,
                 emails[i].from_domain,
                 emails[i].subject,
@@ -279,17 +364,27 @@ async fn main() {
                 i = j;
                 change_status = None;
                 needs_refresh = true;
-            },
-            Character('w') =>{
-              /*  move_emails(&emails,&domain,&user,&password,&archive,&follow_up,&read_through,
-                            |s,count,total|{
-                                window.clear();
-                                window.addstr(format!("Moved {} of {} to {}",count, total,s));
-                                window.refresh();
-                            }).unwrap();
+            }
+            Character('w') => {
+                move_emails(
+                    &hub,
+                    &emails,
+                    "INBOX",
+                    &archive,
+                    &follow_up,
+                    &read_through,
+                    |s, count, total| {
+                        window.clear();
+                        window.addstr(format!("Moved {} of {} to {}", count, total, s));
+                        window.refresh();
+                    },
+                )
+                .await.unwrap();
 
-               */
-                let mut v:Vec<_> =  emails.into_iter().filter(|e|e.status == Status::Inbox).collect();
+                let mut v: Vec<_> = emails
+                    .into_iter()
+                    .filter(|e| e.status == Status::Inbox)
+                    .collect();
                 emails = v;
                 if emails.is_empty() {
                     window.clear();
@@ -298,12 +393,10 @@ async fn main() {
                     return;
                 }
                 i = 0;
-            },
+            }
             pancurses::Input::KeyEnter => needs_refresh = true,
 
             _ => (),
         }
     }
-
-
 }
