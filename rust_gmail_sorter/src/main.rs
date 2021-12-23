@@ -6,6 +6,7 @@ use gmail1::{oauth2, Gmail};
 use gmail1::{Error, Result};
 use itertools::Itertools;
 use std::default::Default;
+use std::fmt::Debug;
 use std::fs;
 use std::ops::Deref;
 use pancurses::Input::Character;
@@ -79,11 +80,12 @@ impl Email {
     }
 }
 
-async fn fetch_inbox_ids(gmail: &Gmail) -> Option<Vec<String>> {
+async fn fetch_inbox_ids<F:Fn(usize,&str)>(gmail: &Gmail, f: &F) -> Option<Vec<String>> {
     let mut ids: Vec<String> = vec![];
     let mut page_token: Option<String> = None;
     loop {
-        let query = gmail.users().messages_list("me").add_label_ids("INBOX");
+        let query = gmail.users().messages_list("me").add_label_ids("INBOX")
+            .add_scope(String::from("https://mail.google.com/"));
         let query = if page_token.is_none() {
             query
         } else {
@@ -103,6 +105,7 @@ async fn fetch_inbox_ids(gmail: &Gmail) -> Option<Vec<String>> {
            if m.id.is_none() { continue;}
             ids.push(m.id.unwrap());
         }
+        f(ids.len(),&format!("{:?}",&ids));
     }
 
     Some(ids)
@@ -116,13 +119,19 @@ fn update_status(current: &mut Email, status: &Option<Status>) {
     }
 }
 
-async fn fetch_inbox<F:Fn(usize)>(gmail: &Gmail, f:F) -> Vec<Email> {
+async fn fetch_inbox<F:Fn(usize, &str)>(gmail: &Gmail, f:F) -> Vec<Email> {
     let mut emails: Vec<Email> = vec![];
-    let ids =  fetch_inbox_ids(gmail).await.unwrap_or_default();
+    let ids =  fetch_inbox_ids(gmail,&f).await.unwrap_or_default();
     for id in &ids{
-        f(emails.len());
-        let result = gmail.users().messages_get("me",id).format("full").doit().await;
-        if(result.is_err()) {continue;}
+        let result = gmail.users().messages_get("me",id).format("metadata")
+
+            .add_scope(String::from("https://mail.google.com/"))
+            .doit().await;
+        f(emails.len(), "Getting");
+        f(emails.len(),&format!("{:?}",&result));
+        if(result.is_err()) {
+            f(emails.len(),&format!("Error {:?}",&result.err()));
+            continue;}
         let email = Email::new(&result.unwrap().1);
         if email.is_none() {continue;}
         emails.push(email.unwrap());
@@ -147,6 +156,7 @@ async fn main() {
         secret,
         oauth2::InstalledFlowReturnMethod::HTTPRedirect,
     )
+        .persist_tokens_to_disk("./tokens")
     .build()
     .await
     .unwrap();
@@ -168,9 +178,9 @@ async fn main() {
     */
 
     let mut window = pancurses::initscr();
-    let mut emails = fetch_inbox(&hub,|c| {
+    let mut emails = fetch_inbox(&hub,|c, s| {
         window.clear();
-        window.addstr(format!("Read {} emails", c));
+        window.addstr(format!("Read {} emails {}", c, s));
         window.refresh();
     })
         .await;
