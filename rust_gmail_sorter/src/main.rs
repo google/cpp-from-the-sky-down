@@ -59,13 +59,16 @@ impl Email {
     fn new(message: &gmail1::api::Message) -> Option<Self> {
         let headers = &message.payload.as_ref()?.headers.as_deref()?;
         let subject = get_header("subject", headers).unwrap_or_default();
-        let from_raw = get_header("from", headers)?;
+        let from_raw = get_header("from", headers).unwrap_or_default();
         let from_vec: Vec<_> = from_raw.split(",").collect_vec();
         let from = if from_vec.is_empty() || from_vec.len() > 1 {
-            get_header("sender", headers).unwrap_or_default()
+            from_raw
+            //get_header("sender", headers).unwrap_or_default()
         } else {
             from_vec.first().unwrap().deref().to_owned()
         };
+        let pos = from.find("<").unwrap_or(0usize);
+        let from = &from[pos..];
         let from_parts = from.split("@").collect_vec();
         let from_name = from_parts.get(0).unwrap_or(&"").deref().to_owned();
         let from_domain = from_parts.get(1).unwrap_or(&"").deref().to_owned();

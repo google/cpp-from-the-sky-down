@@ -19,4 +19,3 @@ dotenv = "0.15.0"
 itertools = "0.10.0"
 
 anyhow = "1.0.40"
-email-address-parser = "1.0.3"
