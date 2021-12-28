@@ -2,15 +2,13 @@ extern crate google_gmail1 as gmail1;
 extern crate hyper;
 extern crate hyper_rustls;
 
-use std::collections::HashMap;
-use gmail1::api::{BatchModifyMessagesRequest, Message, MessagePartHeader};
+use gmail1::api::{BatchModifyMessagesRequest, MessagePartHeader};
 use gmail1::{oauth2, Gmail};
-use gmail1::{Error, Result};
 use itertools::Itertools;
 use pancurses::Input::Character;
+use std::collections::HashMap;
 use std::default::Default;
 use std::fmt::Debug;
-use std::fs;
 use std::ops::Deref;
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
@@ -120,7 +118,7 @@ async fn fetch_inbox_ids<F: Fn(usize, &str)>(gmail: &Gmail, f: &F) -> Option<Vec
         if page_token.is_none() {
             break;
         }
-//        break;
+        //        break;
     }
 
     Some(ids)
@@ -134,8 +132,7 @@ fn update_status(current: &mut Email, status: &Option<Status>) {
 
 async fn fetch_inbox<F: Fn(usize, &str)>(gmail: &Gmail, f: F) -> Vec<Email> {
     let mut emails: Vec<Email> = vec![];
-    let mut ids = fetch_inbox_ids(gmail, &f).await.unwrap_or_default();
-//    ids.truncate(1000);
+    let ids = fetch_inbox_ids(gmail, &f).await.unwrap_or_default();
 
     for id in &ids {
         let result = gmail
@@ -147,7 +144,7 @@ async fn fetch_inbox<F: Fn(usize, &str)>(gmail: &Gmail, f: F) -> Vec<Email> {
             .await;
         f(emails.len(), "Getting");
         f(emails.len(), &format!("{:?}", &result));
-        if (result.is_err()) {
+        if result.is_err() {
             f(emails.len(), "");
             continue;
         }
@@ -160,17 +157,23 @@ async fn fetch_inbox<F: Fn(usize, &str)>(gmail: &Gmail, f: F) -> Vec<Email> {
     emails
 }
 
-async fn move_chunks<F: Fn(&str, u32, u32)>(gmail:&Gmail, inbox:&str, to: &Vec<String>, label: &str, f: &F) -> anyhow::Result<()> {
+async fn move_chunks<F: Fn(&str, u32, u32)>(
+    gmail: &Gmail,
+    inbox: &str,
+    to: &Vec<String>,
+    label: &str,
+    f: &F,
+) -> anyhow::Result<()> {
     let mut i: u32 = 032;
     for chunk in &to.iter().chunks(100) {
         let v: Vec<_> = chunk.map(|i| i.clone()).collect();
         let mut request = BatchModifyMessagesRequest::default();
         request.ids = Some(v);
-        if(label != "archive"){
+        if label != "archive" {
             request.add_label_ids = Some(vec![label.to_owned()]);
         }
         request.remove_label_ids = Some(vec![inbox.to_owned()]);
-        let mut command = gmail
+        gmail
             .users()
             .messages_batch_modify(request, "me")
             .add_scope(String::from("https://mail.google.com/"))
@@ -185,7 +188,7 @@ async fn move_chunks<F: Fn(&str, u32, u32)>(gmail:&Gmail, inbox:&str, to: &Vec<S
 async fn move_emails<F: Fn(&str, u32, u32)>(
     gmail: &Gmail,
     emails: &Vec<Email>,
-    inbox: &str,
+    _inbox: &str,
     archive: &str,
     follow_up: &str,
     read_through: &str,
@@ -207,11 +210,10 @@ async fn move_emails<F: Fn(&str, u32, u32)>(
         .map(|e| e.id.clone())
         .collect();
 
-
-    move_chunks(&gmail,"INBOX",&to_follow_up, follow_up,&f).await?;
-    move_chunks(&gmail,"INBOX",&to_follow_up, follow_up,&f).await?;
-    move_chunks(&gmail,"INBOX",&to_read_through, read_through,&f).await?;
-    move_chunks(&gmail,"INBOX",&to_archive, archive,&f).await?;
+    move_chunks(&gmail, "INBOX", &to_follow_up, follow_up, &f).await?;
+    move_chunks(&gmail, "INBOX", &to_follow_up, follow_up, &f).await?;
+    move_chunks(&gmail, "INBOX", &to_read_through, read_through, &f).await?;
+    move_chunks(&gmail, "INBOX", &to_archive, archive, &f).await?;
 
     Ok(())
 }
@@ -229,7 +231,7 @@ async fn main() {
     // authentication tokens are persisted to a file named tokencache.json. The
     // authenticator takes care of caching tokens to disk and refreshing tokens once
     // they've expired.
-    let mut auth = oauth2::InstalledFlowAuthenticator::builder(
+    let auth = oauth2::InstalledFlowAuthenticator::builder(
         secret,
         oauth2::InstalledFlowReturnMethod::HTTPRedirect,
     )
@@ -238,17 +240,17 @@ async fn main() {
     .await
     .unwrap();
 
-    let mut hub = Gmail::new(
+    let hub = Gmail::new(
         hyper::Client::builder().build(hyper_rustls::HttpsConnector::with_native_roots()),
         auth,
     );
 
     let labels = hub.users().labels_list("me").doit().await.unwrap().1;
     let labels = labels.labels.unwrap();
-    let mut label_map = HashMap::<String,String>::default();
-    for label in labels{
-        label_map.insert(label.name.clone().unwrap(),label.id.clone().unwrap());
-        println!("{:?}",&label.name.unwrap());
+    let mut label_map = HashMap::<String, String>::default();
+    for label in labels {
+        label_map.insert(label.name.clone().unwrap(), label.id.clone().unwrap());
+        println!("{:?}", &label.name.unwrap());
     }
     // return;
 
@@ -275,7 +277,7 @@ async fn main() {
     let follow_up = label_map.get(&follow_up).unwrap().clone();
     let read_through = label_map.get(&read_through).unwrap().clone();
 
-    let mut window = pancurses::initscr();
+    let window = pancurses::initscr();
     let mut emails = fetch_inbox(&hub, |c, _| {
         window.clear();
         window.addstr(format!("Read {} emails", c));
@@ -289,14 +291,14 @@ async fn main() {
     });
     let mut i = 0usize;
     if emails.is_empty() {
+        pancurses::endwin();
         println!("No emails");
         return;
     }
     let mut needs_refresh = true;
-    let mut command = String::new();
     let mut change_status: Option<Status> = None;
     loop {
-        if (i >= emails.len()) {
+        if i >= emails.len() {
             i = emails.len() - 1;
         }
         if needs_refresh {
@@ -322,12 +324,14 @@ async fn main() {
             window.mv(y, 0);
             window.refresh();
             window.clrtoeol();
-            window.addstr(&format!("Command: {}", command));
             window.refresh();
             needs_refresh = false;
         }
         match window.getch().unwrap() {
-            Character('q') => return,
+            Character('q') => {
+                pancurses::endwin();
+                return;
+            }
             Character('a') => change_status = Some(Status::Archive),
             Character('f') => change_status = Some(Status::FollowUp),
             Character('r') => change_status = Some(Status::ReadThrough),
@@ -392,9 +396,10 @@ async fn main() {
                         window.refresh();
                     },
                 )
-                .await.unwrap();
+                .await
+                .unwrap();
 
-                let mut v: Vec<_> = emails
+                let v: Vec<_> = emails
                     .into_iter()
                     .filter(|e| e.status == Status::Inbox)
                     .collect();
