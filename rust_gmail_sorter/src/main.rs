@@ -11,6 +11,20 @@ use std::default::Default;
 use std::fmt::Debug;
 use std::ops::Deref;
 
+fn get_bracketed(s:&str) ->&str{
+    s.split_once("[").unwrap_or(("","")).1.split_once("]").unwrap_or(("","")).0
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::get_bracketed;
+
+    #[test]
+    fn test_get_bracketed() {
+        assert_eq!(get_bracketed("this is [ a very long test [ ] ] "), " a very long test [ ");
+    }
+}
+
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
 enum Status {
     Inbox,
@@ -351,6 +365,20 @@ async fn main() {
                 change_status = None;
                 needs_refresh = true;
             }
+            Character('[') => {
+                let bracketed_current = get_bracketed(&emails[i].subject).trim().to_owned();
+                if(!bracketed_current.is_empty()){
+                    for pos in i..emails.len(){
+                        let bracketed_pos = get_bracketed(&emails[pos].subject).trim().to_owned();
+                        if bracketed_current == bracketed_pos {
+                            update_status(&mut emails[pos], &change_status);
+                        }
+                    }
+               }
+               change_status = None;
+               needs_refresh = true;
+            }
+
 
             Character('j') => {
                 update_status(&mut emails[i], &mut change_status);
