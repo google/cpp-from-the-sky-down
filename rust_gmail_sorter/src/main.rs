@@ -167,6 +167,7 @@ async fn move_chunks<F: Fn(&str, u32, u32)>(
     let mut i: u32 = 032;
     for chunk in &to.iter().chunks(100) {
         let v: Vec<_> = chunk.map(|i| i.clone()).collect();
+        let chunk_size =  v.len() as u32;
         let mut request = BatchModifyMessagesRequest::default();
         request.ids = Some(v);
         if label != "archive" {
@@ -179,7 +180,7 @@ async fn move_chunks<F: Fn(&str, u32, u32)>(
             .add_scope(String::from("https://mail.google.com/"))
             .doit()
             .await?;
-        f(label, i, to.len() as u32);
+        f(label, chunk_size, to.len() as u32);
         i += 1;
     }
     Ok(())
@@ -341,6 +342,16 @@ async fn main() {
                 i = 0;
                 needs_refresh = true;
             }
+            Character('t') => {
+                for pos in i..emails.len(){
+                    if emails[pos].subject == emails[i].subject {
+                        update_status(&mut emails[pos], &change_status);
+                    }
+                }
+                change_status = None;
+                needs_refresh = true;
+            }
+
             Character('j') => {
                 update_status(&mut emails[i], &mut change_status);
                 if i < emails.len() - 1 {
