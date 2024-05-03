@@ -10,12 +10,6 @@ enum class processing_style {
   complete
 };
 
-template<typename aco, processing_style ips>
-concept aco_input = aco::input_processing_style == ips;
-
-template<typename aco, processing_style ops>
-concept aco_output = aco::input_processing_style == ops;
-
 template<typename aco>
 concept incremental_input = aco::input_processing_style
     == processing_style::incremental;
@@ -47,7 +41,7 @@ template<typename aco, typename input, processing_style previous_ops>
 using action_closure_output_type_t = typename action_closure_output_type<aco,
                                                                          input,
                                                                          previous_ops>::type;
-template<typename Child,processing_style ips, processing_style ops, typename Input, typename Next>
+template<typename Child, processing_style ips, processing_style ops, typename Input, typename Next>
 class range_action_closure_object {
   [[no_unique_address]] Next next_;
 
@@ -87,11 +81,10 @@ class range_action_closure_object {
 
   }
 
-  constexpr decltype(auto) process_complete(input_type input)
-  requires(incremental_input<
+  constexpr decltype(auto) process_complete(input_type input)requires(incremental_input<
       Child>)
   {
-    for(int v: static_cast<input_type>(input)){
+    for (int v: static_cast<input_type>(input)) {
       static_cast<Child&>(*this).process_incremental(std::forward<decltype(v)>(v));
     }
 
@@ -102,10 +95,23 @@ class range_action_closure_object {
 };
 
 struct void_tag {};
+template<typename T>
+struct instantiable {
+  using type = T;
+};
+
+template<>
+struct instantiable<void> {
+  using type = void_tag;
+};
+
+template<typename T>
+using instantiable_t = typename instantiable<T>::type;
+
 template<template<typename, typename, typename...> typename aco,
-    typename parameters, typename... TypeParameters>
+    typename Parameters, typename... TypeParameters>
 class range_action_closure_factory {
-  [[no_unique_address]] parameters parameters_;
+  [[no_unique_address]] instantiable_t<Parameters> parameters_;
 
  public:
   template<typename Input>
@@ -118,8 +124,12 @@ class range_action_closure_factory {
 
   template<typename Input, typename Next>
   constexpr auto make(Next&& next) {
-    return aco<Input, Next, TypeParameters...>{std::forward<Next>(next),
-                                               std::move(parameters_)};
+    if constexpr (std::is_same_v<Parameters, void>) {
+      return aco<Input, Next, TypeParameters...>{std::forward<Next>(next)};
+    } else {
+      return aco<Input, Next, TypeParameters...>{std::forward<Next>(next),
+                                                 std::move(parameters_)};
+    }
   }
 };
 
@@ -146,7 +156,7 @@ struct end_factory_tag {};
 
 struct empty {
   template<typename Next>
-  constexpr auto make(Next&& next){
+  constexpr auto make(Next&& next) {
     return std::forward<Next>(next);
   }
 };
@@ -154,14 +164,9 @@ struct empty {
 template<typename Input>
 struct starting_factory {
   template<typename>
-  using input_type = Input;
-  template<typename>
   using output_type = Input;
-  template<int&...,typename Next>
-  constexpr auto make(Next&& next) {
-    return std::forward<Next>(next);
-  }
-    template<typename,typename Next>
+
+  template<typename, typename Next>
   constexpr auto make(Next&& next) {
     return std::forward<Next>(next);
   }
@@ -169,12 +174,11 @@ struct starting_factory {
 template<typename Input, typename Factory = starting_factory<Input>, typename Previous = empty>
 struct input_factory {
   using output_type = typename Factory::template output_type<Input>;
-  using previous_t = Previous;
   Factory& factory;
   Previous& previous;
   template<typename NewFactory>
   constexpr auto operator+(NewFactory&& new_factory) {
-    return input_factory<output_type ,
+    return input_factory<output_type,
                          NewFactory,
                          input_factory>
         {new_factory, *this};
@@ -194,17 +198,14 @@ struct input_factory {
 
 template<typename Input, typename Next, typename F>
 struct for_each_impl
-    : range_action_closure_object<for_each_impl<Input,Next,F>, processing_style::incremental,
-                                  processing_style::complete, Input, Next> {
+    : range_action_closure_object<for_each_impl<Input, Next, F>,
+                                  processing_style::incremental,
+                                  processing_style::complete,
+                                  Input,
+                                  Next> {
   using output_type = void_tag&&;
 
   F f;
-
-  constexpr for_each_impl(Next&& n, F f) : range_action_closure_object<for_each_impl,
-      processing_style::incremental,
-      processing_style::complete,
-      Input,
-      Next>(std::move(n)), f(std::move(f)) {}
 
   constexpr void process_incremental(Input input) {
     f(std::forward<Input>(input));
@@ -222,19 +223,15 @@ constexpr auto for_each(F f) {
 
 template<typename Input, typename Next>
 struct values_impl
-    : range_action_closure_object<values_impl<Input,Next>, processing_style::complete,
-                                  processing_style::incremental, Input, Next> {
+    : range_action_closure_object<values_impl<Input, Next>,
+                                  processing_style::complete,
+                                  processing_style::incremental,
+                                  Input,
+                                  Next> {
   using output_type = std::ranges::range_reference_t<std::remove_cvref_t<Input>>;
 
-
-  constexpr values_impl(Next&& n,int) : range_action_closure_object<values_impl,
-      processing_style::complete,
-      processing_style::incremental,
-      Input,
-      Next>(std::move(n)) {}
-
   constexpr decltype(auto) process_complete(Input input) {
-    for(auto&& v: input){
+    for (auto&& v: input) {
       this->next().process_incremental(v);
     }
     return this->next().finish();
@@ -243,7 +240,7 @@ struct values_impl
 };
 
 constexpr auto values() {
-  return range_action_closure_factory<values_impl,int>{0};
+  return range_action_closure_factory<values_impl, void>{};
 }
 
 template<typename Range, typename... Acos>
@@ -262,9 +259,11 @@ auto apply(Range&& range, Acos&& ... acos) {
 
 int main() {
   std::vector<int> v{1, 2, 3, 4};
-  range::actions::apply(v, range::actions::values(), range::actions::for_each([](int i) {
-    std::cout << i << "\n";
-  }));
+  range::actions::apply(v,
+                        range::actions::values(),
+                        range::actions::for_each([](int i) {
+                          std::cout << i << "\n";
+                        }));
 
   std::cout << "Hello, World!" << std::endl;
   return 0;
