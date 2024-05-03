@@ -42,43 +42,39 @@ using action_closure_output_type_t = typename action_closure_output_type<aco,
                                                                          input,
                                                                          previous_ops>::type;
 template<typename Child, processing_style ips, processing_style ops, typename Input, typename Next>
-class range_action_closure_object {
-  [[no_unique_address]] Next next_;
+struct range_action_closure_object {
+  [[no_unique_address]] Next next;
 
- public:
   using input_type = Input;
   using base = range_action_closure_object;
 
   constexpr static auto input_processing_style = ips;
   constexpr static auto output_processing_style = ops;
 
-  range_action_closure_object(Next&& next) : next_(std::move(next)) {}
+  constexpr range_action_closure_object(Next&& next) : next(std::move(next)) {}
 
-  constexpr Next& next() {
-    return next_;
-  }
 
   constexpr decltype(auto) finish()requires(incremental_input<
       Child>)
   {
-    return next().finish();
+    return next.finish();
   }
 
   constexpr bool done() const requires(incremental_input<
       Child>)
   {
-    return next().done();
+    return next.done();
   }
 
   constexpr void process_incremental(input_type input)requires(incremental_input<
       Child>)
   {
-    return next().process_incremental(static_cast<input_type>(input));
+    return next.process_incremental(static_cast<input_type>(input));
   }
 
   constexpr decltype(auto) process_complete(input_type input)requires(complete_input<
       Child>){
-    return next().process_complete(static_cast<input_type>(input));
+    return next.process_complete(static_cast<input_type>(input));
 
   }
 
@@ -199,7 +195,7 @@ struct input_factory {
 
 
 template<typename Range, typename... Acos>
-auto apply(Range&& range, Acos&& ... acos) {
+constexpr auto apply(Range&& range, Acos&& ... acos) {
 
   detail::empty empty;
   detail::starting_factory<decltype(range)> starting_factory;
@@ -225,7 +221,7 @@ struct for_each_impl
   }
 
   constexpr decltype(auto) finish() {
-    return this->next().process_complete(void_tag{});
+    return this->next.process_complete(void_tag{});
   }
 };
 
@@ -241,13 +237,21 @@ struct values_impl
                                   processing_style::incremental,
                                   Input,
                                   Next> {
-  using output_type = std::ranges::range_reference_t<std::remove_cvref_t<Input>>;
+  using output_type = std::ranges::range_reference_t<std::remove_reference_t<Input>>;
+
+
+  constexpr values_impl(Next&& next):
+  range_action_closure_object<values_impl<Input, Next>,
+                                  processing_style::complete,
+                                  processing_style::incremental,
+                                  Input,
+                                  Next>(std::move(next)){}
 
   constexpr decltype(auto) process_complete(Input input) {
     for (auto&& v: input) {
-      this->next().process_incremental(v);
+      this->next.process_incremental(v);
     }
-    return this->next().finish();
+    return this->next.finish();
   }
 
 };
@@ -257,8 +261,39 @@ constexpr auto values() {
 }
 
 
+template<typename Input, typename Next>
+struct accumulate_in_place_impl
+    : range_action_closure_object<accumulate_in_place_impl<Input, Next>,
+                                  processing_style::incremental,
+                                  processing_style::complete,
+                                  Input,
+                                  Next> {
+  using output_type = int64_t;
+  int64_t result = 0;
+
+  constexpr decltype(auto) process_incremental(Input input) {
+    result += input;
+  }
+
+  constexpr decltype(auto) finish(){
+    return this->next.process_complete(std::move(result));
+  }
+
+};
+
+constexpr auto sum(){
+  return range::actions::range_action_closure_factory<accumulate_in_place_impl,int64_t>(0);
+}
+
 }
 #include <vector>
+
+constexpr int64_t calculate(){
+  constexpr std::array v{1, 2, 3, 4};
+  return range::actions::apply(v,
+                               range::actions::values(),
+                               range::actions::sum());
+}
 
 int main() {
   std::vector<int> v{1, 2, 3, 4};
@@ -267,6 +302,7 @@ int main() {
                         range::actions::for_each([](int i) {
                           std::cout << i << "\n";
                         }));
+  static_assert(calculate() == 10);
 
   std::cout << "Hello, World!" << std::endl;
   return 0;
