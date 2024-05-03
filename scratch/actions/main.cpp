@@ -47,6 +47,7 @@ class range_action_closure_object {
 
  public:
   using input_type = Input;
+  using base = range_action_closure_object;
 
   constexpr static auto input_processing_style = ips;
   constexpr static auto output_processing_style = ops;
@@ -196,6 +197,18 @@ struct input_factory {
 };
 }
 
+
+template<typename Range, typename... Acos>
+auto apply(Range&& range, Acos&& ... acos) {
+
+  detail::empty empty;
+  detail::starting_factory<decltype(range)> starting_factory;
+  auto chain = (detail::input_factory<decltype(range)>{
+      starting_factory, empty} + ... + std::forward<
+      Acos>(acos)).make(detail::end_aco{});
+  return chain.process_complete(std::forward<Range>(range));
+}
+
 template<typename Input, typename Next, typename F>
 struct for_each_impl
     : range_action_closure_object<for_each_impl<Input, Next, F>,
@@ -243,16 +256,6 @@ constexpr auto values() {
   return range_action_closure_factory<values_impl, void>{};
 }
 
-template<typename Range, typename... Acos>
-auto apply(Range&& range, Acos&& ... acos) {
-
-  detail::empty empty;
-  detail::starting_factory<decltype(range)> starting_factory;
-  auto chain = (detail::input_factory<decltype(range)>{
-      starting_factory, empty} + ... + std::forward<
-      Acos>(acos)).make(detail::end_aco{});
-  return chain.process_complete(std::forward<Range>(range));
-}
 
 }
 #include <vector>
