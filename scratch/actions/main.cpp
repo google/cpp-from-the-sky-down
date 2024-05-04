@@ -3,7 +3,7 @@
 #include <type_traits>
 #include <tuple>
 
-namespace range::actions {
+namespace ranges::actions {
 
 enum class processing_style {
   incremental,
@@ -25,22 +25,6 @@ concept incremental_output = aco::output_processing_style
 template<typename aco>
 concept complete_output = aco::output_processing_style
     == processing_style::complete;
-
-template<typename aco, typename input, processing_style previous_ops>
-struct action_closure_output_type {
-  using type = typename aco::template output_type<input>;
-};
-
-template<incremental_input aco, typename input>
-struct action_closure_output_type<aco, input, processing_style::complete> {
-  using type = typename aco::template output_type<
-      std::ranges::range_reference_t<std::remove_cvref_t<input>>>;
-};
-
-template<typename aco, typename input, processing_style previous_ops>
-using action_closure_output_type_t = typename action_closure_output_type<aco,
-                                                                         input,
-                                                                         previous_ops>::type;
 
 template<typename Input, typename Next, processing_style PreviousOutputProcessingStyle,
     processing_style InputProcessingStyle, processing_style OutputProcessingStyle>
@@ -202,7 +186,7 @@ struct end_factory {
 
 struct end_factory_tag {};
 
-struct empty {
+struct starting_previous {
   template<typename Next>
   constexpr auto make(Next&& next) {
     return std::forward<Next>(next);
@@ -221,7 +205,7 @@ struct starting_factory {
     return std::forward<Next>(next);
   }
 };
-template<typename Input, processing_style PreviousOutputProcessingStyle, typename Factory = starting_factory<Input>, typename Previous = empty>
+template<typename Input, processing_style PreviousOutputProcessingStyle, typename Factory = starting_factory<Input>, typename Previous = starting_previous>
 struct input_factory {
   static constexpr auto previous_output_processing_style = PreviousOutputProcessingStyle;
   using output_type = typename Factory::template output_type<Input>;
@@ -253,7 +237,7 @@ struct input_factory {
 template<typename Range, typename... Acos>
 constexpr auto apply(Range&& range, Acos&& ... acos) {
 
-  detail::empty empty;
+  detail::starting_previous empty;
   detail::starting_factory<decltype(range)> starting_factory;
   auto chain = (detail::input_factory<decltype(range),processing_style::complete>{
       starting_factory, empty} + ... + std::forward<
@@ -337,9 +321,9 @@ struct accumulate_in_place_impl
 };
 
 constexpr auto sum() {
-  return range::actions::range_action_closure_factory<accumulate_in_place_impl,
-                                                      processing_style::incremental, processing_style::complete,
-                                                      int64_t>(0);
+  return ranges::actions::range_action_closure_factory<accumulate_in_place_impl,
+                                                       processing_style::incremental, processing_style::complete,
+                                                       int64_t>(0);
 }
 
 }
@@ -347,15 +331,15 @@ constexpr auto sum() {
 
 constexpr int64_t calculate() {
   constexpr std::array v{1, 2, 3, 4};
-  return range::actions::apply(v,
-                               range::actions::values(),
-                               range::actions::sum());
+  return ranges::actions::apply(v,
+                                ranges::actions::values(),
+                                ranges::actions::sum());
 }
 
 int main() {
   std::vector<int> v{1, 2, 3, 4};
-  range::actions::apply(v,
-                        range::actions::for_each([](int i) {
+  ranges::actions::apply(v,
+                         ranges::actions::for_each([](int i) {
                           std::cout << i << "\n";
                         }));
   static_assert(calculate() == 10);
