@@ -10,6 +10,62 @@ enum class processing_style {
   complete
 };
 
+template<typename SizeType = std::monostate, bool Exact = false>
+struct propagated_size{
+  constexpr bool has_size() const {return !std::same_as<SizeType, std::monostate>;}
+  constexpr auto size() const{return size_;}
+  constexpr bool is_exact_size() const {return Exact;}
+  [[no_unique_address]] SizeType size_;
+  explicit constexpr propagated_size()
+  requires(std::same_as<SizeType,std::monostate>)
+  {}
+
+  explicit constexpr propagated_size(size_t s)
+  requires(std::same_as<SizeType, size_t>)
+  :size_(s){}
+
+  constexpr auto min(size_t new_value)
+  requires (has_size())
+  {
+    return propagated_size(std::min(size(),new_value));
+  }
+
+  constexpr auto min(size_t new_value)
+  requires (!has_size())
+  {
+    return propagated_size<size_t, false>(new_value);
+  }
+
+  constexpr auto operator+(size_t new_value)
+  requires(has_size()){
+    return propagated_size(size() + new_value);
+  }
+  constexpr auto operator+(size_t new_value)
+  requires(!has_size()){
+    return propagated_size<size_t, false>(new_value);
+  }
+
+  constexpr auto operator*(size_t new_value)
+  requires(has_size()){
+    return propagated_size(size() * new_value);
+  }
+
+  constexpr auto operator*(size_t new_value)
+  requires(!has_size()){
+    return propagated_size<std::monostate,false>();
+  }
+
+  constexpr auto operator/(size_t new_value)
+  requires(has_size()){
+    return propagated_size(size() * new_value);
+  }
+
+  constexpr auto operator/(size_t new_value)
+  requires(!has_size()){
+    return propagated_size<std::monostate,false>();
+  }
+};
+
 template<typename aco>
 concept incremental_input = aco::input_processing_style
     == processing_style::incremental;
@@ -120,9 +176,13 @@ struct range_action_closure_object<Derived<Opaque, Parameters...>> {
 
   }
 
+  // Utilities
+  constexpr input_type forward(auto&& input){
+    return static_cast<input_type>(input);
+  }
+
 };
 
-struct void_tag {};
 template<typename T>
 struct instantiable {
   using type = T;
@@ -130,7 +190,7 @@ struct instantiable {
 
 template<>
 struct instantiable<void> {
-  using type = void_tag;
+  using type = std::monostate;
 };
 
 template<typename T>
@@ -147,7 +207,7 @@ class range_action_closure_factory {
   static constexpr auto output_processing_style = OutputProcessingStyle;
   template<typename Input>
   using output_type = typename Aco<opaque<Input,
-                                   void_tag,input_processing_style,
+                                   std::monostate,input_processing_style,
                                    input_processing_style,output_processing_style>,
                                    TypeParameters...>::output_type;
   template<typename... Ts>
@@ -235,7 +295,7 @@ struct input_factory {
 }
 
 template<typename Range, typename... Acos>
-constexpr auto apply(Range&& range, Acos&& ... acos) {
+[[nodiscard]] constexpr auto apply(Range&& range, Acos&& ... acos) {
 
   detail::starting_previous empty;
   detail::starting_factory<decltype(range)> starting_factory;
@@ -248,10 +308,10 @@ constexpr auto apply(Range&& range, Acos&& ... acos) {
 template<typename Opaque, typename F>
 struct for_each_impl
     : range_action_closure_object<for_each_impl<Opaque, F>> {
-  using base = range_action_closure_object<for_each_impl>;
+  using typename range_action_closure_object<for_each_impl>::base;
   using typename base::input_type;
   using typename base::next_type;
-  using output_type = void_tag&&;
+  using output_type = std::monostate&&;
 
   F f;
 
@@ -260,7 +320,7 @@ struct for_each_impl
   }
 
   constexpr decltype(auto) finish() {
-    return this->next.process_complete(void_tag{});
+    return this->next.process_complete(std::monostate{});
   }
 };
 
@@ -301,39 +361,92 @@ constexpr auto values() {
                                       void>{};
 }
 
-template<typename Opaque>
+template<template<typename...> typename T>
+struct template_to_typename{
+};
+
+template<typename T, typename>
+struct apply_input_to_typename{
+  using type = T;
+};
+
+template<template<typename...> typename T, typename Input>
+struct apply_input_to_typename<template_to_typename<T>,Input>{
+  using type = T<Input>;
+};
+
+template<typename T, typename Input>
+using apply_input_to_typename_t = typename apply_input_to_typename<T,Input>::type;
+
+template<typename Opaque, typename T, typename F>
 struct accumulate_in_place_impl
-    : range_action_closure_object<accumulate_in_place_impl<Opaque>
+    : range_action_closure_object<accumulate_in_place_impl<Opaque,T,F>
                                   > {
   using base = range_action_closure_object<accumulate_in_place_impl>;
   using typename base::input_type;
-  using output_type = int64_t;
-  int64_t result = 0;
+  using accumulated_type = std::remove_cvref_t<apply_input_to_typename_t<T,input_type>>;
+  using output_type = accumulated_type&&;
+  [[no_unique_address]] accumulated_type accumulated{};
+  [[no_unique_address]] F f{};
+
+  constexpr accumulate_in_place_impl(auto&& opaque, std::tuple<accumulated_type,F>&& tuple)
+  :base(std::forward<decltype(opaque)>(opaque)),accumulated(std::get<0>(tuple)),
+  f(std::get<1>(tuple)){}
+
+  constexpr accumulate_in_place_impl(auto&& opaque, F&& f)
+  :base(std::forward<decltype(opaque)>(opaque)),accumulated{},
+  f(std::move(f)){}
+
 
   constexpr decltype(auto) process_incremental(input_type input) {
-    result += input;
+    std::invoke(f,accumulated, this->forward(input));
   }
 
   constexpr decltype(auto) finish() {
-    return this->next.process_complete(std::move(result));
+    return this->next.process_complete(std::move(accumulated));
   }
 
 };
 
+template<typename T, typename F>
+constexpr auto accumulate_in_place(T t, F f){
+  return range_action_closure_factory<accumulate_in_place_impl,processing_style::incremental,
+  processing_style::complete,std::tuple<T,F>,T,F>(std::make_tuple(std::move(t), std::move(f)));
+}
+
+template<template<typename> typename T, typename F>
+constexpr auto accumulate_in_place(F f){
+  return range_action_closure_factory<accumulate_in_place_impl,processing_style::incremental,
+  processing_style::complete,F,template_to_typename<T> ,F>(std::move(f));
+}
+
+template<typename T, typename F>
+constexpr auto accumulate(T t, F f){
+  return accumulate_in_place(std::forward<T>(t),[f = std::move(f)](auto& accumulated, auto&& v){
+    accumulated = std::invoke(f,std::forward<decltype(v)>(v));
+  });
+}
+
+template<template<typename> typename T, typename F>
+constexpr auto accumulate(F f){
+  return accumulate_in_place<T>([f = std::move(f)](auto& accumulated, auto&& v){
+    accumulated = std::invoke(f,accumulated, std::forward<decltype(v)>(v));
+  });
+}
+
 constexpr auto sum() {
-  return ranges::actions::range_action_closure_factory<accumulate_in_place_impl,
-                                                       processing_style::incremental, processing_style::complete,
-                                                       int64_t>(0);
+  return accumulate<std::type_identity_t>(std::plus<>{});
 }
 
 }
 #include <vector>
 
-constexpr int64_t calculate() {
+constexpr auto calculate() {
   constexpr std::array v{1, 2, 3, 4};
   return ranges::actions::apply(v,
                                 ranges::actions::values(),
                                 ranges::actions::sum());
+
 }
 
 int main() {
@@ -343,6 +456,7 @@ int main() {
                           std::cout << i << "\n";
                         }));
   static_assert(calculate() == 10);
+  static_assert(std::same_as<decltype(calculate()),int>);
 
   std::cout << "Hello, World!" << std::endl;
   return 0;
