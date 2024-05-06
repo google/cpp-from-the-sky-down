@@ -1,6 +1,7 @@
 #include <iostream>
 #include <ranges>
 #include <type_traits>
+#include <functional>
 #include <tuple>
 
 namespace ranges::actions {
