@@ -3,6 +3,7 @@
 #include <type_traits>
 #include <functional>
 #include <tuple>
+#include <utility>
 
 namespace ranges::actions {
 
@@ -12,58 +13,51 @@ enum class processing_style {
 };
 
 template<typename SizeType = std::monostate, bool Exact = false>
-struct propagated_size{
-  constexpr bool has_size() const {return !std::same_as<SizeType, std::monostate>;}
-  constexpr auto size() const{return size_;}
-  constexpr bool is_exact_size() const {return Exact;}
+struct propagated_size {
+  constexpr bool has_size() const {
+    return !std::same_as<SizeType,
+                         std::monostate>;
+  }
+  constexpr auto size() const { return size_; }
+  constexpr bool is_exact_size() const { return Exact; }
   [[no_unique_address]] SizeType size_;
-  explicit constexpr propagated_size()
-  requires(std::same_as<SizeType,std::monostate>)
+  explicit constexpr propagated_size()requires(std::same_as<SizeType,
+                                                            std::monostate>)
   {}
 
-  explicit constexpr propagated_size(size_t s)
-  requires(std::same_as<SizeType, size_t>)
-  :size_(s){}
+  explicit constexpr propagated_size(size_t s)requires(std::same_as<SizeType,
+                                                                    size_t>)
+      : size_(s) {}
 
-  constexpr auto min(size_t new_value)
-  requires (has_size())
-  {
-    return propagated_size(std::min(size(),new_value));
+  constexpr auto min(size_t new_value)requires (has_size()) {
+    return propagated_size(std::min(size(), new_value));
   }
 
-  constexpr auto min(size_t new_value)
-  requires (!has_size())
-  {
+  constexpr auto min(size_t new_value)requires (!has_size()) {
     return propagated_size<size_t, false>(new_value);
   }
 
-  constexpr auto operator+(size_t new_value)
-  requires(has_size()){
+  constexpr auto operator+(size_t new_value)requires (has_size()) {
     return propagated_size(size() + new_value);
   }
-  constexpr auto operator+(size_t new_value)
-  requires(!has_size()){
+  constexpr auto operator+(size_t new_value)requires (!has_size()) {
     return propagated_size<size_t, false>(new_value);
   }
 
-  constexpr auto operator*(size_t new_value)
-  requires(has_size()){
+  constexpr auto operator*(size_t new_value)requires (has_size()) {
     return propagated_size(size() * new_value);
   }
 
-  constexpr auto operator*(size_t new_value)
-  requires(!has_size()){
-    return propagated_size<std::monostate,false>();
+  constexpr auto operator*(size_t new_value)requires (!has_size()) {
+    return propagated_size<std::monostate, false>();
   }
 
-  constexpr auto operator/(size_t new_value)
-  requires(has_size()){
+  constexpr auto operator/(size_t new_value)requires (has_size()) {
     return propagated_size(size() * new_value);
   }
 
-  constexpr auto operator/(size_t new_value)
-  requires(!has_size()){
-    return propagated_size<std::monostate,false>();
+  constexpr auto operator/(size_t new_value)requires (!has_size()) {
+    return propagated_size<std::monostate, false>();
   }
 };
 
@@ -88,7 +82,8 @@ template<typename Input, typename Next, processing_style PreviousOutputProcessin
 struct opaque {
   using input_type = Input;
   using next_type = Next;
-  static constexpr auto previous_output_processing_style = PreviousOutputProcessingStyle;
+  static constexpr auto
+      previous_output_processing_style = PreviousOutputProcessingStyle;
   static constexpr auto input_processing_style = InputProcessingStyle;
   static constexpr auto output_processing_style = OutputProcessingStyle;
 };
@@ -99,7 +94,7 @@ struct adapt_input;
 
 template<typename Input, processing_style PreviousOutputProcessingStyle, processing_style InputProcessingStyle> requires (
     PreviousOutputProcessingStyle == InputProcessingStyle)
-struct adapt_input<Input,PreviousOutputProcessingStyle,InputProcessingStyle> {
+struct adapt_input<Input, PreviousOutputProcessingStyle, InputProcessingStyle> {
   using type = Input;
 };
 
@@ -170,6 +165,7 @@ struct range_action_closure_object<Derived<Opaque, Parameters...>> {
           && incremental_input<
               child>) {
     for (auto&& v: static_cast<raw_input_type>(input)) {
+      static_assert(std::is_same_v<decltype(v), input_type>);
       static_cast<child&>(*this).process_incremental(std::forward<decltype(v)>(v));
     }
 
@@ -178,7 +174,7 @@ struct range_action_closure_object<Derived<Opaque, Parameters...>> {
   }
 
   // Utilities
-  constexpr input_type forward(auto&& input){
+  constexpr input_type forward(auto&& input) {
     return static_cast<input_type>(input);
   }
 
@@ -206,10 +202,12 @@ class range_action_closure_factory {
  public:
   static constexpr auto input_processing_style = InputProcessingStyle;
   static constexpr auto output_processing_style = OutputProcessingStyle;
-  template<typename Input>
+  template<processing_style PreviousOutputProcessingStyle, typename Input>
   using output_type = typename Aco<opaque<Input,
-                                   std::monostate,input_processing_style,
-                                   input_processing_style,output_processing_style>,
+                                          std::monostate,
+                                          PreviousOutputProcessingStyle,
+                                          input_processing_style,
+                                          output_processing_style>,
                                    TypeParameters...>::output_type;
   template<typename... Ts>
   constexpr explicit range_action_closure_factory(Ts&& ... ts)
@@ -256,7 +254,7 @@ struct starting_previous {
 
 template<typename Input>
 struct starting_factory {
-  template<typename>
+  template<auto, typename>
   using output_type = Input;
   static constexpr auto input_processing_style = processing_style::complete;
   static constexpr auto output_processing_style = processing_style::complete;
@@ -266,12 +264,18 @@ struct starting_factory {
     return std::forward<Next>(next);
   }
 };
-template<typename Input, processing_style PreviousOutputProcessingStyle, typename Factory = starting_factory<Input>, typename Previous = starting_previous>
+template<typename Input, processing_style PreviousOutputProcessingStyle, typename Factory = starting_factory<
+    Input>, typename Previous = starting_previous>
 struct input_factory {
-  static constexpr auto previous_output_processing_style = PreviousOutputProcessingStyle;
-  using output_type = typename Factory::template output_type<Input>;
-  static constexpr auto output_processing_style = Factory::output_processing_style;
-  static constexpr auto input_processing_style = Factory::input_processing_style;
+  static constexpr auto
+      previous_output_processing_style = PreviousOutputProcessingStyle;
+  using output_type = typename Factory::template output_type<
+      previous_output_processing_style,
+      Input>;
+  static constexpr auto
+      output_processing_style = Factory::output_processing_style;
+  static constexpr auto
+      input_processing_style = Factory::input_processing_style;
   Factory& factory;
   Previous& previous;
   template<typename NewFactory>
@@ -287,8 +291,11 @@ struct input_factory {
 
   template<typename Next>
   constexpr auto make(Next&& next) {
-    return previous.make(factory.template make<opaque<Input,Next,previous_output_processing_style,
-        input_processing_style,output_processing_style>>(
+    return previous.make(factory.template make<opaque<Input,
+                                                      Next,
+                                                      previous_output_processing_style,
+                                                      input_processing_style,
+                                                      output_processing_style>>(
         std::forward<Next>(next)));
   }
 
@@ -300,18 +307,18 @@ template<typename Range, typename... Acos>
 
   detail::starting_previous empty;
   detail::starting_factory<decltype(range)> starting_factory;
-  auto chain = (detail::input_factory<decltype(range),processing_style::complete>{
-      starting_factory, empty} + ... + std::forward<
-      Acos>(acos)).make(detail::end_aco{});
+  auto chain =
+      (detail::input_factory<decltype(range), processing_style::complete>{
+          starting_factory, empty} + ... + std::forward<
+          Acos>(acos)).make(detail::end_aco{});
   return chain.process_complete(std::forward<Range>(range));
 }
 
 template<typename Opaque, typename F>
 struct for_each_impl
     : range_action_closure_object<for_each_impl<Opaque, F>> {
-  using typename range_action_closure_object<for_each_impl>::base;
+  using base = range_action_closure_object<for_each_impl>;
   using typename base::input_type;
-  using typename base::next_type;
   using output_type = std::monostate&&;
 
   F f;
@@ -363,44 +370,47 @@ constexpr auto values() {
 }
 
 template<template<typename...> typename T>
-struct template_to_typename{
+struct template_to_typename {
 };
 
 template<typename T, typename>
-struct apply_input_to_typename{
+struct apply_input_to_typename {
   using type = T;
 };
 
 template<template<typename...> typename T, typename Input>
-struct apply_input_to_typename<template_to_typename<T>,Input>{
+struct apply_input_to_typename<template_to_typename<T>, Input> {
   using type = T<Input>;
 };
 
 template<typename T, typename Input>
-using apply_input_to_typename_t = typename apply_input_to_typename<T,Input>::type;
+using apply_input_to_typename_t = typename apply_input_to_typename<T,
+                                                                   Input>::type;
 
 template<typename Opaque, typename T, typename F>
 struct accumulate_in_place_impl
-    : range_action_closure_object<accumulate_in_place_impl<Opaque,T,F>
-                                  > {
+    : range_action_closure_object<accumulate_in_place_impl<Opaque, T, F>
+    > {
   using base = range_action_closure_object<accumulate_in_place_impl>;
   using typename base::input_type;
-  using accumulated_type = std::remove_cvref_t<apply_input_to_typename_t<T,input_type>>;
+  using accumulated_type = std::remove_cvref_t<apply_input_to_typename_t<T,
+                                                                         input_type>>;
   using output_type = accumulated_type&&;
   [[no_unique_address]] accumulated_type accumulated{};
   [[no_unique_address]] F f{};
 
-  constexpr accumulate_in_place_impl(auto&& opaque, std::tuple<accumulated_type,F>&& tuple)
-  :base(std::forward<decltype(opaque)>(opaque)),accumulated(std::get<0>(tuple)),
-  f(std::get<1>(tuple)){}
+  constexpr accumulate_in_place_impl(auto&& opaque,
+                                     std::tuple<accumulated_type, F>&& tuple)
+      : base(std::forward<decltype(opaque)>(opaque)),
+        accumulated(std::get<0>(tuple)),
+        f(std::get<1>(tuple)) {}
 
   constexpr accumulate_in_place_impl(auto&& opaque, F&& f)
-  :base(std::forward<decltype(opaque)>(opaque)),accumulated{},
-  f(std::move(f)){}
-
+      : base(std::forward<decltype(opaque)>(opaque)), accumulated{},
+        f(std::move(f)) {}
 
   constexpr decltype(auto) process_incremental(input_type input) {
-    std::invoke(f,accumulated, this->forward(input));
+    std::invoke(f, accumulated, this->forward(input));
   }
 
   constexpr decltype(auto) finish() {
@@ -410,33 +420,70 @@ struct accumulate_in_place_impl
 };
 
 template<typename T, typename F>
-constexpr auto accumulate_in_place(T t, F f){
-  return range_action_closure_factory<accumulate_in_place_impl,processing_style::incremental,
-  processing_style::complete,std::tuple<T,F>,T,F>(std::make_tuple(std::move(t), std::move(f)));
+constexpr auto accumulate_in_place(T t, F f) {
+  return range_action_closure_factory<accumulate_in_place_impl,
+                                      processing_style::incremental,
+                                      processing_style::complete,
+                                      std::tuple<T, F>,
+                                      T,
+                                      F>(std::make_tuple(std::move(t),
+                                                         std::move(f)));
 }
 
 template<template<typename> typename T, typename F>
-constexpr auto accumulate_in_place(F f){
-  return range_action_closure_factory<accumulate_in_place_impl,processing_style::incremental,
-  processing_style::complete,F,template_to_typename<T> ,F>(std::move(f));
+constexpr auto accumulate_in_place(F f) {
+  return range_action_closure_factory<accumulate_in_place_impl,
+                                      processing_style::incremental,
+                                      processing_style::complete,
+                                      F,
+                                      template_to_typename<T>,
+                                      F>(std::move(f));
 }
 
 template<typename T, typename F>
-constexpr auto accumulate(T t, F f){
-  return accumulate_in_place(std::forward<T>(t),[f = std::move(f)](auto& accumulated, auto&& v){
-    accumulated = std::invoke(f,std::forward<decltype(v)>(v));
-  });
+constexpr auto accumulate(T t, F f) {
+  return accumulate_in_place(std::forward<T>(t),
+                             [f = std::move(f)](auto& accumulated, auto&& v) {
+                               accumulated =
+                                   std::invoke(f, std::forward<decltype(v)>(v));
+                             });
 }
 
 template<template<typename> typename T, typename F>
-constexpr auto accumulate(F f){
-  return accumulate_in_place<T>([f = std::move(f)](auto& accumulated, auto&& v){
-    accumulated = std::invoke(f,accumulated, std::forward<decltype(v)>(v));
+constexpr auto accumulate(F f) {
+  return accumulate_in_place<T>([f = std::move(f)](auto& accumulated,
+                                                   auto&& v) {
+    accumulated = std::invoke(f, accumulated, std::forward<decltype(v)>(v));
   });
 }
 
 constexpr auto sum() {
   return accumulate<std::type_identity_t>(std::plus<>{});
+}
+
+template<typename Opaque, typename Predicate>
+struct filter_impl : range_action_closure_object<filter_impl<Opaque,
+                                                             Predicate>> {
+  using base = range_action_closure_object<filter_impl>;
+  using typename base::input_type;
+  using output_type = input_type;
+  [[no_unique_address]] Predicate predicate;
+
+  constexpr void process_incremental(input_type input) {
+    if (std::invoke(predicate, std::as_const(input))) {
+      this->next.process_incremental(this->forward(input));
+    }
+  }
+
+};
+
+template<typename Predicate>
+constexpr auto filter(Predicate predicate) {
+  return range_action_closure_factory<filter_impl,
+                                      processing_style::incremental,
+                                      processing_style::incremental,
+                                      Predicate,
+                                      Predicate>(std::move(predicate));
 }
 
 }
@@ -453,11 +500,14 @@ constexpr auto calculate() {
 int main() {
   std::vector<int> v{1, 2, 3, 4};
   ranges::actions::apply(v,
+                         ranges::actions::filter([](auto&& i) {
+                           return i != 2;
+                         }),
                          ranges::actions::for_each([](int i) {
-                          std::cout << i << "\n";
-                        }));
+                           std::cout << i << "\n";
+                         }));
   static_assert(calculate() == 10);
-  static_assert(std::same_as<decltype(calculate()),int>);
+  static_assert(std::same_as<decltype(calculate()), int>);
 
   std::cout << "Hello, World!" << std::endl;
   return 0;
