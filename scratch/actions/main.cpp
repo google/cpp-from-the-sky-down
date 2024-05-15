@@ -169,7 +169,7 @@ struct range_action_closure_object<Derived<Opaque, Parameters...>> {
       static_cast<child&>(*this).process_incremental(std::forward<decltype(v)>(v));
     }
 
-    static_cast<child&>(*this).finish();
+    return static_cast<child&>(*this).finish();
 
   }
 
@@ -430,7 +430,7 @@ constexpr auto accumulate_in_place(T t, F f) {
                                                          std::move(f)));
 }
 
-template<template<typename> typename T, typename F>
+template<template<typename...> typename T, typename F>
 constexpr auto accumulate_in_place(F f) {
   return range_action_closure_factory<accumulate_in_place_impl,
                                       processing_style::incremental,
@@ -486,6 +486,16 @@ constexpr auto filter(Predicate predicate) {
                                       Predicate>(std::move(predicate));
 }
 
+template<typename T>
+using vector_impl = std::vector<std::remove_cvref_t<T>>;
+
+constexpr auto to_vector(){
+
+  return accumulate_in_place<vector_impl>([](auto& c, auto&& v){
+    c.push_back(std::forward<decltype(v)>(v));
+  });
+}
+
 }
 #include <vector>
 
@@ -503,11 +513,19 @@ int main() {
                          ranges::actions::filter([](auto&& i) {
                            return i != 2;
                          }),
+                         ranges::actions::to_vector(),
                          ranges::actions::for_each([](int i) {
                            std::cout << i << "\n";
                          }));
   static_assert(calculate() == 10);
   static_assert(std::same_as<decltype(calculate()), int>);
+
+auto v2=     ranges::actions::apply(v,
+                         ranges::actions::filter([](auto&& i) {
+                           return i != 2;
+                         }),
+                         ranges::actions::to_vector());
+
 
   std::cout << "Hello, World!" << std::endl;
   return 0;
