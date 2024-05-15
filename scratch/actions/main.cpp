@@ -231,6 +231,7 @@ struct end_aco {
   constexpr decltype(auto) process_complete(T&& t) {
     return std::forward<T>(t);
   }
+  constexpr void process_complete(std::monostate) {}
 };
 
 template<typename Previous>
@@ -317,7 +318,7 @@ template<typename Range, typename... Acos>
 template<typename Opaque, typename F>
 struct for_each_impl
     : range_action_closure_object<for_each_impl<Opaque, F>> {
-  using base = range_action_closure_object<for_each_impl>;
+  using base = typename for_each_impl::base;
   using typename base::input_type;
   using output_type = std::monostate&&;
 
@@ -339,34 +340,6 @@ constexpr auto for_each(F f) {
                                       processing_style::complete,
                                       F,
                                       F>{std::move(f)};
-}
-
-template<typename Opaque>
-struct values_impl
-    : range_action_closure_object<values_impl<Opaque>> {
-  using base = range_action_closure_object<values_impl>;
-  using typename base::input_type;
-  using output_type = std::ranges::range_reference_t<std::remove_reference_t<
-      input_type>>;
-
-  template<typename Next>
-  constexpr values_impl(Next&& next):
-      base(std::move(next)) {}
-
-  constexpr decltype(auto) process_complete(input_type input) {
-    for (auto&& v: input) {
-      this->next.process_incremental(v);
-    }
-    return this->next.finish();
-  }
-
-};
-
-constexpr auto values() {
-  return range_action_closure_factory<values_impl,
-                                      processing_style::complete,
-                                      processing_style::incremental,
-                                      void>{};
 }
 
 template<template<typename...> typename T>
@@ -391,7 +364,7 @@ template<typename Opaque, typename T, typename F>
 struct accumulate_in_place_impl
     : range_action_closure_object<accumulate_in_place_impl<Opaque, T, F>
     > {
-  using base = range_action_closure_object<accumulate_in_place_impl>;
+  using base = typename accumulate_in_place_impl::base;
   using typename base::input_type;
   using accumulated_type = std::remove_cvref_t<apply_input_to_typename_t<T,
                                                                          input_type>>;
@@ -464,7 +437,7 @@ constexpr auto sum() {
 template<typename Opaque, typename Predicate>
 struct filter_impl : range_action_closure_object<filter_impl<Opaque,
                                                              Predicate>> {
-  using base = range_action_closure_object<filter_impl>;
+  using base = typename filter_impl::base;
   using typename base::input_type;
   using output_type = input_type;
   [[no_unique_address]] Predicate predicate;
@@ -502,7 +475,6 @@ constexpr auto to_vector(){
 constexpr auto calculate() {
   constexpr std::array v{1, 2, 3, 4};
   return ranges::actions::apply(v,
-                                ranges::actions::values(),
                                 ranges::actions::sum());
 
 }
