@@ -111,17 +111,17 @@ using adapt_input_t = typename adapt_input<Input,
                                            InputProcessingStyle>::type;
 
 template<typename Child>
-struct range_action_closure_object;
+struct range_action_impl;
 
 template<template<typename...> typename Derived, typename Opaque, typename... Parameters>
-struct range_action_closure_object<Derived<Opaque, Parameters...>> {
+struct range_action_impl<Derived<Opaque, Parameters...>> {
 
   using child = Derived<Opaque, Parameters...>;
   using next_type = typename Opaque::next_type;
   [[no_unique_address]] next_type next;
 
   using raw_input_type = typename Opaque::input_type;
-  using base = range_action_closure_object;
+  using base = range_action_impl;
 
   constexpr static auto previous_output_processing_style =
       Opaque::previous_output_processing_style;
@@ -133,7 +133,7 @@ struct range_action_closure_object<Derived<Opaque, Parameters...>> {
                                    previous_output_processing_style,
                                    input_processing_style>;
 
-  constexpr range_action_closure_object(next_type&& next)
+  constexpr range_action_impl(next_type&& next)
       : next(std::move(next)) {}
 
   constexpr decltype(auto) finish()requires(incremental_input<
@@ -196,7 +196,7 @@ using instantiable_t = typename instantiable<T>::type;
 template<template<typename, typename...> typename Aco, processing_style InputProcessingStyle,
     processing_style OutputProcessingStyle,
     typename Parameters = void, typename... TypeParameters>
-class range_action_closure_factory {
+class range_action {
   [[no_unique_address]] instantiable_t<Parameters> parameters_;
 
  public:
@@ -210,7 +210,7 @@ class range_action_closure_factory {
                                           output_processing_style>,
                                    TypeParameters...>::output_type;
   template<typename... Ts>
-  constexpr explicit range_action_closure_factory(Ts&& ... ts)
+  constexpr explicit range_action(Ts&& ... ts)
       :parameters_{std::forward<Ts>(ts)...} {}
 
   template<typename Opaque, typename Next>
@@ -317,7 +317,7 @@ template<typename Range, typename... Acos>
 
 template<typename Opaque, typename F>
 struct for_each_impl
-    : range_action_closure_object<for_each_impl<Opaque, F>> {
+    : range_action_impl<for_each_impl<Opaque, F>> {
   using base = typename for_each_impl::base;
   using typename base::input_type;
   using output_type = std::monostate&&;
@@ -335,11 +335,11 @@ struct for_each_impl
 
 template<typename F>
 constexpr auto for_each(F f) {
-  return range_action_closure_factory<for_each_impl,
-                                      processing_style::incremental,
-                                      processing_style::complete,
-                                      F,
-                                      F>{std::move(f)};
+  return range_action<for_each_impl,
+                      processing_style::incremental,
+                      processing_style::complete,
+                      F,
+                      F>{std::move(f)};
 }
 
 template<template<typename...> typename T>
@@ -362,7 +362,7 @@ using apply_input_to_typename_t = typename apply_input_to_typename<T,
 
 template<typename Opaque, typename T, typename F>
 struct accumulate_in_place_impl
-    : range_action_closure_object<accumulate_in_place_impl<Opaque, T, F>
+    : range_action_impl<accumulate_in_place_impl<Opaque, T, F>
     > {
   using base = typename accumulate_in_place_impl::base;
   using typename base::input_type;
@@ -394,23 +394,23 @@ struct accumulate_in_place_impl
 
 template<typename T, typename F>
 constexpr auto accumulate_in_place(T t, F f) {
-  return range_action_closure_factory<accumulate_in_place_impl,
-                                      processing_style::incremental,
-                                      processing_style::complete,
-                                      std::tuple<T, F>,
-                                      T,
-                                      F>(std::make_tuple(std::move(t),
+  return range_action<accumulate_in_place_impl,
+                      processing_style::incremental,
+                      processing_style::complete,
+                      std::tuple<T, F>,
+                      T,
+                      F>(std::make_tuple(std::move(t),
                                                          std::move(f)));
 }
 
 template<template<typename...> typename T, typename F>
 constexpr auto accumulate_in_place(F f) {
-  return range_action_closure_factory<accumulate_in_place_impl,
-                                      processing_style::incremental,
-                                      processing_style::complete,
-                                      F,
-                                      template_to_typename<T>,
-                                      F>(std::move(f));
+  return range_action<accumulate_in_place_impl,
+                      processing_style::incremental,
+                      processing_style::complete,
+                      F,
+                      template_to_typename<T>,
+                      F>(std::move(f));
 }
 
 template<typename T, typename F>
@@ -435,8 +435,8 @@ constexpr auto sum() {
 }
 
 template<typename Opaque, typename Predicate>
-struct filter_impl : range_action_closure_object<filter_impl<Opaque,
-                                                             Predicate>> {
+struct filter_impl : range_action_impl<filter_impl<Opaque,
+                                                   Predicate>> {
   using base = typename filter_impl::base;
   using typename base::input_type;
   using output_type = input_type;
@@ -452,11 +452,11 @@ struct filter_impl : range_action_closure_object<filter_impl<Opaque,
 
 template<typename Predicate>
 constexpr auto filter(Predicate predicate) {
-  return range_action_closure_factory<filter_impl,
-                                      processing_style::incremental,
-                                      processing_style::incremental,
-                                      Predicate,
-                                      Predicate>(std::move(predicate));
+  return range_action<filter_impl,
+                      processing_style::incremental,
+                      processing_style::incremental,
+                      Predicate,
+                      Predicate>(std::move(predicate));
 }
 
 template<typename T>
