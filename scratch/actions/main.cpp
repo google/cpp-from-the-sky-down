@@ -2,8 +2,9 @@
 #include <ranges>
 #include <type_traits>
 #include <functional>
-#include <tuple>
+#include <variant>
 #include <utility>
+
 
 namespace ranges::actions {
 
@@ -300,14 +301,19 @@ namespace ranges::actions {
 
 
         template<typename Factory, typename Composed>
-        struct composed_factory:Composed{
+        struct composed_factory{
             template<processing_style, typename>
             using output_type = typename Factory::output_type;
             static constexpr auto
                     output_processing_style = Factory::output_processing_style;
             static constexpr auto
                     input_processing_style = Factory::input_processing_style;
-            using Composed::operator();
+            Composed& composed;
+            template<typename... Ts>
+            constexpr auto operator()(Ts&&... ts){
+                return composed(std::forward<Ts>(ts)...);
+            }
+
         };
 
         template<typename F>
@@ -354,7 +360,7 @@ namespace ranges::actions {
                 return input_factory<output_type, output_processing_style,
                         ComposedFactory,
                         input_factory>
-                        {ComposedFactory(std::move(c)), *this};
+                        {ComposedFactory(c), *this};
             }
 
 
