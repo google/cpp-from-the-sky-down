@@ -3,6 +3,7 @@
 #include <type_traits>
 #include <functional>
 #include <variant>
+#include <tuple>
 #include <utility>
 
 
@@ -251,11 +252,6 @@ namespace ranges::actions {
         }};
     }
     namespace detail {
-
-        template<typename Tuple>
-     concept tuple_like =    requires{
-    { std::tuple_size<std::remove_cvref_t<Tuple>>::value };
-};
 
         struct end_aco {
             template<typename T>
